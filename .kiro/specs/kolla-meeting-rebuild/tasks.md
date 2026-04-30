@@ -247,7 +247,7 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
     - _Requirements: 10.1_
   - [x] 15.2 Implement `store/notificationStore.ts`: lưu notification list, mark-read actions
     - _Requirements: 10.5, 10.6_
-  - [ ] 15.3 Implement `store/meetingStore.ts`: active meeting state, mode, participants, speaking permission
+  - [x] 15.3 Implement `store/meetingStore.ts`: active meeting state, mode, participants, speaking permission
     - _Requirements: 1.7_
   - [ ] 15.4 Viết unit tests cho useWebSocket hook (mocked STOMP)
     - _Requirements: 20.3_
