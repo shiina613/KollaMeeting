@@ -268,9 +268,9 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
   - [x] 17.1 Implement `hooks/useJitsiApi.ts`: load Jitsi IFrame API từ `https://jitsi.kolla.local/external_api.js`, khởi tạo với meetingCode, displayName, avatar, JWT
     - Handle events: `participantJoined`, `participantLeft`, `videoConferenceLeft`
     - _Requirements: 4.1–4.7_
-  - [-] 17.2 Implement `JitsiFrame.tsx`: embed iframe, expose mute/unmute/muteAll controls qua Jitsi API
+  - [x] 17.2 Implement `JitsiFrame.tsx`: embed iframe, expose mute/unmute/muteAll controls qua Jitsi API
     - _Requirements: 4.7_
-  - [ ] 17.3 Implement `MeetingRoom.tsx`: container page kết hợp JitsiFrame + TranscriptionPanel + RaiseHandPanel + MeetingModeToggle + ParticipantList
+  - [-] 17.3 Implement `MeetingRoom.tsx`: container page kết hợp JitsiFrame + TranscriptionPanel + RaiseHandPanel + MeetingModeToggle + ParticipantList
     - Notify backend khi join/leave (attendance tracking)
     - _Requirements: 4.6, 5.1, 5.3_
   - [ ] 17.4 Implement `MeetingModeToggle.tsx`: hiển thị current mode (FREE/MEETING), gọi API switch mode; khi MEETING_MODE → mute all via Jitsi; khi FREE_MODE → restore mic control
