@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Git Push After Task",
+  "description": "Automatically stages all changes, creates a concise commit, and pushes to the current branch after each spec task is marked completed.",
+  "version": "1",
+  "when": {
+    "type": "postTaskExecution"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A spec task was just completed. Stage all changed files, write a concise but complete git commit message summarizing what was implemented (use conventional commit format: feat/test/chore + short scope + description, e.g. \"feat(gipformer): add audio converter with PCM→WAV resampling\"), then push to the current branch. Do not create a new branch. Use: git add -A && git commit -m \"...\" && git push"
+  }
+}

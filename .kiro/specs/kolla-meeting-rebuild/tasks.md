@@ -186,34 +186,34 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
 - [x] 11. Checkpoint — Backend Core
   - Đảm bảo tất cả backend tests pass, Swagger UI accessible, Docker Compose khởi động thành công. Hỏi user nếu có vấn đề.
 
-- [ ] 12. Gipformer Service: Core Setup
-  - [ ] 12.1 Tạo FastAPI app (`main.py`), `config.py` (env vars), `api/schemas.py` (Pydantic models cho request/response)
+- [x] 12. Gipformer Service: Core Setup
+  - [x] 12.1 Tạo FastAPI app (`main.py`), `config.py` (env vars), `api/schemas.py` (Pydantic models cho request/response)
     - _Requirements: 8.16, 8.17, 8.18_
-  - [ ] 12.2 Implement `core/recognizer.py`: load sherpa-onnx gipformer-65M-rnnt ONNX int8 model như singleton; expose `transcribe(wav_path) → str`
+  - [x] 12.2 Implement `core/recognizer.py`: load sherpa-onnx gipformer-65M-rnnt ONNX int8 model như singleton; expose `transcribe(wav_path) → str`
     - _Requirements: 8.17_
-  - [ ] 12.3 Implement `core/audio_converter.py`: convert raw PCM Float32/Int16 → WAV 16kHz mono (soundfile/scipy)
+  - [x] 12.3 Implement `core/audio_converter.py`: convert raw PCM Float32/Int16 → WAV 16kHz mono (soundfile/scipy)
     - _Requirements: 8.16_
-  - [ ] 12.4 Viết unit tests cho audio_converter (PCM → WAV correctness)
+  - [x] 12.4 Viết unit tests cho audio_converter (PCM → WAV correctness)
     - _Requirements: 20.3_
 
-- [ ] 13. Gipformer Service: VAD Chunker & Redis Worker
-  - [ ] 13.1 Implement `core/vad_chunker.py`: Adaptive VAD threshold (< 15s → 2–3s silence; ≥ 15s → 0.5–1s silence), hard cap 30s, sequence_number tracking per speaker_turn_id
+- [-] 13. Gipformer Service: VAD Chunker & Redis Worker
+  - [x] 13.1 Implement `core/vad_chunker.py`: Adaptive VAD threshold (< 15s → 2–3s silence; ≥ 15s → 0.5–1s silence), hard cap 30s, sequence_number tracking per speaker_turn_id
     - _Requirements: 8.9_
-  - [ ] 13.2 Implement `queue/redis_queue.py`: ZADD (push với priority score), ZPOPMAX (pop highest score), HSET/HGETALL cho job details
+  - [x] 13.2 Implement `queue/redis_queue.py`: ZADD (push với priority score), ZPOPMAX (pop highest score), HSET/HGETALL cho job details
     - _Requirements: 8.10_
-  - [ ] 13.3 Implement `queue/worker.py`: background thread poll Redis queue mỗi 100ms, load WAV, gọi recognizer, gọi callback
+  - [x] 13.3 Implement `queue/worker.py`: background thread poll Redis queue mỗi 100ms, load WAV, gọi recognizer, gọi callback
     - _Requirements: 8.10, 8.11_
-  - [ ] 13.4 Implement `callback/backend_notifier.py`: HTTP POST kết quả về Spring Boot `/api/v1/transcription/callback`
+  - [x] 13.4 Implement `callback/backend_notifier.py`: HTTP POST kết quả về Spring Boot `/api/v1/transcription/callback`
     - _Requirements: 8.11_
-  - [ ] 13.5 Implement `api/routes.py`: POST `/jobs` (submit job → ZADD Redis), GET `/health`, POST `/transcribe` (synchronous)
+  - [x] 13.5 Implement `api/routes.py`: POST `/jobs` (submit job → ZADD Redis), GET `/health`, POST `/transcribe` (synchronous)
     - _Requirements: 8.10_
-  - [ ] 13.6 Viết property test cho adaptive VAD threshold (hypothesis)
+  - [-] 13.6 Viết property test cho adaptive VAD threshold (hypothesis)
     - **Property 5: Adaptive VAD Threshold Function**
     - **Validates: Requirements 8.9**
-  - [ ] 13.7 Viết property test cho sequence number monotonicity (hypothesis)
+  - [-] 13.7 Viết property test cho sequence number monotonicity (hypothesis)
     - **Property 6: Sequence Number Monotonicity**
     - **Validates: Requirements 8.9**
-  - [ ] 13.8 Viết property test cho queue priority ordering (hypothesis)
+  - [-] 13.8 Viết property test cho queue priority ordering (hypothesis)
     - **Property 3: Queue Priority Ordering**
     - **Validates: Requirements 8.10**
 
@@ -267,7 +267,7 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
     - _Requirements: 21.4, 21.5, 21.6_
   - [ ] 17.5 Implement `ParticipantList.tsx`: real-time list từ WebSocket events, hiển thị speaking indicator
     - _Requirements: 5.6_
-  - [ ]* 17.6 Viết component tests cho MeetingModeToggle (state display, API call)
+  - [ ]t 17.6 Viết component tests cho MeetingModeToggle (state display, API call)
     - _Requirements: 20.4_
 
 - [ ] 18. Frontend: Raise Hand & Speaking Permission UI
@@ -279,7 +279,7 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
     - _Requirements: 22.5_
   - [ ] 18.4 Wire Jitsi mute/unmute với WebSocket events: `SPEAKING_PERMISSION_GRANTED` → unmute speaker, mute others; `SPEAKING_PERMISSION_REVOKED` → mute speaker
     - _Requirements: 4.9, 4.10, 22.5_
-  - [ ]* 18.5 Viết component tests cho RaiseHandPanel (chronological order rendering)
+  - [ ] 18.5 Viết component tests cho RaiseHandPanel (chronological order rendering)
     - _Requirements: 20.4_
 
 - [ ] 19. Frontend: Audio Capture & Transcription
@@ -292,12 +292,12 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
     - _Requirements: 8.12, 8.13_
   - [ ] 19.4 Implement priority controls: UI cho ADMIN/SECRETARY set HIGH/NORMAL priority; hiển thị `TRANSCRIPTION_UNAVAILABLE` indicator khi Gipformer down
     - _Requirements: 8.12_
-  - [ ]* 19.5 Viết unit tests cho float32ToInt16 conversion và sortSegments utility
+  - [ ] 19.5 Viết unit tests cho float32ToInt16 conversion và sortSegments utility
     - _Requirements: 20.3_
-  - [ ]* 19.6 Viết property test cho transcription segment ordering (fast-check)
+  - [ ] 19.6 Viết property test cho transcription segment ordering (fast-check)
     - **Property 7: Minutes Assembly Ordering (frontend display)**
     - **Validates: Requirements 8.12**
-  - [ ]* 19.7 Viết property test cho adaptive VAD threshold (fast-check, frontend mirror)
+  - [ ] 19.7 Viết property test cho adaptive VAD threshold (fast-check, frontend mirror)
     - **Property 5: Adaptive VAD Threshold Function (frontend)**
     - **Validates: Requirements 8.9**
 
@@ -313,7 +313,7 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
     - _Requirements: 25.4_
   - [ ] 21.4 Implement download buttons cho 3 versions (draft, confirmed, secretary)
     - _Requirements: 25.6_
-  - [ ]* 21.5 Viết component tests cho MinutesEditor (render, submit)
+  - [ ] 21.5 Viết component tests cho MinutesEditor (render, submit)
     - _Requirements: 20.4_
 
 - [ ] 22. Frontend: Admin Pages
@@ -323,7 +323,7 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
     - _Requirements: 6.7_
   - [ ] 22.3 Implement `AdminPage.tsx`: tabs cho User Management, Storage Dashboard, Department/Room management
     - _Requirements: 12.4_
-  - [ ]* 22.4 Viết component tests cho UserManagement (role display, password reset flow)
+  - [ ] 22.4 Viết component tests cho UserManagement (role display, password reset flow)
     - _Requirements: 20.4_
 
 - [ ] 23. Frontend: Common Components & Polish
@@ -347,7 +347,7 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
     - _Requirements: 20.7_
   - [ ] 24.5 Viết Spring Boot integration tests (Testcontainers): meeting lifecycle API, WebSocket events, Redis queue operations
     - _Requirements: 20.2_
-  - [ ]* 24.6 Viết Playwright E2E test: Gipformer unavailable → Meeting continues → Recovery → Pending jobs processed
+  - [ ] 24.6 Viết Playwright E2E test: Gipformer unavailable → Meeting continues → Recovery → Pending jobs processed
     - _Requirements: 20.7_
 
 - [ ] 25. Final Checkpoint — Full System
