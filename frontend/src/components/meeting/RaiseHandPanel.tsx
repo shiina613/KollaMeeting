@@ -267,9 +267,14 @@ export default function RaiseHandPanel({ meetingId, isHost }: RaiseHandPanelProp
         }
       : null
 
+  // Sort pending requests chronologically (oldest first — Req 22.9)
+  const sortedRequests = [...raiseHandRequests].sort(
+    (a, b) => new Date(a.requestedAt).getTime() - new Date(b.requestedAt).getTime(),
+  )
+
   const displayList: RaiseHandRequest[] = [
     ...(syntheticSpeakerEntry ? [syntheticSpeakerEntry] : []),
-    ...raiseHandRequests,
+    ...sortedRequests,
   ]
 
   // ── Render ─────────────────────────────────────────────────────────────────

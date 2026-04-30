@@ -289,7 +289,7 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
     - _Requirements: 22.5_
   - [x] 18.4 Wire Jitsi mute/unmute với WebSocket events: `SPEAKING_PERMISSION_GRANTED` → unmute speaker, mute others; `SPEAKING_PERMISSION_REVOKED` → mute speaker
     - _Requirements: 4.9, 4.10, 22.5_
-  - [ ] 18.5 Viết component tests cho RaiseHandPanel (chronological order rendering)
+  - [x] 18.5 Viết component tests cho RaiseHandPanel (chronological order rendering)
     - _Requirements: 20.4_
 
 - [ ] 19. Frontend: Audio Capture & Transcription
