@@ -283,7 +283,7 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
 - [-] 18. Frontend: Raise Hand & Speaking Permission UI
   - [x] 18.1 Implement `RaiseHandPanel.tsx`: hiển thị pending requests theo chronological order (Host view); nút Grant/Revoke permission
     - _Requirements: 22.3, 22.9_
-  - [ ] 18.2 Implement raise hand button cho Participants: hiển thị khi MEETING_MODE và chưa có permission; ẩn khi đang giữ permission
+  - [x] 18.2 Implement raise hand button cho Participants: hiển thị khi MEETING_MODE và chưa có permission; ẩn khi đang giữ permission
     - _Requirements: 22.1_
   - [ ] 18.3 Implement `SpeakingPermissionBadge.tsx`: hiển thị ai đang giữ speaking permission
     - _Requirements: 22.5_
