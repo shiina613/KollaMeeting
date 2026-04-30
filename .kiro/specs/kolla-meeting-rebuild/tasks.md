@@ -242,8 +242,8 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
   - [x] 14.6 Viết unit tests cho Zustand store actions và Axios interceptor logic
     - _Requirements: 20.3_
 
-- [ ] 15. Frontend: WebSocket Hook & Notification
-  - [ ] 15.1 Implement `hooks/useWebSocket.ts`: STOMP/SockJS connection, subscribe `/topic/meeting/{id}` và `/user/queue/notifications`, auto-reconnect với exponential backoff (1s, 2s, 4s, max 30s)
+- [-] 15. Frontend: WebSocket Hook & Notification
+  - [x] 15.1 Implement `hooks/useWebSocket.ts`: STOMP/SockJS connection, subscribe `/topic/meeting/{id}` và `/user/queue/notifications`, auto-reconnect với exponential backoff (1s, 2s, 4s, max 30s)
     - _Requirements: 10.1_
   - [ ] 15.2 Implement `store/notificationStore.ts`: lưu notification list, mark-read actions
     - _Requirements: 10.5, 10.6_
