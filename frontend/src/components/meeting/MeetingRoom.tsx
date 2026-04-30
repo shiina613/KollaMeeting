@@ -22,6 +22,7 @@ import { useNavigate } from 'react-router-dom'
 import JitsiFrame, { type JitsiFrameHandle } from './JitsiFrame'
 import TranscriptionPanel from './TranscriptionPanel'
 import RaiseHandPanel from './RaiseHandPanel'
+import RaiseHandButton from './RaiseHandButton'
 import MeetingModeToggle from './MeetingModeToggle'
 import ParticipantList from './ParticipantList'
 import useWebSocket from '../../hooks/useWebSocket'
@@ -196,6 +197,16 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
             className="w-full h-full"
           />
         </div>
+
+        {/* Raise hand button — shown to non-host participants in MEETING_MODE */}
+        {!isHost && !isSecretary && user?.id && (
+          <div className="flex justify-center py-2 bg-slate-800 border-t border-slate-700 shrink-0">
+            <RaiseHandButton
+              meetingId={meeting.id}
+              currentUserId={user.id}
+            />
+          </div>
+        )}
       </div>
 
       {/* ── Sidebar ── */}
