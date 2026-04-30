@@ -270,12 +270,12 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
     - _Requirements: 4.1–4.7_
   - [x] 17.2 Implement `JitsiFrame.tsx`: embed iframe, expose mute/unmute/muteAll controls qua Jitsi API
     - _Requirements: 4.7_
-  - [-] 17.3 Implement `MeetingRoom.tsx`: container page kết hợp JitsiFrame + TranscriptionPanel + RaiseHandPanel + MeetingModeToggle + ParticipantList
+  - [x] 17.3 Implement `MeetingRoom.tsx`: container page kết hợp JitsiFrame + TranscriptionPanel + RaiseHandPanel + MeetingModeToggle + ParticipantList
     - Notify backend khi join/leave (attendance tracking)
     - _Requirements: 4.6, 5.1, 5.3_
-  - [ ] 17.4 Implement `MeetingModeToggle.tsx`: hiển thị current mode (FREE/MEETING), gọi API switch mode; khi MEETING_MODE → mute all via Jitsi; khi FREE_MODE → restore mic control
+  - [x] 17.4 Implement `MeetingModeToggle.tsx`: hiển thị current mode (FREE/MEETING), gọi API switch mode; khi MEETING_MODE → mute all via Jitsi; khi FREE_MODE → restore mic control
     - _Requirements: 21.4, 21.5, 21.6_
-  - [ ] 17.5 Implement `ParticipantList.tsx`: real-time list từ WebSocket events, hiển thị speaking indicator
+  - [x] 17.5 Implement `ParticipantList.tsx`: real-time list từ WebSocket events, hiển thị speaking indicator
     - _Requirements: 5.6_
   - [ ]t 17.6 Viết component tests cho MeetingModeToggle (state display, API call)
     - _Requirements: 20.4_
