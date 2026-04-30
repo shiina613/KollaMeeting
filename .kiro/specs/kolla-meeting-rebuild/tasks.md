@@ -227,7 +227,7 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
   - [x] 13.9.5 Tạo file `frontend/src/components/layout/sidebar-spec.md` mô tả chính xác Sidebar từ thiết kế thực tế (pixel values, màu sắc, icon names) để dùng làm reference khi code
   - _Yêu cầu: Stitch MCP phải được kết nối và project ID phải có sẵn trong workspace_
 
-- [-] 14. Frontend: Project Setup & Core Infrastructure
+- [x] 14. Frontend: Project Setup & Core Infrastructure
   - [x] 14.1 Khởi tạo React 18 + Vite project, cài Tailwind CSS, React Router v6, Zustand, Axios, SockJS + @stomp/stompjs, fast-check
     - Cấu hình `vite.config.ts`, `tailwind.config.ts`, `vitest.config.ts`
     - _Requirements: 1.1–1.3, 1.6, 1.7_
