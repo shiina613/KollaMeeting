@@ -21,16 +21,18 @@ import { useEffect, useRef, useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import JitsiFrame, { type JitsiFrameHandle } from './JitsiFrame'
 import TranscriptionPanel from './TranscriptionPanel'
+import TranscriptionPriorityControl from './TranscriptionPriorityControl'
 import RaiseHandPanel from './RaiseHandPanel'
 import RaiseHandButton from './RaiseHandButton'
 import MeetingModeToggle from './MeetingModeToggle'
 import ParticipantList from './ParticipantList'
 import SpeakingPermissionBadge from './SpeakingPermissionBadge'
 import useWebSocket from '../../hooks/useWebSocket'
+import useTranscription from '../../hooks/useTranscription'
 import useAuthStore from '../../store/authStore'
 import useMeetingStore from '../../store/meetingStore'
 import { joinMeeting, leaveMeeting } from '../../services/meetingService'
-import type { Meeting, MeetingMode, MeetingEvent } from '../../types/meeting'
+import type { Meeting, MeetingMode, MeetingEvent, TranscriptionPriority } from '../../types/meeting'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -49,18 +51,24 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
   const navigate = useNavigate()
   const { user } = useAuthStore()
   const { setActiveMeeting, clearActiveMeeting, handleMeetingEvent, mode } = useMeetingStore()
+  const { handleTranscriptionEvent, clearSegments } = useTranscription()
 
   const jitsiRef = useRef<JitsiFrameHandle>(null)
   const hasJoinedRef = useRef(false)
   const [sidebarTab, setSidebarTab] = useState<'participants' | 'transcription' | 'raise-hand'>('participants')
   const [joinError, setJoinError] = useState<string | null>(null)
+  const [currentPriority, setCurrentPriority] = useState<TranscriptionPriority>(
+    meeting.transcriptionPriority,
+  )
 
   // ── Derived state ──────────────────────────────────────────────────────────
 
   const isHost = user?.id === meeting.hostUser?.id
   const isSecretary = user?.id === meeting.secretaryUser?.id
-  const isHighPriority = meeting.transcriptionPriority === 'HIGH_PRIORITY'
+  const isHighPriority = currentPriority === 'HIGH_PRIORITY'
   const isMeetingMode = mode === 'MEETING_MODE'
+  const canChangePriority =
+    user?.role === 'ADMIN' || user?.role === 'SECRETARY'
 
   // ── Join / leave ───────────────────────────────────────────────────────────
 
@@ -82,6 +90,7 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
         console.error('[MeetingRoom] Failed to notify leave:', err)
       })
       clearActiveMeeting()
+      clearSegments()
     }
   }, [meeting.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -94,6 +103,8 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
 
       // Dispatch to store first
       handleMeetingEvent(event)
+      // Dispatch transcription-related events to the transcription hook
+      handleTranscriptionEvent(event)
 
       // React to mode changes for Jitsi audio control
       if (event.type === 'MODE_CHANGED') {
@@ -134,7 +145,7 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
         navigate(`/meetings/${meeting.id}`, { replace: true })
       }
     },
-    [handleMeetingEvent, meeting.id, navigate, user?.id],
+    [handleMeetingEvent, handleTranscriptionEvent, meeting.id, navigate, user?.id],
   )
 
   useWebSocket({
@@ -199,6 +210,14 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
               meetingId={meeting.id}
               isHost={isHost || isSecretary}
               onModeChanged={handleModeChanged}
+            />
+
+            {/* Transcription priority control — ADMIN/SECRETARY only */}
+            <TranscriptionPriorityControl
+              meetingId={meeting.id}
+              currentPriority={currentPriority}
+              canChangePriority={canChangePriority}
+              onPriorityChanged={setCurrentPriority}
             />
 
             {/* Speaking permission badge — visible to all in MEETING_MODE */}
