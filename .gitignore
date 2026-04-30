@@ -1,0 +1,59 @@
+# =============================================================================
+# .gitignore — Kolla Meeting Rebuild
+# =============================================================================
+
+# ── Secrets & environment ─────────────────────────────────────────────────────
+.env
+*.env.local
+*.env.*.local
+
+# ── OS & editor ───────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# ── Backend (Java / Maven) ────────────────────────────────────────────────────
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+backend/.jqwik-database
+*.class
+*.jar
+*.war
+*.ear
+
+# ── Frontend (Node / Vite) ────────────────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/coverage/
+
+# ── Gipformer (Python) ────────────────────────────────────────────────────────
+gipformer/__pycache__/
+gipformer/**/__pycache__/
+gipformer/*.pyc
+gipformer/.venv/
+gipformer/venv/
+gipformer/*.egg-info/
+gipformer/dist/
+gipformer/.pytest_cache/
+gipformer/.hypothesis/
+
+# ── File storage (runtime data) ───────────────────────────────────────────────
+storage/
+/app/storage/
+
+# ── Docker ────────────────────────────────────────────────────────────────────
+# Keep docker-compose.yml but ignore override files with local secrets
+docker-compose.override.yml
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── SSL certs (generated at runtime by certbot) ───────────────────────────────
+nginx/certs/
+certbot/

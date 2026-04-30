@@ -1,0 +1,215 @@
+# ============================================================
+# application.yml — Kolla Meeting Backend
+# Spring Boot 3.2 | Requirements: 14.1–14.10
+#
+# All sensitive values are read from environment variables.
+# See .env.example for the full list of required variables.
+# ============================================================
+
+# ─────────────────────────────────────────────
+# Server
+# ─────────────────────────────────────────────
+server:
+  port: 8080
+  servlet:
+    context-path: /api/v1
+  # Requirement 14.8 – UTC+7 for all datetime values
+  tomcat:
+    uri-encoding: UTF-8
+
+# ─────────────────────────────────────────────
+# Spring Core
+# ─────────────────────────────────────────────
+spring:
+  application:
+    name: kolla-meeting-backend
+
+  # Requirement 14.1 – Datasource (MySQL)
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/kolla_meeting?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh&characterEncoding=UTF-8}
+    username: ${SPRING_DATASOURCE_USERNAME:kolla}
+    password: ${SPRING_DATASOURCE_PASSWORD:kollapass}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # Requirement 16.6 – Connection pooling (HikariCP)
+    hikari:
+      pool-name: KollaHikariPool
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 300000        # 5 minutes
+      connection-timeout: 30000   # 30 seconds
+      max-lifetime: 1800000       # 30 minutes
+      connection-test-query: SELECT 1
+
+  # JPA / Hibernate
+  jpa:
+    hibernate:
+      ddl-auto: validate           # Flyway owns schema; Hibernate only validates
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+        format_sql: true
+        # Requirement 14.8 – Store all datetimes in UTC+7
+        jdbc:
+          time_zone: Asia/Ho_Chi_Minh
+        default_schema: kolla_meeting
+
+  # Flyway – database migrations
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+    validate-on-migrate: true
+    out-of-order: false
+
+  # Redis – Requirement 16.6 (connection pool) + transcription queue
+  data:
+    redis:
+      host: ${SPRING_REDIS_HOST:localhost}
+      port: ${SPRING_REDIS_PORT:6379}
+      password: ${SPRING_REDIS_PASSWORD:}
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+          max-wait: 2000ms
+
+  # File upload limits (Requirement 6.4 – validate size before accepting)
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 500MB
+      max-request-size: 512MB
+      file-size-threshold: 2MB
+
+  # Requirement 14.8 – Jackson serialises all dates in UTC+7
+  jackson:
+    time-zone: Asia/Ho_Chi_Minh
+    date-format: yyyy-MM-dd'T'HH:mm:ss.SSSXXX
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+
+# ─────────────────────────────────────────────
+# Requirement 14.2 – JWT configuration
+# ─────────────────────────────────────────────
+jwt:
+  secret: ${JWT_SECRET:changeme-super-secret-key-at-least-32-chars}
+  # Default: 24 hours in milliseconds
+  expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+  # Refresh token TTL: 7 days
+  refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}
+
+# ─────────────────────────────────────────────
+# Requirement 14.3 – Local file storage path
+# ─────────────────────────────────────────────
+file:
+  storage:
+    base-path: ${FILE_STORAGE_PATH:/app/storage}
+    # Sub-directories (relative to base-path)
+    recordings-dir: recordings
+    documents-dir: documents
+    audio-chunks-dir: audio_chunks
+    minutes-dir: minutes
+    # Requirement 6.4 – allowed MIME types and max sizes
+    allowed-document-types: application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,image/jpeg,image/png
+    max-document-size-mb: 100
+    max-recording-size-mb: 5120
+
+# ─────────────────────────────────────────────
+# Requirement 14.4 – Jitsi server URL
+# ─────────────────────────────────────────────
+jitsi:
+  server-url: ${JITSI_SERVER_URL:https://jitsi.kolla.local:8443}
+  # JWT secret shared with Jitsi Prosody for authenticated rooms
+  app-id: ${JITSI_APP_ID:kolla}
+  app-secret: ${JITSI_APP_SECRET:jitsi-secret-change-me}
+
+# ─────────────────────────────────────────────
+# Requirement 14.5 – Gipformer service URL
+# ─────────────────────────────────────────────
+gipformer:
+  service-url: ${GIPFORMER_SERVICE_URL:http://localhost:8000}
+  # Health check interval (seconds)
+  health-check-interval-s: 30
+  # HTTP client timeouts
+  connect-timeout-ms: 5000
+  read-timeout-ms: 60000
+  # Retry policy (Requirement 8.7)
+  max-retries: 3
+  retry-delay-ms: 2000
+  # Internal API key for callback authentication
+  callback-api-key: ${GIPFORMER_CALLBACK_API_KEY:internal-callback-key-change-me}
+
+# ─────────────────────────────────────────────
+# Redis queue keys (used by TranscriptionQueueService)
+# ─────────────────────────────────────────────
+transcription:
+  queue:
+    sorted-set-key: "transcription:queue"
+    job-hash-prefix: "transcription:job:"
+    high-priority-meeting-key: "meeting:high_priority"
+  # Waiting timeout before auto-end (Requirement 3.11)
+  waiting-timeout-s: 600
+
+# ─────────────────────────────────────────────
+# Requirement 14.8 / 14.10 – Timezone
+# ─────────────────────────────────────────────
+app:
+  timezone: Asia/Ho_Chi_Minh
+
+# ─────────────────────────────────────────────
+# Logging
+# Requirement 15.1 – log all errors with stack traces
+# ─────────────────────────────────────────────
+logging:
+  level:
+    root: INFO
+    com.example.kolla: DEBUG
+    org.springframework.security: INFO
+    org.springframework.web.socket: INFO
+    org.flywaydb: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: /app/storage/logs/kolla-backend.log
+    max-size: 50MB
+    max-history: 30
+
+# ─────────────────────────────────────────────
+# Actuator (health checks for Docker healthcheck)
+# ─────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+  health:
+    redis:
+      enabled: true
+    db:
+      enabled: true
+
+# ─────────────────────────────────────────────
+# Springdoc OpenAPI – Requirement 18.1–18.7
+# ─────────────────────────────────────────────
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    # Requirement 18.7 – accessible without auth in dev
+    disable-swagger-default-url: true
+    operations-sorter: method
+    tags-sorter: alpha
+    try-it-out-enabled: true
+  show-actuator: false
+  default-produces-media-type: application/json

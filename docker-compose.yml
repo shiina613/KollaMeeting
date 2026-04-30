@@ -1,0 +1,248 @@
+# Kolla Meeting Rebuild - Docker Compose
+# Services: frontend (:3000), backend (:8080), gipformer (:8000),
+#           mysql (:3306), redis (:6379), jitsi (:8443)
+
+networks:
+  kolla-network:
+    driver: bridge
+
+volumes:
+  mysql-data:
+    driver: local
+  redis-data:
+    driver: local
+  app-storage:
+    driver: local
+  jitsi-web-config:
+    driver: local
+  jitsi-prosody-config:
+    driver: local
+  jitsi-jicofo-config:
+    driver: local
+  jitsi-jvb-config:
+    driver: local
+  # Requirement 19.1 – SSL / certbot volumes
+  certbot-webroot:
+    driver: local
+  certbot-certs:
+    driver: local
+
+services:
+  # ─────────────────────────────────────────────
+  # MySQL 8.0
+  # ─────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: kolla-mysql
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-kollaroot}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-kolla_meeting}
+      MYSQL_USER: ${MYSQL_USER:-kolla}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-kollapass}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - kolla-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-kollaroot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ─────────────────────────────────────────────
+  # Redis 7
+  # ─────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: kolla-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - kolla-network
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  # ─────────────────────────────────────────────
+  # Backend – Spring Boot 3.2 (:8080)
+  # ─────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: kolla-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # Requirement 14.1 – DB connection
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-kolla_meeting}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-kolla}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-kollapass}
+      # Requirement 14.2 – JWT
+      JWT_SECRET: ${JWT_SECRET:-changeme-super-secret-key-at-least-32-chars}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
+      # Requirement 14.3 – File storage path
+      FILE_STORAGE_PATH: /app/storage
+      # Requirement 14.4 – Jitsi server URL
+      JITSI_SERVER_URL: ${JITSI_SERVER_URL:-https://jitsi.kolla.local:8443}
+      # Requirement 14.5 – Gipformer service URL
+      GIPFORMER_SERVICE_URL: http://gipformer:8000
+      # Timezone
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_OPTS: "-Duser.timezone=Asia/Ho_Chi_Minh"
+    volumes:
+      - app-storage:/app/storage
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - kolla-network
+
+  # ─────────────────────────────────────────────
+  # Gipformer – Python FastAPI + sherpa-onnx (:8000)
+  # GPU passthrough via nvidia runtime; set DEVICE=cpu to fall back to CPU ONNX
+  # ─────────────────────────────────────────────
+  gipformer:
+    build:
+      context: ./gipformer
+      dockerfile: Dockerfile
+    container_name: kolla-gipformer
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # DEVICE=cuda enables GPU inference; set to "cpu" for CPU-only ONNX fallback
+      DEVICE: ${DEVICE:-cuda}
+      REDIS_URL: redis://redis:6379
+      BACKEND_CALLBACK_URL: http://backend:8080/api/v1/transcription/callback
+      STORAGE_PATH: /app/storage
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - app-storage:/app/storage
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - kolla-network
+    # GPU passthrough – requires nvidia-container-toolkit on the host.
+    # If no GPU is available, set DEVICE=cpu in your .env file; sherpa-onnx
+    # will automatically use CPU ONNX inference without this deploy section.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # ─────────────────────────────────────────────
+  # Frontend – React 18 + Vite (:3000)
+  # ─────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: kolla-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Requirement 14.6 – API base URL
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080/api/v1}
+      # Requirement 14.7 – Jitsi server URL
+      VITE_JITSI_URL: ${VITE_JITSI_URL:-https://jitsi.kolla.local:8443}
+      TZ: Asia/Ho_Chi_Minh
+    depends_on:
+      - backend
+    networks:
+      - kolla-network
+
+  # ─────────────────────────────────────────────
+  # Jitsi Meet – self-hosted (:8443)
+  # Prosody XMPP + Jicofo + JVB (Jitsi Videobridge)
+  # ─────────────────────────────────────────────
+  jitsi:
+    image: jitsi/web:stable
+    container_name: kolla-jitsi
+    restart: unless-stopped
+    ports:
+      - "8443:443"
+    environment:
+      PUBLIC_URL: ${JITSI_PUBLIC_URL:-https://jitsi.kolla.local:8443}
+      XMPP_SERVER: localhost
+      XMPP_DOMAIN: ${XMPP_DOMAIN:-meet.jitsi}
+      XMPP_AUTH_DOMAIN: ${XMPP_AUTH_DOMAIN:-auth.meet.jitsi}
+      XMPP_MUC_DOMAIN: ${XMPP_MUC_DOMAIN:-muc.meet.jitsi}
+      XMPP_INTERNAL_MUC_DOMAIN: ${XMPP_INTERNAL_MUC_DOMAIN:-internal-muc.meet.jitsi}
+      JICOFO_AUTH_USER: focus
+      JVB_ADVERTISE_IPS: ${JVB_ADVERTISE_IPS:-127.0.0.1}
+      ENABLE_AUTH: ${JITSI_ENABLE_AUTH:-0}
+      ENABLE_GUESTS: ${JITSI_ENABLE_GUESTS:-1}
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - jitsi-web-config:/config
+    networks:
+      - kolla-network
+
+  # ─────────────────────────────────────────────
+  # Nginx – reverse proxy + SSL termination
+  # Requirement 19.1: HTTPS, security headers, routing
+  #   /        → frontend:3000
+  #   /api     → backend:8080
+  #   /ws      → backend:8080 (WebSocket upgrade)
+  #   meet.*   → jitsi:8443
+  # ─────────────────────────────────────────────
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: kolla-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-kolla.local}
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      # nginx.conf template — envsubst expands ${DOMAIN} at container start
+      - ./nginx/nginx.conf:/etc/nginx/templates/default.conf.template:ro
+      # Shared webroot for ACME challenge files written by certbot
+      - certbot-webroot:/var/www/certbot
+      # Let's Encrypt certificates (shared with certbot container)
+      - certbot-certs:/etc/letsencrypt
+    depends_on:
+      - frontend
+      - backend
+      - jitsi
+    networks:
+      - kolla-network
+
+  # ─────────────────────────────────────────────
+  # Certbot – automatic SSL certificate renewal
+  # Polls every 12 h; certbot only renews when < 30 days remain,
+  # so certs are effectively renewed well before the 90-day expiry.
+  # ─────────────────────────────────────────────
+  certbot:
+    image: certbot/certbot:latest
+    container_name: kolla-certbot
+    volumes:
+      - certbot-webroot:/var/www/certbot
+      - certbot-certs:/etc/letsencrypt
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done"
+    networks:
+      - kolla-network

@@ -1,0 +1,41 @@
+# ============================================================
+# application-test.yml — Test profile
+# Used by Testcontainers integration tests (Task 24.5)
+# Activate with: @ActiveProfiles("test")
+# ============================================================
+
+spring:
+  # Testcontainers will override datasource URL at runtime
+  datasource:
+    url: jdbc:mysql://localhost:3306/kolla_test?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh
+    username: test
+    password: test
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+  flyway:
+    enabled: true
+    clean-on-validation-error: true
+
+  jpa:
+    show-sql: false
+
+jwt:
+  secret: test-secret-key-for-unit-tests-only-32chars
+  expiration-ms: 3600000
+
+file:
+  storage:
+    base-path: ./target/test-storage
+
+gipformer:
+  service-url: http://localhost:8000
+
+logging:
+  level:
+    root: WARN
+    com.example.kolla: INFO
+    org.flywaydb: INFO
