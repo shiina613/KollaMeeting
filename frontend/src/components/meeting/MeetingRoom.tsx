@@ -13,8 +13,9 @@
  * - Calls POST /meetings/{id}/leave on unmount
  * - Subscribes to WebSocket meeting events and dispatches to meetingStore
  * - Reacts to mode changes: muteAll on MEETING_MODE, restore on FREE_MODE
+ * - Starts/stops audio capture based on speaking permission and meeting mode
  *
- * Requirements: 4.6, 5.1, 5.3
+ * Requirements: 4.6, 5.1, 5.3, 8.14
  */
 
 import { useEffect, useRef, useCallback, useState } from 'react'
@@ -29,6 +30,7 @@ import ParticipantList from './ParticipantList'
 import SpeakingPermissionBadge from './SpeakingPermissionBadge'
 import useWebSocket from '../../hooks/useWebSocket'
 import useTranscription from '../../hooks/useTranscription'
+import useAudioCapture from '../../hooks/useAudioCapture'
 import useAuthStore from '../../store/authStore'
 import useMeetingStore from '../../store/meetingStore'
 import { joinMeeting, leaveMeeting } from '../../services/meetingService'
@@ -45,7 +47,7 @@ export interface MeetingRoomProps {
 /**
  * MeetingRoom
  *
- * Requirements: 4.6, 5.1, 5.3
+ * Requirements: 4.6, 5.1, 5.3, 8.14
  */
 export default function MeetingRoom({ meeting }: MeetingRoomProps) {
   const navigate = useNavigate()
@@ -61,6 +63,12 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
     meeting.transcriptionPriority,
   )
 
+  // ── Audio capture state ────────────────────────────────────────────────────
+
+  // speakerTurnId is set when the local user receives SPEAKING_PERMISSION_GRANTED.
+  // In FREE_MODE, a stable turn ID is used so all participants can stream.
+  const [speakerTurnId, setSpeakerTurnId] = useState<string | null>(null)
+
   // ── Derived state ──────────────────────────────────────────────────────────
 
   const isHost = user?.id === meeting.hostUser?.id
@@ -69,6 +77,16 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
   const isMeetingMode = mode === 'MEETING_MODE'
   const canChangePriority =
     user?.role === 'ADMIN' || user?.role === 'SECRETARY'
+
+  // ── Audio capture hook ─────────────────────────────────────────────────────
+
+  const { startCapture, stopCapture, isCapturing, isPermissionDenied } = useAudioCapture({
+    meetingId: meeting.id,
+    speakerTurnId,
+    onError: (err) => {
+      console.error('[MeetingRoom] Audio capture error:', err.message)
+    },
+  })
 
   // ── Join / leave ───────────────────────────────────────────────────────────
 
@@ -112,31 +130,50 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
         if (newMode === 'MEETING_MODE') {
           // Mute all participants when entering Meeting Mode (Req 21.4)
           jitsiRef.current?.muteAll()
+          // Stop audio capture for all participants — only the granted speaker
+          // will capture in MEETING_MODE (started on SPEAKING_PERMISSION_GRANTED)
+          stopCapture()
+          setSpeakerTurnId(null)
+        } else {
+          // FREE_MODE: all participants can capture simultaneously (Req 21.5)
+          // Generate a stable turn ID for this free-mode session
+          const freeTurnId = `free-${meeting.id}-${user?.id ?? 'anon'}-${Date.now()}`
+          setSpeakerTurnId(freeTurnId)
+          startCapture()
         }
-        // FREE_MODE: restore mic control — participants can unmute themselves (Req 21.5)
-        // No explicit action needed; Jitsi allows self-unmute by default
       }
 
       // SPEAKING_PERMISSION_GRANTED:
       // - Mute all participants first (Req 4.9)
-      // - If the local user is the granted speaker → unmute themselves (Req 4.10, 22.5)
-      // Note: Jitsi IFrame API does not allow remote unmute for security reasons.
-      //       The speaker must unmute themselves after receiving the event.
+      // - If the local user is the granted speaker → unmute + start audio capture (Req 4.10, 22.5, 8.14)
       if (event.type === 'SPEAKING_PERMISSION_GRANTED') {
-        const { userId } = event.payload as { userId: number; userName: string; speakerTurnId: string }
+        const { userId, speakerTurnId: newTurnId } = event.payload as {
+          userId: number
+          userName: string
+          speakerTurnId: string
+        }
         // Mute everyone first (Req 4.9)
         jitsiRef.current?.muteAll()
-        // If the local user is the new speaker, unmute themselves (Req 4.10)
         if (user?.id === userId) {
+          // Unmute the local speaker in Jitsi (Req 4.10)
           jitsiRef.current?.unmute()
+          // Start audio capture with the new speaker turn ID (Req 8.14)
+          setSpeakerTurnId(newTurnId)
+          startCapture()
+        } else {
+          // Another user got permission — stop our capture if running
+          stopCapture()
+          setSpeakerTurnId(null)
         }
       }
 
       // SPEAKING_PERMISSION_REVOKED:
-      // - If the local user was the speaker → mute themselves (Req 4.9, 22.5)
+      // - If the local user was the speaker → mute + stop audio capture (Req 4.9, 22.5, 8.14)
       if (event.type === 'SPEAKING_PERMISSION_REVOKED') {
         if (user?.id !== undefined && prevSpeakingPermission?.userId === user.id) {
           jitsiRef.current?.mute()
+          stopCapture()
+          setSpeakerTurnId(null)
         }
       }
 
@@ -145,7 +182,7 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
         navigate(`/meetings/${meeting.id}`, { replace: true })
       }
     },
-    [handleMeetingEvent, handleTranscriptionEvent, meeting.id, navigate, user?.id],
+    [handleMeetingEvent, handleTranscriptionEvent, meeting.id, navigate, user?.id, startCapture, stopCapture],
   )
 
   useWebSocket({
@@ -158,9 +195,16 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
   const handleModeChanged = useCallback((newMode: MeetingMode) => {
     if (newMode === 'MEETING_MODE') {
       jitsiRef.current?.muteAll()
+      // Stop audio capture — only the granted speaker will capture in MEETING_MODE
+      stopCapture()
+      setSpeakerTurnId(null)
+    } else {
+      // FREE_MODE: start capturing for all participants
+      const freeTurnId = `free-${meeting.id}-${user?.id ?? 'anon'}-${Date.now()}`
+      setSpeakerTurnId(freeTurnId)
+      startCapture()
     }
-    // FREE_MODE: no action — participants can unmute themselves
-  }, [])
+  }, [meeting.id, user?.id, startCapture, stopCapture])
 
   // ── Jitsi event handlers ───────────────────────────────────────────────────
 
@@ -222,6 +266,19 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
 
             {/* Speaking permission badge — visible to all in MEETING_MODE */}
             <SpeakingPermissionBadge currentUserId={user?.id} />
+
+            {/* Audio capture indicator — shown when actively streaming */}
+            {isCapturing && (
+              <div
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full
+                  bg-red-100 border border-red-300 text-label-md font-medium text-red-700"
+                aria-label="Đang ghi âm và phiên âm"
+                data-testid="audio-capture-indicator"
+              >
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" aria-hidden="true" />
+                REC
+              </div>
+            )}
           </div>
         </div>
 
@@ -232,6 +289,20 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
             role="alert"
           >
             {joinError}
+          </div>
+        )}
+
+        {/* Microphone permission denied banner */}
+        {isPermissionDenied && (
+          <div
+            className="flex items-center gap-2 bg-red-50 border-b border-red-200 px-4 py-2 text-body-sm text-red-800"
+            role="alert"
+            data-testid="mic-permission-denied-banner"
+          >
+            <span className="material-symbols-outlined text-[16px] shrink-0" aria-hidden="true">
+              mic_off
+            </span>
+            Trình duyệt đã chặn quyền truy cập microphone. Vui lòng cấp quyền trong cài đặt trình duyệt để phiên âm hoạt động.
           </div>
         )}
 
