@@ -298,7 +298,7 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
     - _Requirements: 8.14_
   - [x] 19.2 Implement `hooks/useTranscription.ts`: buffer incoming `TRANSCRIPTION_SEGMENT` WebSocket events, sort by (speakerTurnId, sequenceNumber)
     - _Requirements: 8.12_
-  - [~] 19.3 Implement `TranscriptionPanel.tsx`: hiển thị real-time transcription segments; chỉ visible khi meeting là HIGH_PRIORITY
+  - [x] 19.3 Implement `TranscriptionPanel.tsx`: hiển thị real-time transcription segments; chỉ visible khi meeting là HIGH_PRIORITY
     - _Requirements: 8.12, 8.13_
   - [~] 19.4 Implement priority controls: UI cho ADMIN/SECRETARY set HIGH/NORMAL priority; hiển thị `TRANSCRIPTION_UNAVAILABLE` indicator khi Gipformer down
     - _Requirements: 8.12_
