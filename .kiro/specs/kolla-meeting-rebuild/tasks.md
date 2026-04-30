@@ -302,12 +302,12 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
     - _Requirements: 8.12, 8.13_
   - [x] 19.4 Implement priority controls: UI cho ADMIN/SECRETARY set HIGH/NORMAL priority; hiển thị `TRANSCRIPTION_UNAVAILABLE` indicator khi Gipformer down
     - _Requirements: 8.12_
-  - [~] 19.5 Viết unit tests cho float32ToInt16 conversion và sortSegments utility
+  - [x] 19.5 Viết unit tests cho float32ToInt16 conversion và sortSegments utility
     - _Requirements: 20.3_
-  - [~] 19.6 Viết property test cho transcription segment ordering (fast-check)
+  - [x] 19.6 Viết property test cho transcription segment ordering (fast-check)
     - **Property 7: Minutes Assembly Ordering (frontend display)**
     - **Validates: Requirements 8.12**
-  - [~] 19.7 Viết property test cho adaptive VAD threshold (fast-check, frontend mirror)
+  - [x] 19.7 Viết property test cho adaptive VAD threshold (fast-check, frontend mirror)
     - **Property 5: Adaptive VAD Threshold Function (frontend)**
     - **Validates: Requirements 8.9**
 
