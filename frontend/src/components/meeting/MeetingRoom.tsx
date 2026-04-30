@@ -25,6 +25,7 @@ import RaiseHandPanel from './RaiseHandPanel'
 import RaiseHandButton from './RaiseHandButton'
 import MeetingModeToggle from './MeetingModeToggle'
 import ParticipantList from './ParticipantList'
+import SpeakingPermissionBadge from './SpeakingPermissionBadge'
 import useWebSocket from '../../hooks/useWebSocket'
 import useAuthStore from '../../store/authStore'
 import useMeetingStore from '../../store/meetingStore'
@@ -173,6 +174,9 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
               isHost={isHost || isSecretary}
               onModeChanged={handleModeChanged}
             />
+
+            {/* Speaking permission badge — visible to all in MEETING_MODE */}
+            <SpeakingPermissionBadge currentUserId={user?.id} />
           </div>
         </div>
 
