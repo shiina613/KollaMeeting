@@ -196,7 +196,7 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
   - [x] 12.4 Viết unit tests cho audio_converter (PCM → WAV correctness)
     - _Requirements: 20.3_
 
-- [-] 13. Gipformer Service: VAD Chunker & Redis Worker
+- [x] 13. Gipformer Service: VAD Chunker & Redis Worker
   - [x] 13.1 Implement `core/vad_chunker.py`: Adaptive VAD threshold (< 15s → 2–3s silence; ≥ 15s → 0.5–1s silence), hard cap 30s, sequence_number tracking per speaker_turn_id
     - _Requirements: 8.9_
   - [x] 13.2 Implement `queue/redis_queue.py`: ZADD (push với priority score), ZPOPMAX (pop highest score), HSET/HGETALL cho job details
@@ -207,13 +207,13 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
     - _Requirements: 8.11_
   - [x] 13.5 Implement `api/routes.py`: POST `/jobs` (submit job → ZADD Redis), GET `/health`, POST `/transcribe` (synchronous)
     - _Requirements: 8.10_
-  - [-] 13.6 Viết property test cho adaptive VAD threshold (hypothesis)
+  - [x] 13.6 Viết property test cho adaptive VAD threshold (hypothesis)
     - **Property 5: Adaptive VAD Threshold Function**
     - **Validates: Requirements 8.9**
-  - [-] 13.7 Viết property test cho sequence number monotonicity (hypothesis)
+  - [x] 13.7 Viết property test cho sequence number monotonicity (hypothesis)
     - **Property 6: Sequence Number Monotonicity**
     - **Validates: Requirements 8.9**
-  - [-] 13.8 Viết property test cho queue priority ordering (hypothesis)
+  - [x] 13.8 Viết property test cho queue priority ordering (hypothesis)
     - **Property 3: Queue Priority Ordering**
     - **Validates: Requirements 8.10**
 
