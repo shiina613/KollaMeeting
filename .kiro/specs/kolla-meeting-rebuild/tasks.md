@@ -227,19 +227,19 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
   - [x] 13.9.5 Tạo file `frontend/src/components/layout/sidebar-spec.md` mô tả chính xác Sidebar từ thiết kế thực tế (pixel values, màu sắc, icon names) để dùng làm reference khi code
   - _Yêu cầu: Stitch MCP phải được kết nối và project ID phải có sẵn trong workspace_
 
-- [ ] 14. Frontend: Project Setup & Core Infrastructure
-  - [ ] 14.1 Khởi tạo React 18 + Vite project, cài Tailwind CSS, React Router v6, Zustand, Axios, SockJS + @stomp/stompjs, fast-check
+- [-] 14. Frontend: Project Setup & Core Infrastructure
+  - [x] 14.1 Khởi tạo React 18 + Vite project, cài Tailwind CSS, React Router v6, Zustand, Axios, SockJS + @stomp/stompjs, fast-check
     - Cấu hình `vite.config.ts`, `tailwind.config.ts`, `vitest.config.ts`
     - _Requirements: 1.1–1.3, 1.6, 1.7_
-  - [ ] 14.2 Implement `services/api.ts`: Axios instance với JWT interceptor (attach Bearer token; 401 → redirect login; 5xx → toast error)
+  - [x] 14.2 Implement `services/api.ts`: Axios instance với JWT interceptor (attach Bearer token; 401 → redirect login; 5xx → toast error)
     - _Requirements: 2.3, 2.4, 15.3_
-  - [ ] 14.3 Implement `store/authStore.ts` (Zustand): JWT token, user info, login/logout actions; không lưu sensitive data vào localStorage
+  - [x] 14.3 Implement `store/authStore.ts` (Zustand): JWT token, user info, login/logout actions; không lưu sensitive data vào localStorage
     - _Requirements: 2.2, 19.6_
-  - [ ] 14.4 Implement `AppRouter.tsx`: protected routes theo role, lazy loading cho pages
+  - [x] 14.4 Implement `AppRouter.tsx`: protected routes theo role, lazy loading cho pages
     - _Requirements: 1.6, 16.7_
-  - [ ] 14.5 Implement layout components: `Sidebar.tsx`, `Header.tsx`, `NotificationPanel.tsx`
+  - [x] 14.5 Implement layout components: `Sidebar.tsx`, `Header.tsx`, `NotificationPanel.tsx`
     - _Requirements: 1.4, 10.5, 10.6_
-  - [ ] 14.6 Viết unit tests cho Zustand store actions và Axios interceptor logic
+  - [x] 14.6 Viết unit tests cho Zustand store actions và Axios interceptor logic
     - _Requirements: 20.3_
 
 - [ ] 15. Frontend: WebSocket Hook & Notification
