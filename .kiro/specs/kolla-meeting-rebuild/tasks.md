@@ -314,7 +314,7 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
 - [x] 20. Checkpoint — Meeting Room Features
   - Đảm bảo: join meeting → Jitsi load, mode switch hoạt động, raise hand flow end-to-end, audio capture gửi được WebSocket binary. Hỏi user nếu có vấn đề.
 
-- [-] 21. Frontend: Minutes UI
+- [x] 21. Frontend: Minutes UI
   - [x] 21.1 Implement `MinutesViewer.tsx`: hiển thị PDF viewer (iframe hoặc react-pdf) cho draft/confirmed/secretary versions
     - _Requirements: 25.6_
   - [x] 21.2 Implement `MinutesEditor.tsx`: rich text editor (TipTap hoặc Quill) cho Secretary edit; submit contentHtml
