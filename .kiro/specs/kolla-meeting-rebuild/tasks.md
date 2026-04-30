@@ -242,7 +242,7 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
   - [x] 14.6 Viết unit tests cho Zustand store actions và Axios interceptor logic
     - _Requirements: 20.3_
 
-- [-] 15. Frontend: WebSocket Hook & Notification
+- [x] 15. Frontend: WebSocket Hook & Notification
   - [x] 15.1 Implement `hooks/useWebSocket.ts`: STOMP/SockJS connection, subscribe `/topic/meeting/{id}` và `/user/queue/notifications`, auto-reconnect với exponential backoff (1s, 2s, 4s, max 30s)
     - _Requirements: 10.1_
   - [x] 15.2 Implement `store/notificationStore.ts`: lưu notification list, mark-read actions
@@ -252,16 +252,16 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
   - [x] 15.4 Viết unit tests cho useWebSocket hook (mocked STOMP)
     - _Requirements: 20.3_
 
-- [ ] 16. Frontend: Meeting List & CRUD Pages
-  - [ ] 16.1 Implement `MeetingListPage.tsx`: danh sách meetings với filter (date range, room, department), sort, pagination
+- [-] 16. Frontend: Meeting List & CRUD Pages
+  - [x] 16.1 Implement `MeetingListPage.tsx`: danh sách meetings với filter (date range, room, department), sort, pagination
     - _Requirements: 3.4, 13.5, 13.6_
-  - [ ] 16.2 Implement meeting create/edit form: validation, room selection với availability indicator, host/secretary designation
+  - [x] 16.2 Implement meeting create/edit form: validation, room selection với availability indicator, host/secretary designation
     - _Requirements: 3.3, 3.8, 12.8_
-  - [ ] 16.3 Implement `MeetingDetailPage.tsx`: hiển thị participants, documents, recordings, attendance history
+  - [x] 16.3 Implement `MeetingDetailPage.tsx`: hiển thị participants, documents, recordings, attendance history
     - _Requirements: 3.7, 5.7_
-  - [ ] 16.4 Implement `services/meetingService.ts`, `recordingService.ts`, `userService.ts`: wrap API calls
+  - [x] 16.4 Implement `services/meetingService.ts`, `recordingService.ts`, `userService.ts`: wrap API calls
     - _Requirements: 1.4_
-  - [ ] 16.5 Viết component tests cho meeting create form (validation, room conflict display)
+  - [x] 16.5 Viết component tests cho meeting create form (validation, room conflict display)
     - _Requirements: 20.4_
 
 - [ ] 17. Frontend: Meeting Room & Jitsi Integration
