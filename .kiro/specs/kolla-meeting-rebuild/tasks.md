@@ -277,7 +277,7 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
     - _Requirements: 21.4, 21.5, 21.6_
   - [x] 17.5 Implement `ParticipantList.tsx`: real-time list từ WebSocket events, hiển thị speaking indicator
     - _Requirements: 5.6_
-  - [x] 17.6 Viết component tests cho MeetingModeToggle (state display, API call)
+  - [x]  17.6 Viết component tests cho MeetingModeToggle (state display, API call)
     - _Requirements: 20.4_
 
 - [x] 18. Frontend: Raise Hand & Speaking Permission UI
@@ -292,7 +292,7 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
   - [x] 18.5 Viết component tests cho RaiseHandPanel (chronological order rendering)
     - _Requirements: 20.4_
 
-- [-] 19. Frontend: Audio Capture & Transcription
+- [x] 19. Frontend: Audio Capture & Transcription
   - [x] 19.1 Implement `hooks/useAudioCapture.ts`: `getUserMedia()` → `AudioContext` (16kHz) → `ScriptProcessorNode` (4096 samples) → Float32 to Int16 conversion → send binary via WebSocket
     - Handle permission denied: show dialog, disable capture
     - _Requirements: 8.14_
@@ -311,7 +311,7 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
     - **Property 5: Adaptive VAD Threshold Function (frontend)**
     - **Validates: Requirements 8.9**
 
-- [ ] 20. Checkpoint — Meeting Room Features
+- [x] 20. Checkpoint — Meeting Room Features
   - Đảm bảo: join meeting → Jitsi load, mode switch hoạt động, raise hand flow end-to-end, audio capture gửi được WebSocket binary. Hỏi user nếu có vấn đề.
 
 - [ ] 21. Frontend: Minutes UI
