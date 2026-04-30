@@ -1,0 +1,33 @@
+{
+  "mcpServers": {
+    "fetch": {
+      "command": "uvx",
+      "args": [
+        "mcp-server-fetch"
+      ],
+      "env": {},
+      "disabled": true,
+      "autoApprove": []
+    },
+    "stitch": {
+      "command": "npx",
+      "args": [
+        "@_davideast/stitch-mcp",
+        "proxy"
+      ],
+      "env": {
+        "STITCH_API_KEY": "${STITCH_API_KEY}"
+      },
+      "disabled": false,
+      "autoApprove": [
+        "list_projects",
+        "list_screens",
+        "get_screen",
+        "get_project",
+        "get_screen_code",
+        "get_screen_image",
+        "build_site"
+      ]
+    }
+  }
+}

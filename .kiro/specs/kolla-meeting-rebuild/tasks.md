@@ -217,6 +217,16 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
     - **Property 3: Queue Priority Ordering**
     - **Validates: Requirements 8.10**
 
+- [x] 13.9 Design Sync — Đọc thiết kế từ Stitch MCP và đồng bộ hóa Shared Layout
+  - [x] 13.9.1 Dùng Stitch MCP đọc toàn bộ screens trong project, liệt kê tên và ID từng screen
+  - [x] 13.9.2 Xác định screen nào chứa Sidebar + Header (Shared Layout) — đọc HTML/screenshot của screen đó
+  - [x] 13.9.3 Trích xuất design tokens từ Shared Layout screen: màu sắc, font, spacing, border-radius, shadow
+    - Ghi kết quả vào `frontend/src/styles/tokens.css` (CSS variables)
+  - [x] 13.9.4 Đọc từng screen còn lại, ghi chú sự khác biệt về Sidebar so với spec trong `frontend-design-brief.md`
+    - Nếu có sự không nhất quán → ghi rõ screen nào bị lệch và lệch ở điểm nào
+  - [x] 13.9.5 Tạo file `frontend/src/components/layout/sidebar-spec.md` mô tả chính xác Sidebar từ thiết kế thực tế (pixel values, màu sắc, icon names) để dùng làm reference khi code
+  - _Yêu cầu: Stitch MCP phải được kết nối và project ID phải có sẵn trong workspace_
+
 - [ ] 14. Frontend: Project Setup & Core Infrastructure
   - [ ] 14.1 Khởi tạo React 18 + Vite project, cài Tailwind CSS, React Router v6, Zustand, Axios, SockJS + @stomp/stompjs, fast-check
     - Cấu hình `vite.config.ts`, `tailwind.config.ts`, `vitest.config.ts`
