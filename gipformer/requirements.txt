@@ -1,8 +1,5 @@
 # Gipformer - Vietnamese ASR Service
 # https://huggingface.co/g-group-ai-lab/gipformer-65M-rnnt
-#
-# Install (CPU / dev):  pip install -r requirements.txt
-# Install (GPU):        pip install -r requirements.txt -r requirements-gpu.txt
 
 # ── FastAPI service ──────────────────────────────────────────────────────────
 fastapi>=0.110.0
@@ -24,12 +21,28 @@ soundfile>=0.12.0
 sherpa-onnx>=1.10.0
 huggingface_hub>=0.20.0
 
+# ── PyTorch inference (GPU, optional) ────────────────────────────────────────
+# NOTE: k2 và kaldifeat KHÔNG có trên PyPI — chỉ cài được từ custom index bên dưới.
+# Nếu chạy CPU-only (DEVICE=cpu), bỏ qua toàn bộ section này.
+--find-links https://k2-fsa.github.io/k2/cuda.html
+--find-links https://csukuangfj.github.io/kaldifeat/cuda.html
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch==2.8.0
+torchaudio==2.8.0
+k2==1.24.4.dev20250807+cuda12.8.torch2.8.0
+kaldifeat==1.25.5.dev20250807+cuda12.8.torch2.8.0
+sentencepiece==0.2.1
+# icefall runtime dependencies
+kaldialign
+pypinyin==0.50.0
+tensorboard
+
 # ── Testing ──────────────────────────────────────────────────────────────────
 pytest>=7.0.0
 hypothesis>=6.0.0
-# sortedcontainers is a direct dependency of hypothesis (property-based testing)
+# sortedcontainers: direct dependency của hypothesis
 sortedcontainers>=2.1.0
-# fakeredis: in-memory Redis for unit/property tests (no real Redis needed)
+# fakeredis: in-memory Redis cho unit/property tests (không cần Redis thật)
 fakeredis>=2.0.0
-# pytest-asyncio: needed if async FastAPI route tests are added
+# pytest-asyncio: cần nếu thêm async FastAPI route tests
 pytest-asyncio>=0.21.0
