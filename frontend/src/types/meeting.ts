@@ -91,7 +91,28 @@ export interface RaiseHandRequest {
   requestedAt: string
 }
 
-// ─── Meeting detail ───────────────────────────────────────────────────────────
+// ─── Domain models ────────────────────────────────────────────────────────────
+
+export interface Department {
+  id: number
+  name: string
+}
+
+export interface Room {
+  id: number
+  name: string
+  capacity?: number
+  department: Department
+}
+
+export interface MeetingUser {
+  id: number
+  username: string
+  fullName: string
+  email: string
+  role: 'ADMIN' | 'SECRETARY' | 'USER'
+  department?: Department
+}
 
 export interface Meeting {
   id: number
@@ -101,15 +122,109 @@ export interface Meeting {
   status: MeetingStatus
   mode: MeetingMode
   transcriptionPriority: TranscriptionPriority
-  startTime: string
+  startTime: string  // ISO8601 UTC+7
   endTime: string
-  roomId: number
+  room: Room
+  hostUser: MeetingUser
+  secretaryUser: MeetingUser
+  createdBy: MeetingUser
+  memberCount?: number
+  // Legacy flat fields (kept for backward compat)
+  roomId?: number
   roomName?: string
   departmentId?: number
   departmentName?: string
-  hostUserId: number
+  hostUserId?: number
   hostUserName?: string
-  secretaryUserId: number
+  secretaryUserId?: number
   secretaryUserName?: string
-  createdAt: string
+  createdAt?: string
+}
+
+export interface MeetingMember {
+  id: number
+  username: string
+  fullName: string
+  email: string
+  role: 'ADMIN' | 'SECRETARY' | 'USER'
+  department?: Department
+}
+
+// ─── Recording ────────────────────────────────────────────────────────────────
+
+export type RecordingStatus = 'RECORDING' | 'COMPLETED' | 'FAILED'
+
+export interface Recording {
+  id: number
+  fileName: string
+  fileSize: number
+  startTime: string
+  endTime?: string
+  status: RecordingStatus
+}
+
+// ─── Document ─────────────────────────────────────────────────────────────────
+
+export interface MeetingDocument {
+  id: number
+  fileName: string
+  fileSize: number
+  uploadedAt: string
+  uploadedBy: MeetingUser
+}
+
+// ─── Attendance ───────────────────────────────────────────────────────────────
+
+export interface AttendanceLog {
+  id: number
+  user: MeetingUser
+  joinTime: string
+  leaveTime?: string
+  durationMinutes?: number
+}
+
+// ─── Room availability ────────────────────────────────────────────────────────
+
+export interface RoomAvailabilitySlot {
+  startTime: string
+  endTime: string
+  meetingId: number
+  meetingTitle: string
+}
+
+// ─── Create/Update request bodies ────────────────────────────────────────────
+
+export interface CreateMeetingRequest {
+  title: string
+  description?: string
+  startTime: string
+  endTime: string
+  roomId: number
+  hostUserId: number
+  secretaryUserId: number
+  transcriptionPriority?: TranscriptionPriority
+}
+
+export interface UpdateMeetingRequest {
+  title?: string
+  description?: string
+  startTime?: string
+  endTime?: string
+  roomId?: number
+  hostUserId?: number
+  secretaryUserId?: number
+  transcriptionPriority?: TranscriptionPriority
+}
+
+// ─── Meeting list filters ─────────────────────────────────────────────────────
+
+export interface MeetingFilters {
+  startDate?: string
+  endDate?: string
+  roomId?: number
+  departmentId?: number
+  status?: MeetingStatus
+  page?: number
+  size?: number
+  sort?: string
 }
