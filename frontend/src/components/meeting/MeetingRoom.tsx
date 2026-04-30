@@ -89,6 +89,9 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
 
   const onMeetingEvent = useCallback(
     (event: MeetingEvent) => {
+      // Capture pre-dispatch state for events that need it
+      const prevSpeakingPermission = useMeetingStore.getState().speakingPermission
+
       // Dispatch to store first
       handleMeetingEvent(event)
 
@@ -103,12 +106,35 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
         // No explicit action needed; Jitsi allows self-unmute by default
       }
 
+      // SPEAKING_PERMISSION_GRANTED:
+      // - Mute all participants first (Req 4.9)
+      // - If the local user is the granted speaker → unmute themselves (Req 4.10, 22.5)
+      // Note: Jitsi IFrame API does not allow remote unmute for security reasons.
+      //       The speaker must unmute themselves after receiving the event.
+      if (event.type === 'SPEAKING_PERMISSION_GRANTED') {
+        const { userId } = event.payload as { userId: number; userName: string; speakerTurnId: string }
+        // Mute everyone first (Req 4.9)
+        jitsiRef.current?.muteAll()
+        // If the local user is the new speaker, unmute themselves (Req 4.10)
+        if (user?.id === userId) {
+          jitsiRef.current?.unmute()
+        }
+      }
+
+      // SPEAKING_PERMISSION_REVOKED:
+      // - If the local user was the speaker → mute themselves (Req 4.9, 22.5)
+      if (event.type === 'SPEAKING_PERMISSION_REVOKED') {
+        if (user?.id !== undefined && prevSpeakingPermission?.userId === user.id) {
+          jitsiRef.current?.mute()
+        }
+      }
+
       // When meeting ends, navigate back to meeting detail
       if (event.type === 'MEETING_ENDED') {
         navigate(`/meetings/${meeting.id}`, { replace: true })
       }
     },
-    [handleMeetingEvent, meeting.id, navigate],
+    [handleMeetingEvent, meeting.id, navigate, user?.id],
   )
 
   useWebSocket({
