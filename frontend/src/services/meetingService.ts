@@ -16,6 +16,8 @@ import type {
   Room,
   Department,
   RoomAvailabilitySlot,
+  RaiseHandRequest,
+  SpeakingPermission,
 } from '../types/meeting'
 
 // ─── Meetings ─────────────────────────────────────────────────────────────────
@@ -220,4 +222,84 @@ export function getConflictMessage(error: unknown): string {
     axiosError?.response?.data?.message ??
     'Phòng họp đã được đặt trong khoảng thời gian này.'
   )
+}
+
+// ─── Raise Hand ───────────────────────────────────────────────────────────────
+
+/**
+ * Submit a raise-hand request (Participant action).
+ * Requirements: 22.2
+ */
+export async function raiseHand(meetingId: number): Promise<ApiResponse<void>> {
+  const response = await api.post<ApiResponse<void>>(
+    `/meetings/${meetingId}/raise-hand`,
+  )
+  return response.data
+}
+
+/**
+ * Lower hand / cancel raise-hand request (Participant action).
+ * Requirements: 22.7
+ */
+export async function lowerHand(meetingId: number): Promise<ApiResponse<void>> {
+  const response = await api.delete<ApiResponse<void>>(
+    `/meetings/${meetingId}/raise-hand`,
+  )
+  return response.data
+}
+
+/**
+ * List pending raise-hand requests for a meeting (Host view).
+ * Returns requests in chronological order (oldest first).
+ * Requirements: 22.9
+ */
+export async function listRaiseHandRequests(
+  meetingId: number,
+): Promise<ApiResponse<RaiseHandRequest[]>> {
+  const response = await api.get<ApiResponse<RaiseHandRequest[]>>(
+    `/meetings/${meetingId}/raise-hand`,
+  )
+  return response.data
+}
+
+// ─── Speaking Permission ──────────────────────────────────────────────────────
+
+/**
+ * Grant speaking permission to a participant (Host action).
+ * Requirements: 22.4
+ */
+export async function grantSpeakingPermission(
+  meetingId: number,
+  userId: number,
+): Promise<ApiResponse<void>> {
+  const response = await api.post<ApiResponse<void>>(
+    `/meetings/${meetingId}/speaking-permission/${userId}`,
+  )
+  return response.data
+}
+
+/**
+ * Revoke speaking permission from the current speaker (Host action).
+ * Requirements: 22.6
+ */
+export async function revokeSpeakingPermission(
+  meetingId: number,
+): Promise<ApiResponse<void>> {
+  const response = await api.delete<ApiResponse<void>>(
+    `/meetings/${meetingId}/speaking-permission`,
+  )
+  return response.data
+}
+
+/**
+ * Get the current speaking permission for a meeting.
+ * Requirements: 22.5
+ */
+export async function getSpeakingPermission(
+  meetingId: number,
+): Promise<ApiResponse<SpeakingPermission | null>> {
+  const response = await api.get<ApiResponse<SpeakingPermission | null>>(
+    `/meetings/${meetingId}/speaking-permission`,
+  )
+  return response.data
 }
