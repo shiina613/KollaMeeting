@@ -264,7 +264,7 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
   - [x] 16.5 Viết component tests cho meeting create form (validation, room conflict display)
     - _Requirements: 20.4_
 
-- [-] 17. Frontend: Meeting Room & Jitsi Integration
+- [x] 17. Frontend: Meeting Room & Jitsi Integration
   - [x] 17.1 Implement `hooks/useJitsiApi.ts`: load Jitsi IFrame API từ `https://jitsi.kolla.local/external_api.js`, khởi tạo với meetingCode, displayName, avatar, JWT
     - Handle events: `participantJoined`, `participantLeft`, `videoConferenceLeft`
     - _Requirements: 4.1–4.7_
