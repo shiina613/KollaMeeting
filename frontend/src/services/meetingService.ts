@@ -303,3 +303,33 @@ export async function getSpeakingPermission(
   )
   return response.data
 }
+
+// ─── Transcription Priority ───────────────────────────────────────────────────
+
+/**
+ * Set the transcription priority for a meeting (ADMIN/SECRETARY only).
+ * Requirements: 8.12
+ */
+export async function setTranscriptionPriority(
+  meetingId: number,
+  priority: import('../types/meeting').TranscriptionPriority,
+): Promise<ApiResponse<void>> {
+  const response = await api.put<ApiResponse<void>>(
+    `/meetings/${meetingId}/priority`,
+    { priority },
+  )
+  return response.data
+}
+
+/**
+ * Get the current transcription priority for a meeting.
+ * Requirements: 8.12
+ */
+export async function getTranscriptionPriority(
+  meetingId: number,
+): Promise<ApiResponse<{ priority: import('../types/meeting').TranscriptionPriority }>> {
+  const response = await api.get<ApiResponse<{ priority: import('../types/meeting').TranscriptionPriority }>>(
+    `/meetings/${meetingId}/priority`,
+  )
+  return response.data
+}
