@@ -296,7 +296,7 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
   - [x] 19.1 Implement `hooks/useAudioCapture.ts`: `getUserMedia()` → `AudioContext` (16kHz) → `ScriptProcessorNode` (4096 samples) → Float32 to Int16 conversion → send binary via WebSocket
     - Handle permission denied: show dialog, disable capture
     - _Requirements: 8.14_
-  - [~] 19.2 Implement `hooks/useTranscription.ts`: buffer incoming `TRANSCRIPTION_SEGMENT` WebSocket events, sort by (speakerTurnId, sequenceNumber)
+  - [x] 19.2 Implement `hooks/useTranscription.ts`: buffer incoming `TRANSCRIPTION_SEGMENT` WebSocket events, sort by (speakerTurnId, sequenceNumber)
     - _Requirements: 8.12_
   - [~] 19.3 Implement `TranscriptionPanel.tsx`: hiển thị real-time transcription segments; chỉ visible khi meeting là HIGH_PRIORITY
     - _Requirements: 8.12, 8.13_
