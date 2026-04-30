@@ -252,7 +252,7 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
   - [x] 15.4 Viết unit tests cho useWebSocket hook (mocked STOMP)
     - _Requirements: 20.3_
 
-- [-] 16. Frontend: Meeting List & CRUD Pages
+- [x] 16. Frontend: Meeting List & CRUD Pages
   - [x] 16.1 Implement `MeetingListPage.tsx`: danh sách meetings với filter (date range, room, department), sort, pagination
     - _Requirements: 3.4, 13.5, 13.6_
   - [x] 16.2 Implement meeting create/edit form: validation, room selection với availability indicator, host/secretary designation
@@ -264,11 +264,11 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
   - [x] 16.5 Viết component tests cho meeting create form (validation, room conflict display)
     - _Requirements: 20.4_
 
-- [ ] 17. Frontend: Meeting Room & Jitsi Integration
-  - [ ] 17.1 Implement `hooks/useJitsiApi.ts`: load Jitsi IFrame API từ `https://jitsi.kolla.local/external_api.js`, khởi tạo với meetingCode, displayName, avatar, JWT
+- [-] 17. Frontend: Meeting Room & Jitsi Integration
+  - [x] 17.1 Implement `hooks/useJitsiApi.ts`: load Jitsi IFrame API từ `https://jitsi.kolla.local/external_api.js`, khởi tạo với meetingCode, displayName, avatar, JWT
     - Handle events: `participantJoined`, `participantLeft`, `videoConferenceLeft`
     - _Requirements: 4.1–4.7_
-  - [ ] 17.2 Implement `JitsiFrame.tsx`: embed iframe, expose mute/unmute/muteAll controls qua Jitsi API
+  - [-] 17.2 Implement `JitsiFrame.tsx`: embed iframe, expose mute/unmute/muteAll controls qua Jitsi API
     - _Requirements: 4.7_
   - [ ] 17.3 Implement `MeetingRoom.tsx`: container page kết hợp JitsiFrame + TranscriptionPanel + RaiseHandPanel + MeetingModeToggle + ParticipantList
     - Notify backend khi join/leave (attendance tracking)
