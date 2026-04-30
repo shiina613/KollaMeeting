@@ -280,7 +280,7 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
   - [x] 17.6 Viết component tests cho MeetingModeToggle (state display, API call)
     - _Requirements: 20.4_
 
-- [-] 18. Frontend: Raise Hand & Speaking Permission UI
+- [x] 18. Frontend: Raise Hand & Speaking Permission UI
   - [x] 18.1 Implement `RaiseHandPanel.tsx`: hiển thị pending requests theo chronological order (Host view); nút Grant/Revoke permission
     - _Requirements: 22.3, 22.9_
   - [x] 18.2 Implement raise hand button cho Participants: hiển thị khi MEETING_MODE và chưa có permission; ẩn khi đang giữ permission
@@ -292,22 +292,22 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
   - [x] 18.5 Viết component tests cho RaiseHandPanel (chronological order rendering)
     - _Requirements: 20.4_
 
-- [ ] 19. Frontend: Audio Capture & Transcription
-  - [ ] 19.1 Implement `hooks/useAudioCapture.ts`: `getUserMedia()` → `AudioContext` (16kHz) → `ScriptProcessorNode` (4096 samples) → Float32 to Int16 conversion → send binary via WebSocket
+- [-] 19. Frontend: Audio Capture & Transcription
+  - [x] 19.1 Implement `hooks/useAudioCapture.ts`: `getUserMedia()` → `AudioContext` (16kHz) → `ScriptProcessorNode` (4096 samples) → Float32 to Int16 conversion → send binary via WebSocket
     - Handle permission denied: show dialog, disable capture
     - _Requirements: 8.14_
-  - [ ] 19.2 Implement `hooks/useTranscription.ts`: buffer incoming `TRANSCRIPTION_SEGMENT` WebSocket events, sort by (speakerTurnId, sequenceNumber)
+  - [~] 19.2 Implement `hooks/useTranscription.ts`: buffer incoming `TRANSCRIPTION_SEGMENT` WebSocket events, sort by (speakerTurnId, sequenceNumber)
     - _Requirements: 8.12_
-  - [ ] 19.3 Implement `TranscriptionPanel.tsx`: hiển thị real-time transcription segments; chỉ visible khi meeting là HIGH_PRIORITY
+  - [~] 19.3 Implement `TranscriptionPanel.tsx`: hiển thị real-time transcription segments; chỉ visible khi meeting là HIGH_PRIORITY
     - _Requirements: 8.12, 8.13_
-  - [ ] 19.4 Implement priority controls: UI cho ADMIN/SECRETARY set HIGH/NORMAL priority; hiển thị `TRANSCRIPTION_UNAVAILABLE` indicator khi Gipformer down
+  - [~] 19.4 Implement priority controls: UI cho ADMIN/SECRETARY set HIGH/NORMAL priority; hiển thị `TRANSCRIPTION_UNAVAILABLE` indicator khi Gipformer down
     - _Requirements: 8.12_
-  - [ ] 19.5 Viết unit tests cho float32ToInt16 conversion và sortSegments utility
+  - [~] 19.5 Viết unit tests cho float32ToInt16 conversion và sortSegments utility
     - _Requirements: 20.3_
-  - [ ] 19.6 Viết property test cho transcription segment ordering (fast-check)
+  - [~] 19.6 Viết property test cho transcription segment ordering (fast-check)
     - **Property 7: Minutes Assembly Ordering (frontend display)**
     - **Validates: Requirements 8.12**
-  - [ ] 19.7 Viết property test cho adaptive VAD threshold (fast-check, frontend mirror)
+  - [~] 19.7 Viết property test cho adaptive VAD threshold (fast-check, frontend mirror)
     - **Property 5: Adaptive VAD Threshold Function (frontend)**
     - **Validates: Requirements 8.9**
 
