@@ -213,10 +213,12 @@ services:
     container_name: kolla-nginx
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "8080:8080"   # HTTP (ACME challenge + redirect)
+      - "8443:8443"   # HTTPS (main app + Jitsi vhost)
     environment:
       DOMAIN: ${DOMAIN:-kolla.local}
+      DUCKDNS_TOKEN: ${DUCKDNS_TOKEN:-}
+      CERTBOT_EMAIL: ${CERTBOT_EMAIL:-admin@example.com}
       TZ: Asia/Ho_Chi_Minh
     volumes:
       # nginx.conf template — envsubst expands ${DOMAIN} at container start
