@@ -326,14 +326,14 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
   - [x] 21.5 Viết component tests cho MinutesEditor (render, submit)
     - _Requirements: 20.4_
 
-- [ ] 22. Frontend: Admin Pages
-  - [ ] 22.1 Implement `UserManagement.tsx`: list users (paginated), create/edit/delete, reset password, role assignment
+- [-] 22. Frontend: Admin Pages
+  - [x] 22.1 Implement `UserManagement.tsx`: list users (paginated), create/edit/delete, reset password, role assignment
     - _Requirements: 11.3, 11.8_
-  - [ ] 22.2 Implement `StorageDashboard.tsx`: hiển thị storage stats (total size, per-type breakdown), bulk delete UI với confirmation dialog
+  - [x] 22.2 Implement `StorageDashboard.tsx`: hiển thị storage stats (total size, per-type breakdown), bulk delete UI với confirmation dialog
     - _Requirements: 6.7_
-  - [ ] 22.3 Implement `AdminPage.tsx`: tabs cho User Management, Storage Dashboard, Department/Room management
+  - [x] 22.3 Implement `AdminPage.tsx`: tabs cho User Management, Storage Dashboard, Department/Room management
     - _Requirements: 12.4_
-  - [ ] 22.4 Viết component tests cho UserManagement (role display, password reset flow)
+  - [x] 22.4 Viết component tests cho UserManagement (role display, password reset flow)
     - _Requirements: 20.4_
 
 - [ ] 23. Frontend: Common Components & Polish
