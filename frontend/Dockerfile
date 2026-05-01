@@ -19,7 +19,7 @@ ARG VITE_JITSI_URL=https://jitsi.kolla.local:8443
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 ENV VITE_JITSI_URL=$VITE_JITSI_URL
 
-RUN npm run build
+RUN npx vite build
 
 # ── Stage 2: Serve ─────────────────────────────────────────────────────────
 FROM nginx:1.25-alpine
