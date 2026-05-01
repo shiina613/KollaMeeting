@@ -326,7 +326,7 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
   - [x] 21.5 Viết component tests cho MinutesEditor (render, submit)
     - _Requirements: 20.4_
 
-- [-] 22. Frontend: Admin Pages
+- [x] 22. Frontend: Admin Pages
   - [x] 22.1 Implement `UserManagement.tsx`: list users (paginated), create/edit/delete, reset password, role assignment
     - _Requirements: 11.3, 11.8_
   - [x] 22.2 Implement `StorageDashboard.tsx`: hiển thị storage stats (total size, per-type breakdown), bulk delete UI với confirmation dialog
@@ -336,14 +336,14 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
   - [x] 22.4 Viết component tests cho UserManagement (role display, password reset flow)
     - _Requirements: 20.4_
 
-- [ ] 23. Frontend: Common Components & Polish
-  - [ ] 23.1 Implement common components: `ConfirmDialog.tsx`, `Pagination.tsx`, `StatusBadge.tsx`
+- [-] 23. Frontend: Common Components & Polish
+  - [x] 23.1 Implement common components: `ConfirmDialog.tsx`, `Pagination.tsx`, `StatusBadge.tsx`
     - _Requirements: 1.4_
-  - [ ] 23.2 Implement `LoginPage.tsx`, `DashboardPage.tsx`, `RecordingListPage.tsx`
+  - [x] 23.2 Implement `LoginPage.tsx`, `DashboardPage.tsx`, `RecordingListPage.tsx`
     - _Requirements: 1.4, 1.5_
-  - [ ] 23.3 Implement search UI: `SearchPage` với filter controls, paginated results cho meetings và transcriptions
+  - [x] 23.3 Implement search UI: `SearchPage` với filter controls, paginated results cho meetings và transcriptions
     - _Requirements: 13.5, 13.6_
-  - [ ] 23.4 Đảm bảo tất cả datetime hiển thị UTC+7; responsive design cho desktop và mobile
+  - [x] 23.4 Đảm bảo tất cả datetime hiển thị UTC+7; responsive design cho desktop và mobile
     - _Requirements: 14.8, 14.9, 1.5_
 
 - [ ] 24. Integration & E2E Tests

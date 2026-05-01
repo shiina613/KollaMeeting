@@ -12,6 +12,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard',   icon: 'dashboard',             path: '/' },
   { label: 'Cuộc họp',   icon: 'video_chat',             path: '/meetings' },
+  { label: 'Ghi âm',     icon: 'mic',                   path: '/recordings' },
   { label: 'Tìm kiếm',   icon: 'search',                 path: '/search' },
 ]
 

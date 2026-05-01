@@ -10,13 +10,15 @@ import useAuthStore from '../store/authStore'
 import type { UserRole } from '../types/user'
 
 // ─── Lazy-loaded page components ─────────────────────────────────────────────
-const LoginPage        = lazy(() => import('../pages/LoginPage'))
-const DashboardPage    = lazy(() => import('../pages/DashboardPage'))
-const MeetingListPage  = lazy(() => import('../pages/MeetingListPage'))
-const MeetingFormPage  = lazy(() => import('../pages/MeetingFormPage'))
+const LoginPage         = lazy(() => import('../pages/LoginPage'))
+const DashboardPage     = lazy(() => import('../pages/DashboardPage'))
+const MeetingListPage   = lazy(() => import('../pages/MeetingListPage'))
+const MeetingFormPage   = lazy(() => import('../pages/MeetingFormPage'))
 const MeetingDetailPage = lazy(() => import('../pages/MeetingDetailPage'))
-const MeetingRoomPage  = lazy(() => import('../pages/MeetingRoomPage'))
-const AdminPage        = lazy(() => import('../pages/AdminPage'))
+const MeetingRoomPage   = lazy(() => import('../pages/MeetingRoomPage'))
+const AdminPage         = lazy(() => import('../pages/AdminPage'))
+const SearchPage        = lazy(() => import('../pages/SearchPage'))
+const RecordingListPage = lazy(() => import('../pages/RecordingListPage'))
 
 // ─── Layout wrapper (Sidebar + Header) ───────────────────────────────────────
 // Imported lazily to avoid circular deps; layout components implemented in 14.5
@@ -79,6 +81,8 @@ export default function AppRouter() {
               <Route path="/meetings" element={<MeetingListPage />} />
               <Route path="/meetings/:id" element={<MeetingDetailPage />} />
               <Route path="/meetings/:id/room" element={<MeetingRoomPage />} />
+              <Route path="/search" element={<SearchPage />} />
+              <Route path="/recordings" element={<RecordingListPage />} />
             </Route>
           </Route>
 
