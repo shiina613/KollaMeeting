@@ -116,8 +116,11 @@ class MeetingLifecycleIntegrationTest {
         @Test
         @DisplayName("New meeting has a unique meeting code")
         void newMeetingHasUniqueCode() {
-            MeetingResponse r1 = createMeeting("Meeting Alpha");
-            MeetingResponse r2 = createMeeting("Meeting Beta");
+            // Use non-overlapping time slots to avoid scheduling conflict on the same room
+            LocalDateTime start1 = LocalDateTime.now().plusDays(1);
+            LocalDateTime start2 = LocalDateTime.now().plusDays(2);
+            MeetingResponse r1 = createMeetingAt("Meeting Alpha", start1, start1.plusHours(1));
+            MeetingResponse r2 = createMeetingAt("Meeting Beta", start2, start2.plusHours(1));
 
             assertThat(r1.getCode()).isNotBlank();
             assertThat(r2.getCode()).isNotBlank();
@@ -274,12 +277,16 @@ class MeetingLifecycleIntegrationTest {
 
     private MeetingResponse createMeeting(String title) {
         LocalDateTime start = LocalDateTime.now().plusDays(1);
+        return createMeetingAt(title, start, start.plusHours(1));
+    }
+
+    private MeetingResponse createMeetingAt(String title, LocalDateTime start, LocalDateTime end) {
         return meetingService.createMeeting(
                 CreateMeetingRequest.builder()
                         .title(title)
                         .description("Integration test meeting")
                         .startTime(start)
-                        .endTime(start.plusHours(1))
+                        .endTime(end)
                         .roomId(room.getId())
                         .hostUserId(admin.getId())
                         .secretaryUserId(secretary.getId())
