@@ -182,8 +182,8 @@ services:
     image: jitsi/web:stable
     container_name: kolla-jitsi
     restart: unless-stopped
-    ports:
-      - "8443:443"
+    # No external port mapping — Nginx proxies to jitsi internally
+    # (port 8443 is used by Nginx for external HTTPS)
     environment:
       PUBLIC_URL: ${JITSI_PUBLIC_URL:-https://jitsi.kolla.local:8443}
       XMPP_SERVER: localhost
@@ -216,7 +216,7 @@ services:
     container_name: kolla-nginx
     restart: unless-stopped
     ports:
-      - "8080:8080"   # HTTP (ACME challenge + redirect)
+      - "8081:8080"   # HTTP (ACME challenge + redirect) — port 8080 used by Docker Desktop
       - "8443:8443"   # HTTPS (main app + Jitsi vhost)
     environment:
       DOMAIN: ${DOMAIN:-kolla.local}

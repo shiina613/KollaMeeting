@@ -55,8 +55,8 @@ EOF
         --non-interactive \
         --agree-tos \
         --email "${CERTBOT_EMAIL}" \
-        --dns-duckdns \
-        --dns-duckdns-credentials /tmp/duckdns.ini \
+        --authenticator dns-duckdns \
+        --dns-duckdns-token "${DUCKDNS_TOKEN}" \
         --dns-duckdns-propagation-seconds 60 \
         -d "${DOMAIN}" \
         -d "meet.${DOMAIN}" \
