@@ -53,7 +53,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("tc-test")
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 class MeetingLifecycleApiIntegrationTest {
 
     // ── Containers ────────────────────────────────────────────────────────────

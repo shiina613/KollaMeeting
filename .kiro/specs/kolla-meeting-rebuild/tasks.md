@@ -360,7 +360,7 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
   - [x] 24.6 Viết Playwright E2E test: Gipformer unavailable → Meeting continues → Recovery → Pending jobs processed
     - _Requirements: 20.7_
 
-- [ ] 25. Final Checkpoint — Full System
+- [x] 25. Final Checkpoint — Full System
   - Đảm bảo tất cả tests pass (unit, integration, E2E), Docker Compose chạy đầy đủ 6 services, Swagger UI accessible, audio pipeline hoạt động end-to-end. Hỏi user nếu có vấn đề.
 
 

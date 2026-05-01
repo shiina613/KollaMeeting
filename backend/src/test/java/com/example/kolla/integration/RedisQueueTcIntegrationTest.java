@@ -54,7 +54,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @SpringBootTest
 @ActiveProfiles("tc-test")
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 class RedisQueueTcIntegrationTest {
 
     // ── Containers ────────────────────────────────────────────────────────────
