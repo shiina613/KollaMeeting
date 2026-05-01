@@ -1,19 +1,20 @@
 FROM nginx:1.25-alpine
 
-# Install certbot + DuckDNS DNS plugin for SSL certificate issuance
-# (DNS challenge — no port 80 needed, works behind Viettel residential ISP)
-RUN apk add --no-cache python3 py3-pip py3-setuptools gettext \
-    && pip3 install --break-system-packages certbot certbot-dns-duckdns 2>/dev/null \
-    || pip3 install certbot certbot-dns-duckdns
+# Install tools needed for acme.sh (DuckDNS DNS challenge)
+# acme.sh is installed at runtime in entrypoint.sh
+RUN apk add --no-cache \
+    wget \
+    curl \
+    openssl \
+    gettext \
+    bash \
+    socat
 
-# Copy custom entrypoint that handles SSL bootstrap via DNS challenge
+# Copy custom entrypoint
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# nginx-init.conf is used as fallback when SSL is not yet available
+# Fallback HTTP-only config (used when SSL not yet available)
 COPY nginx-init.conf /etc/nginx/nginx-init.conf
-
-# nginx.conf is the full SSL template; mounted via docker-compose volume
-# at /etc/nginx/templates/default.conf.template so envsubst can expand ${DOMAIN}
 
 ENTRYPOINT ["/entrypoint.sh"]
