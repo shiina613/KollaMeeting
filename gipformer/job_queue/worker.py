@@ -25,7 +25,7 @@ from api.schemas import TranscriptionCallbackPayload
 from callback.backend_notifier import BackendNotifier
 from config import settings as _default_settings
 from core.recognizer import GipformerRecognizer, get_recognizer
-from queue.redis_queue import RedisQueue
+from job_queue.redis_queue import RedisQueue
 
 logger = logging.getLogger(__name__)
 
