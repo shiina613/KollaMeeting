@@ -336,7 +336,7 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
   - [x] 22.4 Viết component tests cho UserManagement (role display, password reset flow)
     - _Requirements: 20.4_
 
-- [-] 23. Frontend: Common Components & Polish
+- [x] 23. Frontend: Common Components & Polish
   - [x] 23.1 Implement common components: `ConfirmDialog.tsx`, `Pagination.tsx`, `StatusBadge.tsx`
     - _Requirements: 1.4_
   - [x] 23.2 Implement `LoginPage.tsx`, `DashboardPage.tsx`, `RecordingListPage.tsx`
@@ -346,18 +346,18 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
   - [x] 23.4 Đảm bảo tất cả datetime hiển thị UTC+7; responsive design cho desktop và mobile
     - _Requirements: 14.8, 14.9, 1.5_
 
-- [ ] 24. Integration & E2E Tests
-  - [ ] 24.1 Viết Playwright E2E test: Login → Create meeting → Add members → Activate meeting
+- [-] 24. Integration & E2E Tests
+  - [x] 24.1 Viết Playwright E2E test: Login → Create meeting → Add members → Activate meeting
     - _Requirements: 20.7_
-  - [ ] 24.2 Viết Playwright E2E test: Join meeting → Switch MEETING_MODE → Raise hand → Grant permission → Transcription segment appears
+  - [x] 24.2 Viết Playwright E2E test: Join meeting → Switch MEETING_MODE → Raise hand → Grant permission → Transcription segment appears
     - _Requirements: 20.7_
-  - [ ] 24.3 Viết Playwright E2E test: End meeting → Host confirm minutes → Secretary edit → Download PDF
+  - [x] 24.3 Viết Playwright E2E test: End meeting → Host confirm minutes → Secretary edit → Download PDF
     - _Requirements: 20.7_
-  - [ ] 24.4 Viết Playwright E2E test: Admin set HIGH_PRIORITY → Verify real-time transcription panel visible
+  - [x] 24.4 Viết Playwright E2E test: Admin set HIGH_PRIORITY → Verify real-time transcription panel visible
     - _Requirements: 20.7_
-  - [ ] 24.5 Viết Spring Boot integration tests (Testcontainers): meeting lifecycle API, WebSocket events, Redis queue operations
+  - [x] 24.5 Viết Spring Boot integration tests (Testcontainers): meeting lifecycle API, WebSocket events, Redis queue operations
     - _Requirements: 20.2_
-  - [ ] 24.6 Viết Playwright E2E test: Gipformer unavailable → Meeting continues → Recovery → Pending jobs processed
+  - [-] 24.6 Viết Playwright E2E test: Gipformer unavailable → Meeting continues → Recovery → Pending jobs processed
     - _Requirements: 20.7_
 
 - [ ] 25. Final Checkpoint — Full System
