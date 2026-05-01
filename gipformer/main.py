@@ -102,8 +102,8 @@ async def on_startup() -> None:
 
     # Start background transcription worker
     from callback.backend_notifier import create_notifier
-    from queue.redis_queue import create_redis_queue
-    from queue.worker import start_worker
+    from job_queue.redis_queue import create_redis_queue
+    from job_queue.worker import start_worker
 
     try:
         redis_queue = create_redis_queue(settings.REDIS_URL)
@@ -126,7 +126,7 @@ async def on_startup() -> None:
 @app.on_event("shutdown")
 async def on_shutdown() -> None:
     """Stop background worker and log service stop."""
-    from queue.worker import stop_worker
+    from job_queue.worker import stop_worker
 
     stop_worker(timeout=5.0)
     logger.info("=== Gipformer ASR Service shutting down ===")

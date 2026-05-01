@@ -26,7 +26,7 @@ from api.schemas import (
 )
 from config import settings
 from core.recognizer import GipformerRecognizer, get_recognizer
-from queue.redis_queue import RedisQueue, create_redis_queue
+from job_queue.redis_queue import RedisQueue, create_redis_queue
 
 logger = logging.getLogger(__name__)
 
