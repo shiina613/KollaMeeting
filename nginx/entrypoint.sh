@@ -50,7 +50,7 @@ dns_duckdns_token = ${DUCKDNS_TOKEN}
 EOF
     chmod 600 /tmp/duckdns.ini
 
-    echo "[entrypoint] Running certbot DNS challenge for ${DOMAIN} and meet.${DOMAIN}..."
+    echo "[entrypoint] Running certbot DNS challenge for ${DOMAIN}..."
     certbot certonly \
         --non-interactive \
         --agree-tos \
@@ -59,7 +59,6 @@ EOF
         --dns-duckdns-token "${DUCKDNS_TOKEN}" \
         --dns-duckdns-propagation-seconds 60 \
         -d "${DOMAIN}" \
-        -d "meet.${DOMAIN}" \
         || {
             echo "[entrypoint] WARNING: certbot failed. Starting nginx without SSL."
             exec nginx -c /etc/nginx/nginx-init.conf -g "daemon off;"
