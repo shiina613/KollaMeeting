@@ -357,7 +357,7 @@ Rebuild Kolla Meeting với React 18 + Vite + Tailwind CSS (frontend), Spring Bo
     - _Requirements: 20.7_
   - [x] 24.5 Viết Spring Boot integration tests (Testcontainers): meeting lifecycle API, WebSocket events, Redis queue operations
     - _Requirements: 20.2_
-  - [-] 24.6 Viết Playwright E2E test: Gipformer unavailable → Meeting continues → Recovery → Pending jobs processed
+  - [x] 24.6 Viết Playwright E2E test: Gipformer unavailable → Meeting continues → Recovery → Pending jobs processed
     - _Requirements: 20.7_
 
 - [ ] 25. Final Checkpoint — Full System
