@@ -138,15 +138,16 @@ services:
         condition: service_healthy
     networks:
       - kolla-network
-    # GPU passthrough — uncomment when running on PC with nvidia-container-toolkit
-    # and set DEVICE=cuda in .env
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
+    # GPU passthrough – requires nvidia-container-toolkit on the host.
+    # If no GPU is available, set DEVICE=cpu in your .env file; sherpa-onnx
+    # will automatically use CPU ONNX inference without this deploy section.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
   # ─────────────────────────────────────────────
   # Frontend – React 18 + Vite (:3000)
