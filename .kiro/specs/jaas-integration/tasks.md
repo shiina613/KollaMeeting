@@ -67,7 +67,7 @@ Tích hợp JaaS (Jitsi as a Service) của 8x8 vào Kolla Meeting. Backend thê
     - Dùng jqwik `@Property(tries = 100)` với generator `meetingsWithRoles` (meeting có host/secretary và danh sách regular members)
     - Assert host/secretary → `moderator: true`; regular member → `moderator: false`
 
-  - [~] 4.4 Viết property test — Property 4: Room name format consistency
+  - [x] 4.4 Viết property test — Property 4: Room name format consistency
     - **Property 4: Room name format consistency**
     - **Validates: Requirements 1.10, 1.18**
     - Dùng jqwik `@Property(tries = 100)` với `@ForAll` generators cho `meetingCode` và `appId`
