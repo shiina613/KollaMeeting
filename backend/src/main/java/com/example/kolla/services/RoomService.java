@@ -29,7 +29,8 @@ public interface RoomService {
     /**
      * Check room availability for a given time range.
      * Returns booked slots that overlap with the requested period.
+     * Pass excludeMeetingId to ignore a specific meeting (used when editing).
      * Requirements: 12.8
      */
-    RoomAvailabilityResponse checkAvailability(Long roomId, LocalDateTime startTime, LocalDateTime endTime);
+    RoomAvailabilityResponse checkAvailability(Long roomId, LocalDateTime startTime, LocalDateTime endTime, Long excludeMeetingId);
 }

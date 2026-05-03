@@ -58,9 +58,13 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        String[] origins = corsAllowedOrigins.split(",");
+        // Native WebSocket endpoint (no SockJS) — used by frontend in LAN/tunnel mode
         registry.addEndpoint("/ws")
-                .setAllowedOrigins(origins)
+                .setAllowedOriginPatterns("*");
+
+        // SockJS fallback endpoint — for browsers that don't support native WebSocket
+        registry.addEndpoint("/ws-sockjs")
+                .setAllowedOriginPatterns("*")
                 .withSockJS();
     }
 

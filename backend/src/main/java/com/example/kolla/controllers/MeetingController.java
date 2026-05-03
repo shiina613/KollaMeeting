@@ -82,12 +82,12 @@ public class MeetingController {
 
     /**
      * POST /api/v1/meetings
-     * Create a new meeting. ADMIN or SECRETARY only.
+     * Create a new meeting. SECRETARY only.
      * Requirements: 3.1, 3.2, 3.8
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SECRETARY')")
-    @Operation(summary = "Create a new meeting (ADMIN/SECRETARY only)")
+    @PreAuthorize("hasRole('SECRETARY')")
+    @Operation(summary = "Create a new meeting (SECRETARY only)")
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Meeting created"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request body"),
@@ -131,12 +131,12 @@ public class MeetingController {
 
     /**
      * PUT /api/v1/meetings/{id}
-     * Update a meeting. ADMIN or SECRETARY only.
+     * Update a meeting. SECRETARY only.
      * Requirements: 3.5, 3.12
      */
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SECRETARY')")
-    @Operation(summary = "Update a meeting (ADMIN/SECRETARY only)")
+    @PreAuthorize("hasRole('SECRETARY')")
+    @Operation(summary = "Update a meeting (SECRETARY only)")
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Meeting updated"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request body"),
@@ -204,12 +204,12 @@ public class MeetingController {
 
     /**
      * POST /api/v1/meetings/{id}/members
-     * Add a member to a meeting. ADMIN or SECRETARY only.
+     * Add a member to a meeting. SECRETARY only.
      * Requirements: 3.9, 10.3
      */
     @PostMapping("/{id}/members")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SECRETARY')")
-    @Operation(summary = "Add a member to a meeting (ADMIN/SECRETARY only)")
+    @PreAuthorize("hasRole('SECRETARY')")
+    @Operation(summary = "Add a member to a meeting (SECRETARY only)")
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Member added"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request"),
@@ -232,12 +232,12 @@ public class MeetingController {
 
     /**
      * DELETE /api/v1/meetings/{id}/members/{userId}
-     * Remove a member from a meeting. ADMIN or SECRETARY only.
+     * Remove a member from a meeting. SECRETARY only.
      * Requirements: 3.9
      */
     @DeleteMapping("/{id}/members/{userId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SECRETARY')")
-    @Operation(summary = "Remove a member from a meeting (ADMIN/SECRETARY only)")
+    @PreAuthorize("hasRole('SECRETARY')")
+    @Operation(summary = "Remove a member from a meeting (SECRETARY only)")
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Member removed"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),

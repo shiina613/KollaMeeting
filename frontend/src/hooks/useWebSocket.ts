@@ -1,13 +1,25 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { Client, type IMessage, type StompSubscription } from '@stomp/stompjs'
-import SockJS from 'sockjs-client'
 import useAuthStore from '../store/authStore'
 import type { MeetingEvent } from '../types/meeting'
 import type { Notification } from '../types/notification'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const WS_URL = import.meta.env.VITE_WS_URL ?? 'http://localhost:8080/ws'
+// Build WebSocket URL dynamically from current window location if no env var set.
+// This ensures WS works regardless of whether user accesses via localhost, LAN IP, or public IP.
+function buildWsUrl(): string {
+  const envUrl = import.meta.env.VITE_WS_URL
+  if (envUrl) {
+    // Convert http(s):// to ws(s)://
+    return envUrl.replace(/^http:\/\//, 'ws://').replace(/^https:\/\//, 'wss://')
+  }
+  // Derive from current page origin: https://host:port → wss://host:port/ws
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${proto}//${window.location.host}/ws`
+}
+
+const WS_URL = buildWsUrl()
 
 /** Exponential backoff delays in ms: 1s, 2s, 4s, 8s, 16s, 30s (capped) */
 const BACKOFF_DELAYS = [1_000, 2_000, 4_000, 8_000, 16_000, 30_000]
@@ -104,8 +116,8 @@ export function useWebSocket({
     if (!token) return // Don't connect without a JWT
 
     const client = new Client({
-      // SockJS factory — recreated on each connect attempt so the URL is fresh
-      webSocketFactory: () => new SockJS(WS_URL) as WebSocket,
+      // Native WebSocket — no SockJS, avoids CORS preflight issues
+      brokerURL: WS_URL,
 
       // Attach JWT in STOMP CONNECT headers
       connectHeaders: {

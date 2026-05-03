@@ -112,6 +112,7 @@ export interface MeetingUser {
   email: string
   role: 'ADMIN' | 'SECRETARY' | 'USER'
   department?: Department
+  departmentName?: string
 }
 
 export interface Meeting {
@@ -136,16 +137,25 @@ export interface Meeting {
   departmentName?: string
   hostUserId?: number
   hostUserName?: string
+  hostDepartmentName?: string
+  // Flat host/secretary fields from backend MeetingResponse
+  hostId?: number
+  hostName?: string
+  secretaryId?: number
+  secretaryName?: string
   secretaryUserId?: number
   secretaryUserName?: string
+  secretaryDepartmentName?: string
   createdAt?: string
 }
 
 export interface MeetingMember {
-  id: number
+  id: number       // member record ID
+  userId: number   // user ID (used for add/remove operations)
   username: string
   fullName: string
   email: string
+  departmentName?: string
   role: 'ADMIN' | 'SECRETARY' | 'USER'
   department?: Department
 }
@@ -190,6 +200,15 @@ export interface RoomAvailabilitySlot {
   endTime: string
   meetingId: number
   meetingTitle: string
+  meetingCode?: string
+  status?: string
+}
+
+export interface RoomAvailabilityResponse {
+  roomId: number
+  roomName: string
+  available: boolean
+  bookedSlots: RoomAvailabilitySlot[]
 }
 
 // ─── Create/Update request bodies ────────────────────────────────────────────

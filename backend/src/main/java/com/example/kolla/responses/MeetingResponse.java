@@ -44,18 +44,25 @@ public class MeetingResponse {
     // Host info
     private Long hostId;
     private String hostName;
+    private String hostDepartmentName;
 
     // Secretary info
     private Long secretaryId;
     private String secretaryName;
+    private String secretaryDepartmentName;
 
     private LocalDateTime activatedAt;
     private LocalDateTime endedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    /** Convenience factory from entity. */
+    /** Convenience factory from entity (no department names). */
     public static MeetingResponse from(Meeting meeting) {
+        return from(meeting, null, null);
+    }
+
+    /** Convenience factory from entity with resolved department names. */
+    public static MeetingResponse from(Meeting meeting, String hostDepartmentName, String secretaryDepartmentName) {
         MeetingResponse.MeetingResponseBuilder builder = MeetingResponse.builder()
                 .id(meeting.getId())
                 .code(meeting.getCode())
@@ -81,11 +88,13 @@ public class MeetingResponse {
         }
         if (meeting.getHost() != null) {
             builder.hostId(meeting.getHost().getId())
-                   .hostName(meeting.getHost().getFullName());
+                   .hostName(meeting.getHost().getFullName())
+                   .hostDepartmentName(hostDepartmentName);
         }
         if (meeting.getSecretary() != null) {
             builder.secretaryId(meeting.getSecretary().getId())
-                   .secretaryName(meeting.getSecretary().getFullName());
+                   .secretaryName(meeting.getSecretary().getFullName())
+                   .secretaryDepartmentName(secretaryDepartmentName);
         }
 
         return builder.build();

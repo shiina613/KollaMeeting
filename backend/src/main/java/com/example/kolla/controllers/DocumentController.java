@@ -142,12 +142,12 @@ public class DocumentController {
 
     /**
      * DELETE /api/v1/documents/{id}
-     * Delete a document. ADMIN or SECRETARY only.
+     * Delete a document. SECRETARY only.
      * Requirements: 9.6
      */
     @DeleteMapping("/documents/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SECRETARY')")
-    @Operation(summary = "Delete a document (ADMIN/SECRETARY only)")
+    @PreAuthorize("hasRole('SECRETARY')")
+    @Operation(summary = "Delete a document (SECRETARY only)")
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Document deleted"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),

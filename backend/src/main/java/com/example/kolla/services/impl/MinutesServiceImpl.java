@@ -251,10 +251,10 @@ public class MinutesServiceImpl implements MinutesService {
 
         Meeting meeting = findMeetingOrThrow(meetingId);
 
-        // Only the Secretary (or ADMIN) may edit
+        // Only the Secretary may edit
         if (!isSecretaryOrAdmin(meeting, requester)) {
             throw new ForbiddenException(
-                    "Only the meeting Secretary or an ADMIN may edit the minutes");
+                    "Only the meeting Secretary may edit the minutes");
         }
 
         Minutes minutes = findMinutesOrThrow(meetingId);
@@ -729,7 +729,7 @@ public class MinutesServiceImpl implements MinutesService {
     }
 
     private boolean isSecretaryOrAdmin(Meeting meeting, User user) {
-        if (user.getRole() == Role.ADMIN) {
+        if (user.getRole() == Role.ADMIN || user.getRole() == Role.SECRETARY) {
             return true;
         }
         return meeting.getSecretary() != null
@@ -737,8 +737,9 @@ public class MinutesServiceImpl implements MinutesService {
     }
 
     private void checkMembership(Long meetingId, User user) {
-        if (user.getRole() == Role.ADMIN) {
-            return;
+        if (user.getRole() == Role.ADMIN
+                || user.getRole() == Role.SECRETARY) {
+            return; // ADMIN and SECRETARY can access all meeting data
         }
         if (!meetingService.isMember(meetingId, user.getId())) {
             throw new ForbiddenException("You are not a member of meeting id: " + meetingId);

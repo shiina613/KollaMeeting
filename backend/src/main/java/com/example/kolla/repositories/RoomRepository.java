@@ -51,4 +51,23 @@ public interface RoomRepository extends JpaRepository<Room, Long> {
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime,
             @Param("statuses") List<MeetingStatus> statuses);
+
+    /**
+     * Same as above but excludes a specific meeting (used when editing an existing meeting).
+     * Requirements: 3.12, 12.8
+     */
+    @Query("""
+            SELECT m FROM Meeting m
+            WHERE m.room.id = :roomId
+              AND m.status IN :statuses
+              AND m.startTime < :endTime
+              AND m.endTime > :startTime
+              AND m.id <> :excludeId
+            """)
+    List<com.example.kolla.models.Meeting> findOverlappingMeetingsExcluding(
+            @Param("roomId") Long roomId,
+            @Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime,
+            @Param("statuses") List<MeetingStatus> statuses,
+            @Param("excludeId") Long excludeId);
 }

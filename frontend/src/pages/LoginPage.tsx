@@ -11,8 +11,17 @@ import type { ApiResponse } from '../types/api'
 import type { User } from '../types/user'
 
 interface LoginResponse {
-  token: string
-  user: User
+  accessToken: string
+  refreshToken: string
+  tokenType: string
+  expiresIn: number
+  user: {
+    id: number
+    username: string
+    fullName: string
+    role: User['role']
+    email: string
+  }
 }
 
 export default function LoginPage() {
@@ -42,8 +51,14 @@ export default function LoginPage() {
         username: username.trim(),
         password,
       })
-      const { token, user } = res.data.data
-      login(token, user)
+      const { accessToken, user: userInfo } = res.data.data
+      const user: User = {
+        id: userInfo.id,
+        username: userInfo.username,
+        email: userInfo.email,
+        role: userInfo.role,
+      }
+      login(accessToken, user)
       navigate('/', { replace: true })
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status

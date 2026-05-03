@@ -11,8 +11,9 @@ import {
   deleteUser,
   resetPassword,
 } from '../../services/userService'
+import { listDepartments } from '../../services/meetingService'
 import type { CreateUserRequest, UpdateUserRequest } from '../../services/userService'
-import type { MeetingUser } from '../../types/meeting'
+import type { MeetingUser, Department } from '../../types/meeting'
 import type { PageResponse } from '../../types/api'
 
 // ─── Role badge ───────────────────────────────────────────────────────────────
@@ -58,6 +59,11 @@ function CreateUserModal({ onClose, onSuccess }: CreateUserModalProps) {
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [departments, setDepartments] = useState<Department[]>([])
+
+  useEffect(() => {
+    listDepartments().then((res) => setDepartments(res.data ?? [])).catch(() => {})
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -136,11 +142,13 @@ function CreateUserModal({ onClose, onSuccess }: CreateUserModalProps) {
             <input
               type="password"
               required
+              minLength={8}
               value={form.password}
               onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
               data-testid="create-password-input"
               className="w-full border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary"
             />
+            <p className="text-label-md text-on-surface-variant mt-1">Tối thiểu 8 ký tự</p>
           </div>
           <div>
             <label className="block text-label-md text-on-surface-variant mb-1">Vai trò</label>
@@ -153,6 +161,20 @@ function CreateUserModal({ onClose, onSuccess }: CreateUserModalProps) {
               <option value="USER">Người dùng</option>
               <option value="SECRETARY">Thư ký</option>
               <option value="ADMIN">Quản trị viên</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-label-md text-on-surface-variant mb-1">Phòng ban</label>
+            <select
+              value={form.departmentId ?? ''}
+              onChange={(e) => setForm((f) => ({ ...f, departmentId: e.target.value ? Number(e.target.value) : undefined }))}
+              data-testid="create-department-select"
+              className="w-full border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="">— Không có phòng ban —</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
             </select>
           </div>
           <div className="flex justify-end gap-3 pt-2 border-t border-outline-variant">
@@ -196,6 +218,11 @@ function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) {
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [departments, setDepartments] = useState<Department[]>([])
+
+  useEffect(() => {
+    listDepartments().then((res) => setDepartments(res.data ?? [])).catch(() => {})
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -261,6 +288,20 @@ function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) {
               <option value="USER">Người dùng</option>
               <option value="SECRETARY">Thư ký</option>
               <option value="ADMIN">Quản trị viên</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-label-md text-on-surface-variant mb-1">Phòng ban</label>
+            <select
+              value={form.departmentId ?? ''}
+              onChange={(e) => setForm((f) => ({ ...f, departmentId: e.target.value ? Number(e.target.value) : undefined }))}
+              data-testid="edit-department-select"
+              className="w-full border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="">— Không có phòng ban —</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
             </select>
           </div>
           <div className="flex justify-end gap-3 pt-2 border-t border-outline-variant">
@@ -598,7 +639,7 @@ export default function UserManagement() {
                     </td>
                     <td className="px-4 py-3 text-on-surface-variant hidden md:table-cell">{u.email}</td>
                     <td className="px-4 py-3"><RoleBadge role={u.role} /></td>
-                    <td className="px-4 py-3 text-on-surface-variant hidden lg:table-cell">{u.department?.name ?? '—'}</td>
+                    <td className="px-4 py-3 text-on-surface-variant hidden lg:table-cell">{u.departmentName ?? u.department?.name ?? '—'}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-2">
                         <button

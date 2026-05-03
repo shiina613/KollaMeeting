@@ -38,12 +38,12 @@ public class RecordingController {
 
     /**
      * POST /api/v1/meetings/{meetingId}/recordings/start
-     * Start recording a meeting. ADMIN or SECRETARY only.
+     * Start recording a meeting. SECRETARY only.
      * Requirements: 7.1
      */
     @PostMapping("/meetings/{meetingId}/recordings/start")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SECRETARY')")
-    @Operation(summary = "Start recording a meeting (ADMIN/SECRETARY only)")
+    @PreAuthorize("hasRole('SECRETARY')")
+    @Operation(summary = "Start recording a meeting (SECRETARY only)")
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Recording started"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Meeting not active"),
@@ -64,12 +64,12 @@ public class RecordingController {
 
     /**
      * POST /api/v1/recordings/{id}/stop
-     * Stop an active recording. ADMIN or SECRETARY only.
+     * Stop an active recording. SECRETARY only.
      * Requirements: 7.4
      */
     @PostMapping("/recordings/{id}/stop")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SECRETARY')")
-    @Operation(summary = "Stop an active recording (ADMIN/SECRETARY only)")
+    @PreAuthorize("hasRole('SECRETARY')")
+    @Operation(summary = "Stop an active recording (SECRETARY only)")
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Recording stopped"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Recording not active"),

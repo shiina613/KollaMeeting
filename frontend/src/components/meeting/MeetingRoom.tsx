@@ -75,8 +75,7 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
   const isSecretary = user?.id === meeting.secretaryUser?.id
   const isHighPriority = currentPriority === 'HIGH_PRIORITY'
   const isMeetingMode = mode === 'MEETING_MODE'
-  const canChangePriority =
-    user?.role === 'ADMIN' || user?.role === 'SECRETARY'
+  const canChangePriority = user?.role === 'SECRETARY'
 
   // ── Audio capture hook ─────────────────────────────────────────────────────
 
@@ -254,14 +253,6 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
               meetingId={meeting.id}
               isHost={isHost || isSecretary}
               onModeChanged={handleModeChanged}
-            />
-
-            {/* Transcription priority control — ADMIN/SECRETARY only */}
-            <TranscriptionPriorityControl
-              meetingId={meeting.id}
-              currentPriority={currentPriority}
-              canChangePriority={canChangePriority}
-              onPriorityChanged={setCurrentPriority}
             />
 
             {/* Speaking permission badge — visible to all in MEETING_MODE */}

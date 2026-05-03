@@ -57,6 +57,58 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
+    // ── GET /users/candidates ─────────────────────────────────────────────────
+
+    /**
+     * GET /api/v1/users/candidates
+     * List active SECRETARY users for meeting host/secretary dropdowns.
+     * Accessible by any authenticated user.
+     */
+    @GetMapping("/candidates")
+    @Operation(summary = "List meeting host/secretary candidates")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "List of candidates"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
+    public ResponseEntity<ApiResponse<java.util.List<UserResponse>>> listMeetingCandidates() {
+        return ResponseEntity.ok(ApiResponse.success(userService.listMeetingCandidates()));
+    }
+
+    // ── GET /users/search ─────────────────────────────────────────────────────
+
+    /**
+     * GET /api/v1/users/search?q=...
+     * Search active users by name or username (partial match, max 20 results).
+     * Accessible by any authenticated user (used to add meeting members).
+     */
+    @GetMapping("/search")
+    @Operation(summary = "Search users by name or username")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Matching users"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
+    public ResponseEntity<ApiResponse<java.util.List<UserResponse>>> searchUsers(
+            @Parameter(description = "Search query (name or username)") @RequestParam String q) {
+        return ResponseEntity.ok(ApiResponse.success(userService.searchUsers(q)));
+    }
+
+    // ── GET /users/active ─────────────────────────────────────────────────────
+
+    /**
+     * GET /api/v1/users/active
+     * List all active users ordered by full name.
+     * Accessible by any authenticated user (used to populate member picker).
+     */
+    @GetMapping("/active")
+    @Operation(summary = "List all active users")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "All active users"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
+    public ResponseEntity<ApiResponse<java.util.List<UserResponse>>> listAllActiveUsers() {
+        return ResponseEntity.ok(ApiResponse.success(userService.listAllActiveUsers()));
+    }
+
     // ── GET /users ────────────────────────────────────────────────────────────
 
     /**

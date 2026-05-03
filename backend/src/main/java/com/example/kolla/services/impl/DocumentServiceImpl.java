@@ -123,9 +123,9 @@ public class DocumentServiceImpl implements DocumentService {
     @Override
     @Transactional
     public void deleteDocument(Long documentId, User currentUser) {
-        // ADMIN or SECRETARY only (Requirement 9.6)
-        if (currentUser.getRole() != Role.ADMIN && currentUser.getRole() != Role.SECRETARY) {
-            throw new ForbiddenException("Only ADMIN or SECRETARY may delete documents");
+        // SECRETARY only (Requirement 9.6)
+        if (currentUser.getRole() != Role.SECRETARY) {
+            throw new ForbiddenException("Only SECRETARY may delete documents");
         }
 
         Document document = findDocumentOrThrow(documentId);
@@ -154,12 +154,13 @@ public class DocumentServiceImpl implements DocumentService {
 
     /**
      * Checks that the current user is a member of the meeting.
-     * ADMIN users bypass the membership check.
+     * ADMIN and SECRETARY users bypass the membership check.
      * Throws ForbiddenException if not a member.
      */
     private void checkMembership(Long meetingId, User currentUser) {
-        if (currentUser.getRole() == Role.ADMIN) {
-            return; // ADMIN can access all documents
+        if (currentUser.getRole() == Role.ADMIN
+                || currentUser.getRole() == Role.SECRETARY) {
+            return; // ADMIN and SECRETARY can access all documents
         }
         if (!meetingService.isMember(meetingId, currentUser.getId())) {
             throw new ForbiddenException(

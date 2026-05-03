@@ -10,14 +10,17 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci --prefer-offline
 
-# Copy source and build
-COPY . .
-
 # VITE_ env vars must be available at build time
+# Declared BEFORE COPY . . so Docker cache is invalidated when ARG values change
 ARG VITE_API_BASE_URL=http://localhost:8080/api/v1
 ARG VITE_JITSI_URL=https://jitsi.kolla.local:8443
+ARG VITE_WS_URL=http://localhost:8080/ws
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 ENV VITE_JITSI_URL=$VITE_JITSI_URL
+ENV VITE_WS_URL=$VITE_WS_URL
+
+# Copy source and build
+COPY . .
 
 RUN npx vite build
 

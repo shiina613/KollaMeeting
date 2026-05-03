@@ -123,6 +123,14 @@ public class JwtUtils {
         return Math.max(remaining, 0);
     }
 
+    /**
+     * Returns the issuedAt timestamp in milliseconds.
+     * Used to check if a token was issued before a per-user invalidation event.
+     */
+    public long getIssuedAtFromToken(String token) {
+        return parseClaims(token).getIssuedAt().getTime();
+    }
+
     // ── Private helpers ─────────────────────────────────────────────────────
 
     private Claims parseClaims(String token) {

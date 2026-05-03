@@ -11,6 +11,7 @@ import {
   listRooms,
   listDepartments,
 } from '../services/meetingService'
+import { formatMeetingUserLabel } from '../utils/userUtils'
 import type { Meeting, MeetingFilters, MeetingStatus, Room, Department } from '../types/meeting'
 import type { PageResponse } from '../types/api'
 
@@ -140,7 +141,7 @@ export default function MeetingListPage() {
     setPage(0)
   }
 
-  const canCreate = user?.role === 'ADMIN' || user?.role === 'SECRETARY'
+  const canCreate = user?.role === 'SECRETARY'
 
   return (
     <div className="space-y-6">
@@ -377,7 +378,7 @@ export default function MeetingListPage() {
                       <StatusBadge status={meeting.status} />
                     </td>
                     <td className="px-4 py-3 text-on-surface-variant hidden xl:table-cell">
-                      {meeting.hostUser?.fullName ?? meeting.hostUserName ?? '—'}
+                      {formatMeetingUserLabel(meeting.hostId, meeting.hostName, meeting.hostDepartmentName)}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <button

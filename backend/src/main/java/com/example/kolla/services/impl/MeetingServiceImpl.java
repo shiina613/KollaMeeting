@@ -9,11 +9,13 @@ import com.example.kolla.exceptions.BadRequestException;
 import com.example.kolla.exceptions.ForbiddenException;
 import com.example.kolla.exceptions.ResourceNotFoundException;
 import com.example.kolla.exceptions.SchedulingConflictException;
+import com.example.kolla.models.Department;
 import com.example.kolla.models.Meeting;
 import com.example.kolla.models.Member;
 import com.example.kolla.models.Notification;
 import com.example.kolla.models.Room;
 import com.example.kolla.models.User;
+import com.example.kolla.repositories.DepartmentRepository;
 import com.example.kolla.repositories.MeetingRepository;
 import com.example.kolla.repositories.MemberRepository;
 import com.example.kolla.repositories.RoomRepository;
@@ -31,7 +33,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * MeetingService implementation.
@@ -49,6 +54,7 @@ public class MeetingServiceImpl implements MeetingService {
     private final MemberRepository memberRepository;
     private final UserRepository userRepository;
     private final RoomRepository roomRepository;
+    private final DepartmentRepository departmentRepository;
     private final NotificationService notificationService;
 
     // ── Create ────────────────────────────────────────────────────────────────
@@ -58,11 +64,11 @@ public class MeetingServiceImpl implements MeetingService {
     public MeetingResponse createMeeting(CreateMeetingRequest request, User creator) {
         validateTimeRange(request.getStartTime(), request.getEndTime());
 
-        // Validate host: must be SECRETARY or ADMIN (Requirement 3.8)
+        // Validate host: must be SECRETARY (Requirement 3.8)
         User host = findUserOrThrow(request.getHostUserId());
-        if (host.getRole() == Role.USER) {
+        if (host.getRole() != Role.SECRETARY) {
             throw new BadRequestException(
-                    "Host must have SECRETARY or ADMIN role, but user '"
+                    "Host must have SECRETARY role, but user '"
                     + host.getUsername() + "' has role " + host.getRole());
         }
 
@@ -123,7 +129,7 @@ public class MeetingServiceImpl implements MeetingService {
     @Transactional(readOnly = true)
     public MeetingResponse getMeetingById(Long id, User requester) {
         Meeting meeting = findMeetingOrThrow(id);
-        return MeetingResponse.from(meeting);
+        return toResponseWithDepartments(meeting);
     }
 
     // ── List ──────────────────────────────────────────────────────────────────
@@ -137,9 +143,26 @@ public class MeetingServiceImpl implements MeetingService {
                                                LocalDateTime startTo,
                                                Pageable pageable,
                                                User requester) {
-        return meetingRepository
-                .findAllFiltered(status, roomId, creatorId, startFrom, startTo, pageable)
-                .map(MeetingResponse::from);
+        Page<Meeting> page = meetingRepository
+                .findAllFiltered(status, roomId, creatorId, startFrom, startTo, pageable);
+
+        // Batch-load departments for all host/secretary users in this page
+        Set<Long> deptIds = page.getContent().stream()
+                .flatMap(m -> {
+                    java.util.stream.Stream.Builder<Long> ids = java.util.stream.Stream.builder();
+                    if (m.getHost() != null && m.getHost().getDepartmentId() != null)
+                        ids.add(m.getHost().getDepartmentId());
+                    if (m.getSecretary() != null && m.getSecretary().getDepartmentId() != null)
+                        ids.add(m.getSecretary().getDepartmentId());
+                    return ids.build();
+                })
+                .collect(Collectors.toSet());
+        Map<Long, String> deptNames = departmentRepository.findAllById(deptIds).stream()
+                .collect(Collectors.toMap(Department::getId, Department::getName));
+
+        return page.map(m -> MeetingResponse.from(m,
+                resolveDeptName(m.getHost(), deptNames),
+                resolveDeptName(m.getSecretary(), deptNames)));
     }
 
     // ── Update ────────────────────────────────────────────────────────────────
@@ -149,9 +172,9 @@ public class MeetingServiceImpl implements MeetingService {
     public MeetingResponse updateMeeting(Long id, UpdateMeetingRequest request, User requester) {
         Meeting meeting = findMeetingOrThrow(id);
 
-        // Only ADMIN or SECRETARY (creator/host/secretary) may update (Requirement 3.5)
-        if (requester.getRole() == Role.USER) {
-            throw new ForbiddenException("Only ADMIN or SECRETARY may update meetings");
+        // Only SECRETARY may update meetings (Requirement 3.5)
+        if (requester.getRole() != Role.SECRETARY) {
+            throw new ForbiddenException("Only SECRETARY may update meetings");
         }
 
         // Cannot update an ENDED meeting
@@ -194,9 +217,9 @@ public class MeetingServiceImpl implements MeetingService {
         // Host update
         if (request.getHostUserId() != null) {
             User host = findUserOrThrow(request.getHostUserId());
-            if (host.getRole() == Role.USER) {
+            if (host.getRole() != Role.SECRETARY) {
                 throw new BadRequestException(
-                        "Host must have SECRETARY or ADMIN role");
+                        "Host must have SECRETARY role");
             }
             meeting.setHost(host);
         }
@@ -243,9 +266,22 @@ public class MeetingServiceImpl implements MeetingService {
     @Transactional(readOnly = true)
     public List<MemberResponse> listMembers(Long meetingId, User requester) {
         findMeetingOrThrow(meetingId); // ensure meeting exists
-        return memberRepository.findByMeetingId(meetingId)
-                .stream()
-                .map(MemberResponse::from)
+        List<Member> memberList = memberRepository.findByMeetingId(meetingId);
+
+        // Batch-load department names
+        Set<Long> deptIds = memberList.stream()
+                .map(m -> m.getUser().getDepartmentId())
+                .filter(id -> id != null)
+                .collect(Collectors.toSet());
+        Map<Long, String> deptNames = deptIds.isEmpty() ? Map.of()
+                : departmentRepository.findAllById(deptIds).stream()
+                        .collect(Collectors.toMap(Department::getId, Department::getName));
+
+        return memberList.stream()
+                .map(m -> MemberResponse.from(m,
+                        m.getUser().getDepartmentId() != null
+                                ? deptNames.get(m.getUser().getDepartmentId())
+                                : null))
                 .toList();
     }
 
@@ -254,9 +290,9 @@ public class MeetingServiceImpl implements MeetingService {
     public MemberResponse addMember(Long meetingId, AddMemberRequest request, User requester) {
         Meeting meeting = findMeetingOrThrow(meetingId);
 
-        // Only ADMIN or SECRETARY may add members (Requirement 3.9)
-        if (requester.getRole() == Role.USER) {
-            throw new ForbiddenException("Only ADMIN or SECRETARY may add members to a meeting");
+        // Only SECRETARY may add members (Requirement 3.9)
+        if (requester.getRole() != Role.SECRETARY) {
+            throw new ForbiddenException("Only SECRETARY may add members to a meeting");
         }
 
         // Cannot add members to an ENDED meeting
@@ -295,9 +331,9 @@ public class MeetingServiceImpl implements MeetingService {
     public void removeMember(Long meetingId, Long userId, User requester) {
         Meeting meeting = findMeetingOrThrow(meetingId);
 
-        // Only ADMIN or SECRETARY may remove members (Requirement 3.9)
-        if (requester.getRole() == Role.USER) {
-            throw new ForbiddenException("Only ADMIN or SECRETARY may remove members from a meeting");
+        // Only SECRETARY may remove members (Requirement 3.9)
+        if (requester.getRole() != Role.SECRETARY) {
+            throw new ForbiddenException("Only SECRETARY may remove members from a meeting");
         }
 
         // Cannot remove members from an ENDED meeting
@@ -393,5 +429,30 @@ public class MeetingServiceImpl implements MeetingService {
                     .user(user)
                     .build());
         }
+    }
+
+    /**
+     * Build a MeetingResponse with resolved department names for host and secretary.
+     */
+    private MeetingResponse toResponseWithDepartments(Meeting meeting) {
+        Set<Long> deptIds = new java.util.HashSet<>();
+        if (meeting.getHost() != null && meeting.getHost().getDepartmentId() != null)
+            deptIds.add(meeting.getHost().getDepartmentId());
+        if (meeting.getSecretary() != null && meeting.getSecretary().getDepartmentId() != null)
+            deptIds.add(meeting.getSecretary().getDepartmentId());
+
+        Map<Long, String> deptNames = deptIds.isEmpty()
+                ? Map.of()
+                : departmentRepository.findAllById(deptIds).stream()
+                        .collect(Collectors.toMap(Department::getId, Department::getName));
+
+        return MeetingResponse.from(meeting,
+                resolveDeptName(meeting.getHost(), deptNames),
+                resolveDeptName(meeting.getSecretary(), deptNames));
+    }
+
+    private String resolveDeptName(User user, Map<Long, String> deptNames) {
+        if (user == null || user.getDepartmentId() == null) return null;
+        return deptNames.get(user.getDepartmentId());
     }
 }

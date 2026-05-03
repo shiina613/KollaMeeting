@@ -7,6 +7,7 @@
 import { useState } from 'react'
 import UserManagement from '../components/admin/UserManagement'
 import StorageDashboard from '../components/admin/StorageDashboard'
+import DepartmentRoomManagement from '../components/admin/DepartmentRoomManagement'
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 
@@ -97,19 +98,7 @@ export default function AdminPage() {
         hidden={activeTab !== 'departments'}
         data-testid="tab-panel-departments"
       >
-        {activeTab === 'departments' && (
-          <div className="flex flex-col items-center justify-center py-16 text-on-surface-variant">
-            <span className="material-symbols-outlined text-5xl mb-3" aria-hidden="true">
-              corporate_fare
-            </span>
-            <p className="text-body-md font-medium text-on-surface mb-1">
-              Quản lý Phòng ban & Phòng họp
-            </p>
-            <p className="text-body-sm text-on-surface-variant">
-              Tính năng này sẽ được triển khai trong phiên bản tiếp theo.
-            </p>
-          </div>
-        )}
+        {activeTab === 'departments' && <DepartmentRoomManagement />}
       </div>
     </div>
   )

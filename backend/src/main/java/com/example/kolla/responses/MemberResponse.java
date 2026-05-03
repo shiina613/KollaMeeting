@@ -26,10 +26,11 @@ public class MemberResponse {
     private Long userId;
     private String username;
     private String fullName;
+    private String departmentName;
     private Role role;
     private LocalDateTime addedAt;
 
-    /** Convenience factory from entity. */
+    /** Convenience factory from entity (no department name). */
     public static MemberResponse from(Member member) {
         return MemberResponse.builder()
                 .id(member.getId())
@@ -37,6 +38,20 @@ public class MemberResponse {
                 .userId(member.getUser().getId())
                 .username(member.getUser().getUsername())
                 .fullName(member.getUser().getFullName())
+                .role(member.getUser().getRole())
+                .addedAt(member.getAddedAt())
+                .build();
+    }
+
+    /** Convenience factory from entity with resolved department name. */
+    public static MemberResponse from(Member member, String departmentName) {
+        return MemberResponse.builder()
+                .id(member.getId())
+                .meetingId(member.getMeeting().getId())
+                .userId(member.getUser().getId())
+                .username(member.getUser().getUsername())
+                .fullName(member.getUser().getFullName())
+                .departmentName(departmentName)
                 .role(member.getUser().getRole())
                 .addedAt(member.getAddedAt())
                 .build();

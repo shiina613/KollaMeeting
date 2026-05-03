@@ -7,7 +7,9 @@ import com.example.kolla.enums.Role;
 import com.example.kolla.exceptions.BadRequestException;
 import com.example.kolla.exceptions.ForbiddenException;
 import com.example.kolla.exceptions.ResourceNotFoundException;
+import com.example.kolla.models.Department;
 import com.example.kolla.models.User;
+import com.example.kolla.repositories.DepartmentRepository;
 import com.example.kolla.repositories.UserRepository;
 import com.example.kolla.responses.UserResponse;
 import com.example.kolla.services.UserService;
@@ -21,7 +23,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * UserService implementation.
@@ -38,6 +43,7 @@ public class UserServiceImpl implements UserService {
     private static final int TEMP_PASSWORD_LENGTH = 12;
 
     private final UserRepository userRepository;
+    private final DepartmentRepository departmentRepository;
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate redisTemplate;
 
@@ -46,7 +52,61 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public Page<UserResponse> listUsers(Pageable pageable) {
-        return userRepository.findAll(pageable).map(UserResponse::from);
+        Page<User> page = userRepository.findAll(pageable);
+
+        Set<Long> deptIds = page.getContent().stream()
+                .map(User::getDepartmentId)
+                .filter(id -> id != null)
+                .collect(Collectors.toSet());
+        Map<Long, String> deptNames = deptIds.isEmpty() ? Map.of()
+                : departmentRepository.findAllById(deptIds).stream()
+                        .collect(Collectors.toMap(Department::getId, Department::getName));
+
+        return page.map(u -> UserResponse.from(u,
+                u.getDepartmentId() != null ? deptNames.get(u.getDepartmentId()) : null));
+    }
+
+    // ── Search users ──────────────────────────────────────────────────────────
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UserResponse> searchUsers(String query) {
+        if (query == null || query.isBlank()) return List.of();
+        org.springframework.data.domain.Pageable limit =
+                org.springframework.data.domain.PageRequest.of(0, 20);
+        return userRepository.searchByNameOrUsername(query.trim(), limit)
+                .stream()
+                .map(UserResponse::from)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UserResponse> listAllActiveUsers() {
+        return userRepository.findByIsActiveTrueOrderByFullNameAsc()
+                .stream()
+                .map(UserResponse::from)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UserResponse> listMeetingCandidates() {
+        List<User> users = userRepository.findByRoleAndIsActiveTrueOrderByFullNameAsc(Role.SECRETARY);
+
+        // Batch-load departments to avoid N+1
+        Set<Long> deptIds = users.stream()
+                .map(User::getDepartmentId)
+                .filter(id -> id != null)
+                .collect(Collectors.toSet());
+        Map<Long, String> deptNames = departmentRepository.findAllById(deptIds).stream()
+                .collect(Collectors.toMap(Department::getId, Department::getName));
+
+        return users.stream()
+                .map(u -> UserResponse.from(u, u.getDepartmentId() != null
+                        ? deptNames.get(u.getDepartmentId())
+                        : null))
+                .toList();
     }
 
     // ── Get by ID ─────────────────────────────────────────────────────────────
@@ -150,7 +210,13 @@ public class UserServiceImpl implements UserService {
 
         User saved = userRepository.save(target);
         log.info("Updated user '{}' by '{}'", saved.getUsername(), requester.getUsername());
-        return UserResponse.from(saved);
+
+        String deptName = null;
+        if (saved.getDepartmentId() != null) {
+            deptName = departmentRepository.findById(saved.getDepartmentId())
+                    .map(Department::getName).orElse(null);
+        }
+        return UserResponse.from(saved, deptName);
     }
 
     // ── Delete ────────────────────────────────────────────────────────────────

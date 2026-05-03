@@ -62,6 +62,8 @@ export interface UseJitsiApiOptions {
 export interface UseJitsiApiReturn {
   /** Whether the Jitsi API has been initialised and is ready */
   isReady: boolean
+  /** Current loading status message */
+  loadingStatus: string
   /** Mute the local user's microphone */
   mute: () => void
   /** Unmute the local user's microphone */
@@ -146,7 +148,9 @@ export function useJitsiApi({
 }: UseJitsiApiOptions): UseJitsiApiReturn {
   const apiRef = useRef<JitsiMeetExternalAPI | null>(null)
   const [isReady, setIsReady] = useState(false)
+  const [loadingStatus, setLoadingStatus] = useState('Đang tải Jitsi...')
   const isMountedRef = useRef(true)
+  const readyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Keep callbacks in refs so event handlers always see the latest version
   const onParticipantJoinedRef = useRef(onParticipantJoined)
@@ -170,15 +174,15 @@ export function useJitsiApi({
       .then(() => {
         if (!isMountedRef.current || disposed) return
         if (!containerRef.current) return
+        if (isMountedRef.current) setLoadingStatus('Đang khởi tạo phòng họp...')
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const JitsiAPI = (window as any).JitsiMeetExternalAPI
         if (!JitsiAPI) {
           console.error('[useJitsiApi] JitsiMeetExternalAPI not found on window after script load')
+          if (isMountedRef.current) setLoadingStatus('Lỗi: Không tải được Jitsi API')
           return
         }
-
-        const domain = JITSI_URL.replace(/^https?:\/\//, '')
 
         const options: Record<string, unknown> = {
           roomName: meetingCode,
@@ -230,17 +234,35 @@ export function useJitsiApi({
           onVideoConferenceLeftRef.current?.()
         })
 
-        if (isMountedRef.current) {
-          setIsReady(true)
-        }
+        // Mark ready when Jitsi has actually joined the conference
+        api.addEventListener('videoConferenceJoined', () => {
+          if (isMountedRef.current) {
+            setIsReady(true)
+          }
+        })
+
+        if (isMountedRef.current) setLoadingStatus('Đang kết nối đến phòng họp...')
+
+        // Fallback: mark ready after 30s in case the event never fires
+        readyTimeoutRef.current = setTimeout(() => {
+          if (isMountedRef.current && !disposed) {
+            setLoadingStatus('Hết thời gian chờ — kiểm tra kết nối mạng')
+            setIsReady(true)
+          }
+        }, 30_000)
       })
       .catch((err: Error) => {
         console.error('[useJitsiApi] Failed to initialise Jitsi:', err.message)
+        if (isMountedRef.current) setLoadingStatus(`Lỗi: ${err.message}`)
       })
 
     return () => {
       disposed = true
       isMountedRef.current = false
+      if (readyTimeoutRef.current) {
+        clearTimeout(readyTimeoutRef.current)
+        readyTimeoutRef.current = null
+      }
       if (apiRef.current) {
         try {
           apiRef.current.dispose()
@@ -297,6 +319,7 @@ export function useJitsiApi({
 
   return {
     isReady,
+    loadingStatus,
     mute,
     unmute,
     muteAll,

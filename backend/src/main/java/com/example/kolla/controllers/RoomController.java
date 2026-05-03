@@ -89,9 +89,11 @@ public class RoomController {
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
             @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime) {
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime,
+            @Parameter(description = "Meeting ID to exclude (used when editing an existing meeting)")
+            @RequestParam(required = false) Long excludeMeetingId) {
 
-        RoomAvailabilityResponse response = roomService.checkAvailability(id, startTime, endTime);
+        RoomAvailabilityResponse response = roomService.checkAvailability(id, startTime, endTime, excludeMeetingId);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
