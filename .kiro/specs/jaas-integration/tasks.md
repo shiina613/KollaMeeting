@@ -79,7 +79,7 @@ Tích hợp JaaS (Jitsi as a Service) của 8x8 vào Kolla Meeting. Backend thê
     - Dùng jqwik `@Property(tries = 100)` với generator cho user không thuộc member list của meeting
     - Assert `generateToken()` throw `ForbiddenException` cho mọi non-member user
 
-  - [~] 4.6 Viết property test — Property 6: Private key never exposed
+  - [x] 4.6 Viết property test — Property 6: Private key never exposed
     - **Property 6: Private key never exposed**
     - **Validates: Requirements 6.1**
     - Dùng jqwik `@Property(tries = 100)` với các error scenario (invalid key, missing config, v.v.)
