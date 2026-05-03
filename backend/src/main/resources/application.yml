@@ -129,6 +129,14 @@ jitsi:
   app-secret: ${JITSI_APP_SECRET:jitsi-secret-change-me}
 
 # ─────────────────────────────────────────────
+# JaaS (8x8 Jitsi as a Service) – Requirements 2.1–2.5
+# ─────────────────────────────────────────────
+jaas:
+  app-id: ${JAAS_APP_ID:}
+  api-key: ${JAAS_API_KEY:}
+  private-key: ${JAAS_PRIVATE_KEY:}
+
+# ─────────────────────────────────────────────
 # Requirement 14.5 – Gipformer service URL
 # ─────────────────────────────────────────────
 gipformer:

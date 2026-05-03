@@ -11,7 +11,7 @@ Tích hợp JaaS (Jitsi as a Service) của 8x8 vào Kolla Meeting. Backend thê
   - Thêm `@ExceptionHandler(ServiceUnavailableException.class)` vào `GlobalExceptionHandler` trả về HTTP 503 với `ApiResponse.error(message)`
   - _Requirements: 1.19, 2.5_
 
-- [~] 2. Tạo `JaasProperties` và đăng ký `@EnableConfigurationProperties`
+- [x] 2. Tạo `JaasProperties` và đăng ký `@EnableConfigurationProperties`
   - Tạo file `backend/src/main/java/com/example/kolla/config/JaasProperties.java` với `@ConfigurationProperties(prefix = "jaas")`, các field `appId`, `apiKey`, `privateKey`, method `isEnabled()` và `extractKeyId()`
   - Thêm `@EnableConfigurationProperties(JaasProperties.class)` vào `KollaMeetingApplication`
   - Thêm binding vào `backend/src/main/resources/application.yml`:
@@ -23,7 +23,7 @@ Tích hợp JaaS (Jitsi as a Service) của 8x8 vào Kolla Meeting. Backend thê
     ```
   - _Requirements: 2.1, 2.2, 2.3, 2.5_
 
-  - [~] 2.1 Viết unit test cho `JaasProperties`
+  - [x] 2.1 Viết unit test cho `JaasProperties`
     - Test `isEnabled()` trả về `false` khi `appId` null hoặc blank
     - Test `isEnabled()` trả về `true` khi `appId` có giá trị
     - Test `extractKeyId()` parse đúng từ format `vpaas-magic-cookie-{AppID}/{keyId}`
