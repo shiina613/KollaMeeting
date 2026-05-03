@@ -73,7 +73,7 @@ Tích hợp JaaS (Jitsi as a Service) của 8x8 vào Kolla Meeting. Backend thê
     - Dùng jqwik `@Property(tries = 100)` với `@ForAll` generators cho `meetingCode` và `appId`
     - Assert `roomName = appId + "/" + meetingCode`; JWT `room` claim = `meetingCode` (không có appId prefix)
 
-  - [~] 4.5 Viết property test — Property 5: Access control — non-members are rejected
+  - [x] 4.5 Viết property test — Property 5: Access control — non-members are rejected
     - **Property 5: Access control — non-members are rejected**
     - **Validates: Requirements 1.2, 1.3, 6.4**
     - Dùng jqwik `@Property(tries = 100)` với generator cho user không thuộc member list của meeting
