@@ -6,6 +6,26 @@ Thay thế cơ chế expose dịch vụ Kolla Meeting từ WSL2 portproxy + Ngin
 
 ## Tasks
 
+- [x] 0. Readiness check — Kiểm tra workspace trước khi implement
+  - Đây là checkpoint để agent xác nhận môi trường workspace đủ điều kiện trước khi bắt đầu các task tiếp theo. Không tạo file mới, không thay đổi code.
+  - [x] 0.1 Xác nhận `docker-compose.yml` tồn tại và có service `cloudflared` (task 1 đã hoàn thành)
+    - Kiểm tra file `docker-compose.yml` tồn tại trong workspace root
+    - Kiểm tra service `cloudflared` đã có trong file
+    - Kiểm tra không còn service `jitsi` và `certbot`
+  - [x] 0.2 Xác nhận `nginx/nginx.conf` tồn tại và đọc được
+    - Kiểm tra file `nginx/nginx.conf` tồn tại
+    - Đọc nội dung để xác nhận có server block `listen 8888` và `listen 8443`
+  - [x] 0.3 Xác nhận thư mục `scripts/` tồn tại
+    - Kiểm tra thư mục `scripts/` có trong workspace
+    - Liệt kê các file hiện có để biết cần tạo mới hay cập nhật
+  - [x] 0.4 Xác nhận `.env.example` tồn tại
+    - Kiểm tra file `.env.example` tồn tại để làm cơ sở cập nhật ở task 7
+  - [x] 0.5 Xác nhận `README.md` tồn tại
+    - Kiểm tra file `README.md` tồn tại để làm cơ sở cập nhật ở task 7
+  - [x] 0.6 Xác nhận `scripts/setup-portproxy.ps1` tồn tại
+    - Kiểm tra file tồn tại để đánh dấu deprecated ở task 7
+  - Nếu bất kỳ check nào thất bại: dừng lại, báo cáo rõ file/thư mục nào còn thiếu trước khi tiếp tục.
+
 - [x] 1. Cập nhật `docker-compose.yml` — thêm cloudflared, xóa jitsi và certbot
   - Thêm service `cloudflared` với image `cloudflare/cloudflared:latest`, command `tunnel --no-autoupdate --url http://nginx:8888`, `restart: unless-stopped`, thuộc `kolla-network`, `depends_on: nginx`
   - Xóa service `jitsi` và service `certbot`
