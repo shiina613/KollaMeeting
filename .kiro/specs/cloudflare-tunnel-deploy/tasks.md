@@ -59,46 +59,46 @@ Thay thế cơ chế expose dịch vụ Kolla Meeting từ WSL2 portproxy + Ngin
     - `grep -q "cf_connecting_ip" nginx/nginx.conf`
   - Đảm bảo tất cả tests pass, hỏi người dùng nếu có vấn đề.
 
-- [ ] 4. Viết `scripts/start.sh` (WSL2/bash)
-  - [ ] 4.1 Implement hàm `check_docker()` — kiểm tra Docker daemon
+- [x] 4. Viết `scripts/start.sh` (WSL2/bash)
+  - [x] 4.1 Implement hàm `check_docker()` — kiểm tra Docker daemon
     - Chạy `docker info` và kiểm tra exit code
     - Nếu thất bại: in thông báo lỗi cụ thể "Docker daemon không sẵn sàng. Hãy khởi động Docker Desktop." và `exit 1`
     - _Requirements: 11.2, 11.4_
-  - [ ] 4.2 Implement hàm `start_services()` — khởi động services trừ frontend
+  - [x] 4.2 Implement hàm `start_services()` — khởi động services trừ frontend
     - Chạy `docker compose up -d --scale frontend=0`
     - Nếu thất bại: in output lỗi và `exit 1`
     - _Requirements: 11.2_
-  - [ ] 4.3 Implement hàm `get_tunnel_url()` — poll log cloudflared, extract URL
+  - [x] 4.3 Implement hàm `get_tunnel_url()` — poll log cloudflared, extract URL
     - Poll `docker logs kolla-cloudflared` mỗi 2 giây, timeout 30 giây
     - Dùng `grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com'` để extract URL (dùng `-E` thay `-P` để portable trên Alpine/macOS)
     - Nếu timeout: in "cloudflared không sinh URL sau 30s. Kiểm tra: docker logs kolla-cloudflared" và `exit 1`
     - Return URL qua stdout
     - _Requirements: 2.1, 2.2, 2.3, 2.4_
-  - [ ] 4.4 Viết property test cho hàm extract URL (Property 1)
+  - [x] 4.4 Viết property test cho hàm extract URL (Property 1)
     - **Property 1: URL extraction từ log**
     - **Validates: Requirements 2.1, 2.2**
     - Tạo file `scripts/tests/test_url_extraction.sh` hoặc dùng fast-check/Hypothesis
     - Generator: sinh chuỗi log ngẫu nhiên, một số chứa valid `trycloudflare.com` URL, một số không
     - Assertion: hàm extract trả về URL khi và chỉ khi URL hợp lệ có mặt trong log
-  - [ ] 4.5 Implement hàm `update_env_file()` — cập nhật .env với tunnel URL mới
+  - [x] 4.5 Implement hàm `update_env_file()` — cập nhật .env với tunnel URL mới
     - Dùng `sed -i` để replace `VITE_API_BASE_URL`, `VITE_WS_URL`, `CORS_ALLOWED_ORIGINS`
     - `VITE_API_BASE_URL=https://<tunnel-url>/api/v1`
     - `VITE_WS_URL=wss://<tunnel-url>/ws` (scheme `https://` → `wss://`)
     - `CORS_ALLOWED_ORIGINS=https://<tunnel-url>`
     - Nếu `.env` không tồn tại: in ".env không tìm thấy. Chạy: cp .env.example .env" và `exit 1`
     - _Requirements: 3.1, 3.2, 7.1, 7.2, 7.3_
-  - [ ] 4.6 Viết property test cho hàm update .env (Property 2 và 3)
+  - [x] 4.6 Viết property test cho hàm update .env (Property 2 và 3)
     - **Property 2: .env update không phá vỡ các biến khác**
     - **Property 3: Derived URLs có scheme đúng**
     - **Validates: Requirements 3.1, 3.2, 7.2, 7.3, 8.4**
     - Generator: sinh `.env` file với tập hợp biến ngẫu nhiên (key=value pairs hợp lệ)
     - Assertion P2: sau khi update, tất cả biến không phải target vẫn giữ nguyên giá trị
     - Assertion P3: `VITE_API_BASE_URL` bắt đầu `https://` và kết thúc `/api/v1`; `VITE_WS_URL` bắt đầu `wss://` và kết thúc `/ws`; `CORS_ALLOWED_ORIGINS` bằng đúng tunnel URL
-  - [ ] 4.7 Implement hàm `build_frontend()` — rebuild frontend container
+  - [x] 4.7 Implement hàm `build_frontend()` — rebuild frontend container
     - Chạy `docker compose up -d --build frontend`
     - Nếu thất bại: in docker compose output và `exit 1`
     - _Requirements: 3.3_
-  - [ ] 4.8 Implement hàm `print_success()` và wire toàn bộ script
+  - [x] 4.8 Implement hàm `print_success()` và wire toàn bộ script
     - In `✅ Kolla đang chạy tại: https://<tunnel-url>`
     - Gọi các hàm theo thứ tự: `check_docker` → `start_services` → `get_tunnel_url` → `update_env_file` → `build_frontend` → `print_success`
     - Đặt `set -e` ở đầu script
