@@ -142,7 +142,7 @@ Thay thế cơ chế expose dịch vụ Kolla Meeting từ WSL2 portproxy + Ngin
   - Chạy dry-run kiểm tra syntax: `bash -n scripts/start.sh`
   - Hỏi người dùng nếu có vấn đề.
 
-- [-] 7. Cập nhật `.env.example`, README và đánh dấu deprecated `setup-portproxy.ps1`
+- [x] 7. Cập nhật `.env.example`, README và đánh dấu deprecated `setup-portproxy.ps1`
   - [x] 7.1 Cập nhật `.env.example`
     - Xóa section "DOMAIN & SSL (Nginx + Certbot)": `DOMAIN`, `DUCKDNS_TOKEN`, `DUCKDNS_SUBDOMAIN`, `CERTBOT_EMAIL`
     - Thêm section "CLOUDFLARE TUNNEL" với `CLOUDFLARE_TUNNEL_TOKEN` (optional), `VITE_API_BASE_URL`, `VITE_WS_URL`, `CORS_ALLOWED_ORIGINS` với placeholder `<cloudflare-domain>` và comment hướng dẫn
@@ -160,7 +160,7 @@ Thay thế cơ chế expose dịch vụ Kolla Meeting từ WSL2 portproxy + Ngin
     - Mô tả Named Tunnel upgrade path khi có domain
     - _Requirements: 4.2, 9.1, 9.2, 9.3, 9.4, 11.6_
 
-- [ ] 8. Final checkpoint — Đảm bảo tất cả thay đổi nhất quán
+- [x] 8. Final checkpoint — Đảm bảo tất cả thay đổi nhất quán
   - Verify `docker-compose.yml` không còn reference đến `jitsi`, `certbot`, certbot volumes
   - Verify `docker-compose.yml` vẫn còn port mapping `8443:8443` và `8888:8888` trong nginx service
   - Verify `nginx/nginx.conf` không còn `location /meet`, có `cf_connecting_ip` trên port 8888
