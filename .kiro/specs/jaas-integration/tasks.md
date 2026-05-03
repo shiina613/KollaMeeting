@@ -55,7 +55,7 @@ Tích hợp JaaS (Jitsi as a Service) của 8x8 vào Kolla Meeting. Backend thê
     - Dùng jqwik `@Property(tries = 100)` với `@ForAll` generators cho meeting và member user
     - Generate token, decode JWT body (không verify signature), assert `iss="chat"`, `aud="jitsi"`, `sub=appId`, `room=meetingCode`, `context.user.id=userId.toString()`, `context.user.name`, `context.user.email`, `context.user.moderator`
 
-  - [~] 4.2 Viết property test — Property 2: JWT expiry window
+  - [x] 4.2 Viết property test — Property 2: JWT expiry window
     - **Property 2: JWT expiry window**
     - **Validates: Requirements 1.11, 1.12**
     - Dùng jqwik `@Property(tries = 100)`
