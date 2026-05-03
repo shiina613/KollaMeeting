@@ -136,7 +136,7 @@ Thay thế cơ chế expose dịch vụ Kolla Meeting từ WSL2 portproxy + Ngin
     - Gọi các hàm theo thứ tự đúng với error handling ở mỗi bước
     - _Requirements: 3.3, 3.4, 11.1, 11.3_
 
-- [ ] 6. Checkpoint — Kiểm tra startup scripts
+- [x] 6. Checkpoint — Kiểm tra startup scripts
   - Verify `scripts/start.sh` tồn tại và có execute permission (`chmod +x`)
   - Verify `scripts/start.ps1` tồn tại
   - Chạy dry-run kiểm tra syntax: `bash -n scripts/start.sh`
