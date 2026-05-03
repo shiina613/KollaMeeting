@@ -80,10 +80,11 @@ export default function AppRouter() {
               <Route path="/" element={<DashboardPage />} />
               <Route path="/meetings" element={<MeetingListPage />} />
               <Route path="/meetings/:id" element={<MeetingDetailPage />} />
-              <Route path="/meetings/:id/room" element={<MeetingRoomPage />} />
               <Route path="/search" element={<SearchPage />} />
               <Route path="/recordings" element={<RecordingListPage />} />
             </Route>
+            {/* Meeting room — fullscreen, no sidebar/header */}
+            <Route path="/meetings/:id/room" element={<MeetingRoomPage />} />
           </Route>
 
           {/* Protected routes — SECRETARY only */}

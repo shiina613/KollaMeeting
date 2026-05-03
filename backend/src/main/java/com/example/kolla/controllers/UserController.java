@@ -200,29 +200,31 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success("User updated successfully", response));
     }
 
-    // ── DELETE /users/{id} ────────────────────────────────────────────────────
+    // ── PATCH /users/{id}/toggle-active ──────────────────────────────────────
 
     /**
-     * DELETE /api/v1/users/{id}
-     * Delete a user. ADMIN only.
-     * Returns 400 if the user has active meeting memberships.
+     * PATCH /api/v1/users/{id}/toggle-active
+     * Toggle a user's active status (active ↔ inactive). ADMIN only.
+     * Inactive users cannot log in but their data is preserved.
+     * When deactivating, all existing JWT tokens are invalidated.
      */
-    @DeleteMapping("/{id}")
+    @PatchMapping("/{id}/toggle-active")
     @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Delete user (ADMIN only)")
+    @Operation(summary = "Toggle user active/inactive (ADMIN only)")
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "User deleted"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "User has active meeting memberships"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "User status toggled"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Cannot deactivate own account"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "User not found")
     })
-    public ResponseEntity<ApiResponse<Void>> deleteUser(
+    public ResponseEntity<ApiResponse<UserResponse>> toggleUserActive(
             @Parameter(description = "User ID") @PathVariable Long id,
             @AuthenticationPrincipal User currentUser) {
 
-        userService.deleteUser(id, currentUser);
-        return ResponseEntity.ok(ApiResponse.success("User deleted successfully", null));
+        UserResponse response = userService.toggleUserActive(id, currentUser);
+        String msg = response.isActive() ? "User activated successfully" : "User deactivated successfully";
+        return ResponseEntity.ok(ApiResponse.success(msg, response));
     }
 
     // ── POST /users/{id}/reset-password ───────────────────────────────────────

@@ -8,7 +8,7 @@ import {
   listUsers,
   createUser,
   updateUser,
-  deleteUser,
+  toggleUserActive,
   resetPassword,
 } from '../../services/userService'
 import { listDepartments } from '../../services/meetingService'
@@ -328,28 +328,35 @@ function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) {
   )
 }
 
-// ─── Delete confirmation dialog ───────────────────────────────────────────────
+// ─── Toggle active confirmation dialog ───────────────────────────────────────
 
-interface DeleteConfirmDialogProps {
+interface ToggleActiveDialogProps {
   user: MeetingUser
   onClose: () => void
   onConfirm: () => void
   loading: boolean
 }
 
-function DeleteConfirmDialog({ user, onClose, onConfirm, loading }: DeleteConfirmDialogProps) {
+function ToggleActiveDialog({ user, onClose, onConfirm, loading }: ToggleActiveDialogProps) {
+  const isActive = user.isActive
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      data-testid="delete-confirm-dialog"
+      data-testid="toggle-active-dialog"
       role="dialog"
       aria-modal="true"
-      aria-label="Xác nhận xóa người dùng"
+      aria-label={isActive ? 'Xác nhận vô hiệu hóa người dùng' : 'Xác nhận kích hoạt người dùng'}
     >
       <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-6 w-full max-w-sm shadow-xl">
-        <h2 className="text-h3 font-semibold text-on-surface mb-2">Xóa người dùng</h2>
+        <h2 className="text-h3 font-semibold text-on-surface mb-2">
+          {isActive ? 'Vô hiệu hóa người dùng' : 'Kích hoạt người dùng'}
+        </h2>
         <p className="text-body-sm text-on-surface-variant mb-6">
-          Bạn có chắc muốn xóa người dùng <strong>{user.fullName}</strong>? Hành động này không thể hoàn tác.
+          {isActive ? (
+            <>Bạn có chắc muốn vô hiệu hóa <strong>{user.fullName}</strong>? Người dùng sẽ không thể đăng nhập cho đến khi được kích hoạt lại.</>
+          ) : (
+            <>Bạn có chắc muốn kích hoạt lại <strong>{user.fullName}</strong>? Người dùng sẽ có thể đăng nhập trở lại.</>
+          )}
         </p>
         <div className="flex justify-end gap-3">
           <button
@@ -364,11 +371,11 @@ function DeleteConfirmDialog({ user, onClose, onConfirm, loading }: DeleteConfir
             type="button"
             onClick={onConfirm}
             disabled={loading}
-            data-testid="delete-confirm-btn"
-            className="px-4 py-2 rounded-xl text-button font-medium bg-error text-white hover:bg-error/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+            data-testid="toggle-active-confirm-btn"
+            className={`px-4 py-2 rounded-xl text-button font-medium text-white disabled:opacity-60 disabled:cursor-not-allowed transition-colors flex items-center gap-2 ${isActive ? 'bg-orange-500 hover:bg-orange-600' : 'bg-primary hover:bg-primary/90'}`}
           >
             {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-            Xóa
+            {isActive ? 'Vô hiệu hóa' : 'Kích hoạt'}
           </button>
         </div>
       </div>
@@ -497,8 +504,8 @@ export default function UserManagement() {
   // Modal state
   const [showCreate, setShowCreate] = useState(false)
   const [editUser, setEditUser] = useState<MeetingUser | null>(null)
-  const [deleteUser_, setDeleteUser] = useState<MeetingUser | null>(null)
-  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [toggleUser, setToggleUser] = useState<MeetingUser | null>(null)
+  const [toggleLoading, setToggleLoading] = useState(false)
   const [resetUser, setResetUser] = useState<MeetingUser | null>(null)
 
   const fetchUsers = useCallback(async () => {
@@ -530,18 +537,18 @@ export default function UserManagement() {
     fetchUsers()
   }, [fetchUsers])
 
-  const handleDeleteConfirm = async () => {
-    if (!deleteUser_) return
-    setDeleteLoading(true)
+  const handleToggleConfirm = async () => {
+    if (!toggleUser) return
+    setToggleLoading(true)
     try {
-      await deleteUser(deleteUser_.id)
-      setDeleteUser(null)
+      await toggleUserActive(toggleUser.id)
+      setToggleUser(null)
       fetchUsers()
     } catch {
-      setError('Không thể xóa người dùng. Vui lòng thử lại.')
-      setDeleteUser(null)
+      setError('Không thể thay đổi trạng thái người dùng. Vui lòng thử lại.')
+      setToggleUser(null)
     } finally {
-      setDeleteLoading(false)
+      setToggleLoading(false)
     }
   }
 
@@ -622,6 +629,7 @@ export default function UserManagement() {
                   <th className="text-left px-4 py-3 text-label-md text-on-surface-variant font-semibold">Họ và tên</th>
                   <th className="text-left px-4 py-3 text-label-md text-on-surface-variant font-semibold hidden md:table-cell">Email</th>
                   <th className="text-left px-4 py-3 text-label-md text-on-surface-variant font-semibold">Vai trò</th>
+                  <th className="text-left px-4 py-3 text-label-md text-on-surface-variant font-semibold">Trạng thái</th>
                   <th className="text-left px-4 py-3 text-label-md text-on-surface-variant font-semibold hidden lg:table-cell">Phòng ban</th>
                   <th className="px-4 py-3" aria-label="Hành động" />
                 </tr>
@@ -639,6 +647,19 @@ export default function UserManagement() {
                     </td>
                     <td className="px-4 py-3 text-on-surface-variant hidden md:table-cell">{u.email}</td>
                     <td className="px-4 py-3"><RoleBadge role={u.role} /></td>
+                    <td className="px-4 py-3">
+                      {u.isActive ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-label-md font-semibold bg-green-100 text-green-700">
+                          <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+                          Hoạt động
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-label-md font-semibold bg-surface-container text-on-surface-variant">
+                          <span className="w-1.5 h-1.5 rounded-full bg-outline inline-block" />
+                          Vô hiệu
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-on-surface-variant hidden lg:table-cell">{u.departmentName ?? u.department?.name ?? '—'}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-2">
@@ -659,12 +680,19 @@ export default function UserManagement() {
                           <span className="material-symbols-outlined text-[18px]" aria-hidden="true">lock_reset</span>
                         </button>
                         <button
-                          onClick={() => setDeleteUser(u)}
-                          data-testid={`delete-user-btn-${u.id}`}
-                          aria-label={`Xóa ${u.fullName}`}
-                          className="p-1.5 rounded-lg hover:bg-error-container text-on-surface-variant hover:text-error transition-colors"
+                          onClick={() => setToggleUser(u)}
+                          data-testid={`toggle-active-btn-${u.id}`}
+                          aria-label={u.isActive ? `Vô hiệu hóa ${u.fullName}` : `Kích hoạt ${u.fullName}`}
+                          title={u.isActive ? 'Vô hiệu hóa' : 'Kích hoạt'}
+                          className={`p-1.5 rounded-lg transition-colors ${
+                            u.isActive
+                              ? 'bg-orange-50 text-orange-600 hover:bg-orange-100'
+                              : 'bg-green-50 text-green-600 hover:bg-green-100'
+                          }`}
                         >
-                          <span className="material-symbols-outlined text-[18px]" aria-hidden="true">delete</span>
+                          <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+                            {u.isActive ? 'block' : 'check_circle'}
+                          </span>
                         </button>
                       </div>
                     </td>
@@ -761,12 +789,12 @@ export default function UserManagement() {
           onSuccess={() => { setEditUser(null); fetchUsers() }}
         />
       )}
-      {deleteUser_ && (
-        <DeleteConfirmDialog
-          user={deleteUser_}
-          onClose={() => setDeleteUser(null)}
-          onConfirm={handleDeleteConfirm}
-          loading={deleteLoading}
+      {toggleUser && (
+        <ToggleActiveDialog
+          user={toggleUser}
+          onClose={() => setToggleUser(null)}
+          onConfirm={handleToggleConfirm}
+          loading={toggleLoading}
         />
       )}
       {resetUser && (

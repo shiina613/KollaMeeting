@@ -1,21 +1,12 @@
 # =============================================================================
-# scripts/start.ps1 — Kolla Meeting startup script (Windows PowerShell)
+# scripts/start.ps1 - Kolla Meeting startup script (Windows PowerShell)
 # =============================================================================
-# Khởi động toàn bộ stack Kolla Meeting với Cloudflare Tunnel.
-# Chạy từ thư mục gốc của project (nơi có docker-compose.yml).
-# KHÔNG yêu cầu quyền Administrator.
+# Khoi dong toan bo stack Kolla Meeting voi Cloudflare Tunnel.
+# Chay tu thu muc goc cua project (noi co docker-compose.yml).
+# KHONG yeu cau quyen Administrator.
 #
 # Usage:
 #   .\scripts\start.ps1
-#
-# Steps:
-#   1. Check-DockerRunning()   — Kiểm tra Docker Desktop process đang chạy
-#   2. Wait-DockerDaemon()     — Chờ Docker daemon sẵn sàng (timeout 60s)
-#   3. Start-Services()        — docker compose up -d (trừ frontend)
-#   4. Get-TunnelUrl()         — Poll log cloudflared, extract URL (timeout 30s)
-#   5. Update-EnvFile()        — Cập nhật .env với tunnel URL mới
-#   6. Build-Frontend()        — docker compose up -d --build frontend
-#   7. Print-Success()         — In tunnel URL ra màn hình
 # =============================================================================
 
 Set-StrictMode -Version Latest
@@ -23,9 +14,6 @@ $ErrorActionPreference = "Stop"
 
 # =============================================================================
 # Helper: Extract-TunnelUrl
-# Extract URL từ một chuỗi log (dùng cho testing và Get-TunnelUrl).
-# Input:  $LogContent = chuỗi log (có thể nhiều dòng)
-# Output: URL string, hoặc $null nếu không tìm thấy
 # =============================================================================
 function Extract-TunnelUrl {
     param(
@@ -40,16 +28,13 @@ function Extract-TunnelUrl {
 }
 
 # =============================================================================
-# Subtask 5.1 — Check-DockerRunning
-# Kiểm tra process Docker Desktop đang chạy.
-# Requirements: 11.1, 11.4, 11.5
+# Check-DockerRunning - Kiem tra Docker Desktop dang chay
 # =============================================================================
 function Check-DockerRunning {
-    Write-Host "🔍 Kiểm tra Docker Desktop..."
+    Write-Host "[*] Kiem tra Docker Desktop..."
     $dockerProcess = Get-Process -Name "Docker Desktop" -ErrorAction SilentlyContinue
     if ($null -eq $dockerProcess) {
-        Write-Host "⚠️  Docker Desktop chưa chạy. Đang khởi động Docker Desktop..."
-        # Tìm Docker Desktop executable
+        Write-Host "[!] Docker Desktop chua chay. Dang khoi dong Docker Desktop..."
         $dockerDesktopPaths = @(
             "$env:ProgramFiles\Docker\Docker\Docker Desktop.exe",
             "$env:LOCALAPPDATA\Programs\Docker\Docker\Docker Desktop.exe"
@@ -59,75 +44,71 @@ function Check-DockerRunning {
             if (Test-Path $path) {
                 Start-Process -FilePath $path
                 $launched = $true
-                Write-Host "   Docker Desktop đang khởi động từ: $path"
+                Write-Host "    Docker Desktop dang khoi dong tu: $path"
                 break
             }
         }
         if (-not $launched) {
-            Write-Host "❌ Không tìm thấy Docker Desktop. Hãy cài đặt Docker Desktop từ https://www.docker.com/products/docker-desktop"
+            Write-Host "[ERROR] Khong tim thay Docker Desktop. Hay cai dat tu https://www.docker.com/products/docker-desktop"
             exit 1
         }
     } else {
-        Write-Host "✅ Docker Desktop đang chạy."
+        Write-Host "[OK] Docker Desktop dang chay."
     }
 }
 
 # =============================================================================
-# Subtask 5.1 — Wait-DockerDaemon
-# Poll docker info với timeout 60 giây, mỗi 5 giây.
-# Requirements: 11.1, 11.4, 11.5
+# Wait-DockerDaemon - Cho Docker daemon san sang (timeout 60s)
 # =============================================================================
 function Wait-DockerDaemon {
-    Write-Host "⏳ Chờ Docker daemon sẵn sàng (timeout 60s)..."
+    Write-Host "[*] Cho Docker daemon san sang (timeout 60s)..."
     $timeout = 60
     $elapsed = 0
     $interval = 5
 
     while ($elapsed -lt $timeout) {
-        $result = & docker info 2>&1
+        cmd /c "docker info > nul 2>&1"
         if ($LASTEXITCODE -eq 0) {
-            Write-Host "✅ Docker daemon đang sẵn sàng."
+            Write-Host "[OK] Docker daemon san sang."
             return
         }
-        Write-Host "   Chờ Docker daemon... ($elapsed/$timeout giây)"
+        Write-Host "    Cho Docker daemon... ($elapsed/$timeout giay)"
         Start-Sleep -Seconds $interval
         $elapsed += $interval
     }
 
-    Write-Host "❌ Docker daemon không sẵn sàng sau 60s. Hãy kiểm tra Docker Desktop."
+    Write-Host "[ERROR] Docker daemon khong san sang sau 60s. Hay kiem tra Docker Desktop."
     exit 1
 }
 
 # =============================================================================
-# Subtask 5.2 — Start-Services
-# Khởi động tất cả services trừ frontend.
-# Requirements: 11.1
+# Start-Services - Khoi dong tat ca services tru frontend
 # =============================================================================
 function Start-Services {
-    Write-Host "🚀 Khởi động services (trừ frontend)..."
-    $output = & docker compose up -d --scale frontend=0 2>&1
+    Write-Host "[*] Khoi dong services (tru frontend)..."
+    # Dung cmd /c de tranh PowerShell bat stderr cua docker thanh exception
+    cmd /c "docker compose up -d --scale frontend=0"
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "❌ Không thể khởi động services. Output:"
-        Write-Host $output
+        Write-Host "[ERROR] Khong the khoi dong services. Chay thu: docker compose up -d --scale frontend=0"
         exit 1
     }
-    Write-Host "✅ Services đã khởi động."
+    Write-Host "[OK] Services da khoi dong."
 }
 
 # =============================================================================
-# Subtask 5.3 — Get-TunnelUrl
-# Poll log cloudflared để lấy tunnel URL, timeout 30 giây.
-# Requirements: 2.1, 2.2, 2.3, 2.4
+# Get-TunnelUrl - Poll log cloudflared, extract URL (timeout 30s)
 # =============================================================================
 function Get-TunnelUrl {
-    Write-Host "⏳ Đang chờ cloudflared sinh URL (timeout 30s)..."
+    Write-Host "[*] Dang cho cloudflared sinh URL (timeout 30s)..."
     $timeout = 30
     $elapsed = 0
     $interval = 2
 
     while ($elapsed -lt $timeout) {
-        $logs = & docker logs kolla-cloudflared 2>&1 | Out-String
-        $url = Extract-TunnelUrl -LogContent $logs
+        # Dung cmd /c de gop ca stdout va stderr ma khong trigger PowerShell exception
+        $logs = cmd /c "docker logs kolla-cloudflared 2>&1"
+        $logsStr = $logs -join "`n"
+        $url = Extract-TunnelUrl -LogContent $logsStr
         if ($null -ne $url -and $url -ne "") {
             return $url
         }
@@ -135,14 +116,12 @@ function Get-TunnelUrl {
         $elapsed += $interval
     }
 
-    Write-Host "❌ cloudflared không sinh URL sau 30s. Kiểm tra: docker logs kolla-cloudflared"
+    Write-Host "[ERROR] cloudflared khong sinh URL sau 30s. Kiem tra: docker logs kolla-cloudflared"
     exit 1
 }
 
 # =============================================================================
-# Subtask 5.4 — Update-EnvFile
-# Cập nhật .env với tunnel URL mới.
-# Requirements: 3.1, 3.2, 7.1, 7.2, 7.3
+# Update-EnvFile - Cap nhat .env voi tunnel URL moi
 # =============================================================================
 function Update-EnvFile {
     param(
@@ -152,51 +131,42 @@ function Update-EnvFile {
 
     $envFile = ".env"
     if (-not (Test-Path $envFile)) {
-        Write-Host "❌ .env không tìm thấy. Chạy: Copy-Item .env.example .env"
+        Write-Host "[ERROR] .env khong tim thay. Chay: Copy-Item .env.example .env"
         exit 1
     }
 
-    Write-Host "📝 Cập nhật .env với tunnel URL: $TunnelUrl"
+    Write-Host "[*] Cap nhat .env voi tunnel URL: $TunnelUrl"
 
-    # Derive URLs từ tunnel URL
     $apiUrl  = "$TunnelUrl/api/v1"
     $wsUrl   = ($TunnelUrl -replace '^https://', 'wss://') + "/ws"
     $corsUrl = $TunnelUrl
 
-    # Đọc toàn bộ nội dung file
     $content = Get-Content $envFile -Raw
 
-    # Dùng regex replace để cập nhật từng biến (không xóa các biến khác)
-    $content = $content -replace '(?m)^VITE_API_BASE_URL=.*$', "VITE_API_BASE_URL=$apiUrl"
-    $content = $content -replace '(?m)^VITE_WS_URL=.*$',       "VITE_WS_URL=$wsUrl"
-    $content = $content -replace '(?m)^CORS_ALLOWED_ORIGINS=.*$', "CORS_ALLOWED_ORIGINS=$corsUrl"
+    $content = $content -replace '(?m)^VITE_API_BASE_URL=.*', "VITE_API_BASE_URL=$apiUrl"
+    $content = $content -replace '(?m)^VITE_WS_URL=.*',       "VITE_WS_URL=$wsUrl"
+    $content = $content -replace '(?m)^CORS_ALLOWED_ORIGINS=.*', "CORS_ALLOWED_ORIGINS=$corsUrl"
 
-    # Ghi lại file (giữ nguyên encoding, không thêm BOM)
     [System.IO.File]::WriteAllText((Resolve-Path $envFile).Path, $content, [System.Text.UTF8Encoding]::new($false))
 
-    Write-Host "✅ .env đã được cập nhật."
+    Write-Host "[OK] .env da duoc cap nhat."
 }
 
 # =============================================================================
-# Subtask 5.6 — Build-Frontend
-# Rebuild và khởi động frontend container.
-# Requirements: 3.3
+# Build-Frontend - Rebuild va khoi dong frontend container
 # =============================================================================
 function Build-Frontend {
-    Write-Host "🔨 Rebuild frontend container..."
-    $output = & docker compose up -d --build frontend 2>&1
+    Write-Host "[*] Rebuild frontend container..."
+    cmd /c "docker compose up -d --build frontend"
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "❌ Không thể build frontend. Output:"
-        Write-Host $output
+        Write-Host "[ERROR] Khong the build frontend. Chay thu: docker compose up -d --build frontend"
         exit 1
     }
-    Write-Host "✅ Frontend đã được build và khởi động."
+    Write-Host "[OK] Frontend da duoc build va khoi dong."
 }
 
 # =============================================================================
-# Subtask 5.6 — Print-Success
-# In thông báo thành công kèm tunnel URL.
-# Requirements: 3.4, 11.3
+# Print-Success - In thong bao thanh cong
 # =============================================================================
 function Print-Success {
     param(
@@ -204,14 +174,12 @@ function Print-Success {
         [string]$TunnelUrl
     )
     Write-Host ""
-    Write-Host "✅ Kolla đang chạy tại: $TunnelUrl"
+    Write-Host ">>> Kolla dang chay tai: $TunnelUrl"
     Write-Host ""
 }
 
 # =============================================================================
-# Main — Wire toàn bộ script
-# Gọi các hàm theo thứ tự với error handling ở mỗi bước.
-# Requirements: 3.4, 11.1, 11.3
+# Main
 # =============================================================================
 function Main {
     Check-DockerRunning

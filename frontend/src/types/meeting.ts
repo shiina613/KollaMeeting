@@ -113,6 +113,7 @@ export interface MeetingUser {
   role: 'ADMIN' | 'SECRETARY' | 'USER'
   department?: Department
   departmentName?: string
+  isActive: boolean
 }
 
 export interface Meeting {

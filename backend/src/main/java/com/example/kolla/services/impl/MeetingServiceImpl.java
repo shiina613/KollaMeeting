@@ -405,19 +405,19 @@ public class MeetingServiceImpl implements MeetingService {
     }
 
     /**
-     * Generates a unique 8-character alphanumeric meeting code.
+     * Generates a unique 20-character alphanumeric meeting code.
+     *
+     * 20 chars is long enough to avoid meet.jit.si's "members-only" policy
+     * that is triggered for short/guessable room names on the public instance.
      * Requirements: 3.1
      */
     private String generateUniqueCode() {
         String code;
-        int attempts = 0;
         do {
-            code = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
-            attempts++;
-            if (attempts > 10) {
-                // Fallback: use full UUID segment
-                code = UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase();
-            }
+            // Two UUID segments joined = 32 hex chars; take first 20
+            String part1 = UUID.randomUUID().toString().replace("-", "");
+            String part2 = UUID.randomUUID().toString().replace("-", "");
+            code = (part1 + part2).substring(0, 20).toUpperCase();
         } while (meetingRepository.existsByCode(code));
         return code;
     }
