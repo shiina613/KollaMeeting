@@ -30,7 +30,7 @@ Tích hợp JaaS (Jitsi as a Service) của 8x8 vào Kolla Meeting. Backend thê
     - Test `extractKeyId()` trả về toàn bộ string khi không có dấu `/`
     - _Requirements: 2.1, 2.2, 2.5_
 
-- [~] 3. Tạo `JaasTokenResponse` DTO
+- [x] 3. Tạo `JaasTokenResponse` DTO
   - Tạo file `backend/src/main/java/com/example/kolla/responses/JaasTokenResponse.java` với field `token` (String) và `roomName` (String), dùng `@Data @AllArgsConstructor`
   - _Requirements: 1.18_
 
