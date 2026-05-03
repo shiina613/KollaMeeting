@@ -16,6 +16,7 @@ import type {
   Room,
   Department,
   RoomAvailabilitySlot,
+  RoomAvailabilityResponse,
   RaiseHandRequest,
   SpeakingPermission,
 } from '../types/meeting'
@@ -181,13 +182,14 @@ export async function getRoomAvailability(
   roomId: number,
   startTime: string,
   endTime: string,
+  excludeMeetingId?: number,
 ): Promise<RoomAvailabilitySlot[]> {
   try {
-    const response = await api.get<ApiResponse<RoomAvailabilitySlot[]>>(
+    const response = await api.get<ApiResponse<RoomAvailabilityResponse>>(
       `/rooms/${roomId}/availability`,
-      { params: { startTime, endTime } },
+      { params: { startTime, endTime, ...(excludeMeetingId ? { excludeMeetingId } : {}) } },
     )
-    return response.data.data ?? []
+    return response.data.data?.bookedSlots ?? []
   } catch {
     return []
   }

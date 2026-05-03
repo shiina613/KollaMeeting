@@ -109,32 +109,43 @@ export async function resetPassword(
 }
 
 /**
- * List users eligible to be a host (ADMIN or SECRETARY role).
+ * List users eligible to be a host or secretary (SECRETARY role, active).
+ * Uses the /users/candidates endpoint accessible by any authenticated user.
+ */
+async function listCandidates(): Promise<MeetingUser[]> {
+  const res = await api.get<ApiResponse<MeetingUser[]>>('/users/candidates')
+  return res.data.data ?? []
+}
+
+/**
+ * Search active users by name or username (partial match).
+ * Accessible by any authenticated user. Used to add meeting members.
+ */
+export async function searchUsers(q: string): Promise<MeetingUser[]> {
+  if (!q.trim()) return []
+  const res = await api.get<ApiResponse<MeetingUser[]>>('/users/search', { params: { q } })
+  return res.data.data ?? []
+}
+
+/**
+ * List all active users ordered by full name.
+ * Accessible by any authenticated user. Used to populate member picker.
+ */
+export async function listAllActiveUsers(): Promise<MeetingUser[]> {
+  const res = await api.get<ApiResponse<MeetingUser[]>>('/users/active')
+  return res.data.data ?? []
+}
+
+/**
+ * List users eligible to be a host (SECRETARY role only).
  */
 export async function listHostCandidates(): Promise<MeetingUser[]> {
-  // Fetch ADMIN users
-  const adminRes = await listUsers({ role: 'ADMIN', size: 100 })
-  const secretaryRes = await listUsers({ role: 'SECRETARY', size: 100 })
-
-  const admins = adminRes.data?.content ?? []
-  const secretaries = secretaryRes.data?.content ?? []
-
-  // Deduplicate by id
-  const seen = new Set<number>()
-  const combined: MeetingUser[] = []
-  for (const u of [...admins, ...secretaries]) {
-    if (!seen.has(u.id)) {
-      seen.add(u.id)
-      combined.push(u)
-    }
-  }
-  return combined
+  return listCandidates()
 }
 
 /**
  * List users eligible to be a secretary (SECRETARY role only).
  */
 export async function listSecretaryCandidates(): Promise<MeetingUser[]> {
-  const res = await listUsers({ role: 'SECRETARY', size: 100 })
-  return res.data?.content ?? []
+  return listCandidates()
 }

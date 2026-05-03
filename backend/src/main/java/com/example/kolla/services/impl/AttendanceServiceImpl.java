@@ -64,8 +64,10 @@ public class AttendanceServiceImpl implements AttendanceService {
                     "Cannot join a meeting that is not ACTIVE (current: " + meeting.getStatus() + ")");
         }
 
-        // Only members may join (Requirement 3.9)
-        if (!memberRepository.isMember(meetingId, user.getId())) {
+        // Only members may join — SECRETARY and ADMIN bypass membership check
+        if (user.getRole() != com.example.kolla.enums.Role.SECRETARY
+                && user.getRole() != com.example.kolla.enums.Role.ADMIN
+                && !memberRepository.isMember(meetingId, user.getId())) {
             throw new ForbiddenException(
                     "You are not a member of this meeting");
         }

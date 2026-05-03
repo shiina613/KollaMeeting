@@ -1,6 +1,6 @@
-# Kolla Meeting Rebuild - Docker Compose
+﻿# Kolla Meeting Rebuild - Docker Compose
 # Services: frontend (:3000), backend (:8080), gipformer (:8000),
-#           mysql (:3306), redis (:6379), jitsi (:8443)
+#           mysql (:3306), redis (:6379), cloudflared (tunnel)
 
 networks:
   kolla-network:
@@ -12,19 +12,6 @@ volumes:
   redis-data:
     driver: local
   app-storage:
-    driver: local
-  jitsi-web-config:
-    driver: local
-  jitsi-prosody-config:
-    driver: local
-  jitsi-jicofo-config:
-    driver: local
-  jitsi-jvb-config:
-    driver: local
-  # Requirement 19.1 – SSL / certbot volumes
-  certbot-webroot:
-    driver: local
-  certbot-certs:
     driver: local
 
 services:
@@ -93,12 +80,24 @@ services:
       # Requirement 14.2 – JWT
       JWT_SECRET: ${JWT_SECRET:-changeme-super-secret-key-at-least-32-chars}
       JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-86400000}
+      JWT_REFRESH_EXPIRATION_MS: ${JWT_REFRESH_EXPIRATION_MS:-604800000}
       # Requirement 14.3 – File storage path
       FILE_STORAGE_PATH: /app/storage
       # Requirement 14.4 – Jitsi server URL
-      JITSI_SERVER_URL: ${JITSI_SERVER_URL:-https://jitsi.kolla.local:8443}
+      JITSI_SERVER_URL: ${JITSI_SERVER_URL:-https://meet.jit.si}
       # Requirement 14.5 – Gipformer service URL
       GIPFORMER_SERVICE_URL: http://gipformer:8000
+      # CORS configuration
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      # Redis configuration
+      SPRING_REDIS_HOST: ${SPRING_REDIS_HOST:-redis}
+      SPRING_REDIS_PORT: ${SPRING_REDIS_PORT:-6379}
+      SPRING_REDIS_PASSWORD: ${SPRING_REDIS_PASSWORD:-}
+      # Jitsi configuration
+      JITSI_APP_ID: ${JITSI_APP_ID:-kolla}
+      JITSI_APP_SECRET: ${JITSI_APP_SECRET:-}
+      # Gipformer callback API key
+      GIPFORMER_CALLBACK_API_KEY: ${GIPFORMER_CALLBACK_API_KEY:-}
       # Timezone
       TZ: Asia/Ho_Chi_Minh
       JAVA_OPTS: "-Duser.timezone=Asia/Ho_Chi_Minh"
@@ -157,8 +156,9 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080/api/v1}
-        VITE_JITSI_URL: ${VITE_JITSI_URL:-https://jitsi.kolla.local:8443}
+        VITE_JITSI_URL: ${VITE_JITSI_URL:-https://meet.jit.si}
+        # VITE_API_BASE_URL and VITE_WS_URL are injected via .env by startup scripts
+        # (scripts/start.ps1 or scripts/start.sh) — do not hardcode here
     container_name: kolla-frontend
     restart: unless-stopped
     ports:
@@ -167,37 +167,10 @@ services:
       # Requirement 14.6 – API base URL
       VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080/api/v1}
       # Requirement 14.7 – Jitsi server URL
-      VITE_JITSI_URL: ${VITE_JITSI_URL:-https://jitsi.kolla.local:8443}
+      VITE_JITSI_URL: ${VITE_JITSI_URL:-https://meet.jit.si}
       TZ: Asia/Ho_Chi_Minh
     depends_on:
       - backend
-    networks:
-      - kolla-network
-
-  # ─────────────────────────────────────────────
-  # Jitsi Meet – self-hosted (:8443)
-  # Prosody XMPP + Jicofo + JVB (Jitsi Videobridge)
-  # ─────────────────────────────────────────────
-  jitsi:
-    image: jitsi/web:stable
-    container_name: kolla-jitsi
-    restart: unless-stopped
-    # No external port mapping — Nginx proxies to jitsi internally
-    # (port 8443 is used by Nginx for external HTTPS)
-    environment:
-      PUBLIC_URL: ${JITSI_PUBLIC_URL:-https://jitsi.kolla.local:8443}
-      XMPP_SERVER: localhost
-      XMPP_DOMAIN: ${XMPP_DOMAIN:-meet.jitsi}
-      XMPP_AUTH_DOMAIN: ${XMPP_AUTH_DOMAIN:-auth.meet.jitsi}
-      XMPP_MUC_DOMAIN: ${XMPP_MUC_DOMAIN:-muc.meet.jitsi}
-      XMPP_INTERNAL_MUC_DOMAIN: ${XMPP_INTERNAL_MUC_DOMAIN:-internal-muc.meet.jitsi}
-      JICOFO_AUTH_USER: focus
-      JVB_ADVERTISE_IPS: ${JVB_ADVERTISE_IPS:-127.0.0.1}
-      ENABLE_AUTH: ${JITSI_ENABLE_AUTH:-0}
-      ENABLE_GUESTS: ${JITSI_ENABLE_GUESTS:-1}
-      TZ: Asia/Ho_Chi_Minh
-    volumes:
-      - jitsi-web-config:/config
     networks:
       - kolla-network
 
@@ -207,7 +180,8 @@ services:
   #   /        → frontend:3000
   #   /api     → backend:8080
   #   /ws      → backend:8080 (WebSocket upgrade)
-  #   meet.*   → jitsi:8443
+  # Port 8888: HTTP plain for Cloudflare Tunnel (tunnel terminates SSL)
+  # Port 8443: HTTPS self-signed for LAN access (backward compat)
   # ─────────────────────────────────────────────
   nginx:
     build:
@@ -217,7 +191,8 @@ services:
     restart: unless-stopped
     ports:
       - "8081:8080"   # HTTP (ACME challenge + redirect) — port 8080 used by Docker Desktop
-      - "8443:8443"   # HTTPS (main app + Jitsi vhost)
+      - "8443:8443"   # HTTPS (main app) — LAN backward compat
+      - "8888:8888"   # HTTP plain — for Cloudflare Tunnel / LAN testing
     environment:
       DOMAIN: ${DOMAIN:-kolla.local}
       DUCKDNS_TOKEN: ${DUCKDNS_TOKEN:-}
@@ -226,28 +201,32 @@ services:
     volumes:
       # nginx.conf template — envsubst expands ${DOMAIN} at container start
       - ./nginx/nginx.conf:/etc/nginx/templates/default.conf.template:ro
-      # Shared webroot for ACME challenge files written by certbot
-      - certbot-webroot:/var/www/certbot
-      # Let's Encrypt certificates (shared with certbot container)
-      - certbot-certs:/etc/letsencrypt
     depends_on:
       - frontend
       - backend
-      - jitsi
     networks:
       - kolla-network
 
   # ─────────────────────────────────────────────
-  # Certbot – automatic SSL certificate renewal
-  # Polls every 12 h; certbot only renews when < 30 days remain,
-  # so certs are effectively renewed well before the 90-day expiry.
+  # Cloudflare Tunnel (cloudflared) — Quick Tunnel mode
+  # Exposes Nginx port 8888 to the internet via Cloudflare edge.
+  # No account, domain, or port forwarding required.
+  # URL is auto-generated on each start (see scripts/start.ps1 / start.sh).
+  #
+  # Named Tunnel upgrade path (when you have a domain):
+  #   1. Add to .env: CLOUDFLARE_TUNNEL_TOKEN=eyJ...
+  #   2. Uncomment the environment block below and change command to:
+  #      command: tunnel --no-autoupdate run
   # ─────────────────────────────────────────────
-  certbot:
-    image: certbot/certbot:latest
-    container_name: kolla-certbot
-    volumes:
-      - certbot-webroot:/var/www/certbot
-      - certbot-certs:/etc/letsencrypt
-    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done"
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: kolla-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://nginx:8888
+    # Named Tunnel upgrade path — uncomment when CLOUDFLARE_TUNNEL_TOKEN is set:
+    # environment:
+    #   TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - nginx
     networks:
       - kolla-network

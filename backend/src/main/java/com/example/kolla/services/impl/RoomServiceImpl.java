@@ -116,16 +116,22 @@ public class RoomServiceImpl implements RoomService {
     @Transactional(readOnly = true)
     public RoomAvailabilityResponse checkAvailability(Long roomId,
                                                        LocalDateTime startTime,
-                                                       LocalDateTime endTime) {
+                                                       LocalDateTime endTime,
+                                                       Long excludeMeetingId) {
         Room room = findRoomOrThrow(roomId);
 
         if (startTime != null && endTime != null && !startTime.isBefore(endTime)) {
             throw new BadRequestException("startTime must be before endTime");
         }
 
-        List<Meeting> overlapping = (startTime != null && endTime != null)
-                ? roomRepository.findOverlappingMeetings(roomId, startTime, endTime, ACTIVE_STATUSES)
-                : List.of();
+        List<Meeting> overlapping;
+        if (startTime != null && endTime != null) {
+            overlapping = (excludeMeetingId != null)
+                    ? roomRepository.findOverlappingMeetingsExcluding(roomId, startTime, endTime, ACTIVE_STATUSES, excludeMeetingId)
+                    : roomRepository.findOverlappingMeetings(roomId, startTime, endTime, ACTIVE_STATUSES);
+        } else {
+            overlapping = List.of();
+        }
 
         List<RoomAvailabilityResponse.BookedSlot> slots = overlapping.stream()
                 .map(m -> RoomAvailabilityResponse.BookedSlot.builder()

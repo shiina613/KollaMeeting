@@ -183,32 +183,31 @@ public class RecordingServiceImpl implements RecordingService {
     }
 
     /**
-     * Checks that the current user is the meeting host, secretary, or an ADMIN.
+     * Checks that the current user is the meeting host, meeting secretary, any SECRETARY, or ADMIN.
      * Throws ForbiddenException if not.
      */
     private void checkHostOrSecretaryOrAdmin(Meeting meeting, User currentUser, String action) {
-        if (currentUser.getRole() == Role.ADMIN) {
-            return; // ADMIN always allowed
+        if (currentUser.getRole() == Role.ADMIN
+                || currentUser.getRole() == Role.SECRETARY) {
+            return; // Any SECRETARY or ADMIN may manage recordings
         }
         boolean isHost = meeting.getHost() != null
                 && meeting.getHost().getId().equals(currentUser.getId());
-        boolean isSecretary = meeting.getSecretary() != null
-                && meeting.getSecretary().getId().equals(currentUser.getId());
-
-        if (!isHost && !isSecretary) {
+        if (!isHost) {
             throw new ForbiddenException(
-                    "Only the meeting Host, Secretary, or an ADMIN may " + action);
+                    "Only the meeting Host, a SECRETARY, or an ADMIN may " + action);
         }
     }
 
     /**
      * Checks that the current user is a member of the meeting.
-     * ADMIN users bypass the membership check.
+     * ADMIN and SECRETARY users bypass the membership check.
      * Throws ForbiddenException if not a member.
      */
     private void checkMembership(Long meetingId, User currentUser) {
-        if (currentUser.getRole() == Role.ADMIN) {
-            return; // ADMIN can access all recordings
+        if (currentUser.getRole() == Role.ADMIN
+                || currentUser.getRole() == Role.SECRETARY) {
+            return; // ADMIN and SECRETARY can access all recordings
         }
         if (!meetingService.isMember(meetingId, currentUser.getId())) {
             throw new ForbiddenException(

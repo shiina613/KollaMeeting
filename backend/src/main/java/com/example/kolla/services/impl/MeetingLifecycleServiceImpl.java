@@ -81,16 +81,24 @@ public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
     public MeetingResponse activateMeeting(Long meetingId, User requester) {
         Meeting meeting = findMeetingOrThrow(meetingId);
 
-        // Permission check: only Host or ADMIN
-        if (!isHostOrAdmin(meeting, requester)) {
+        // Permission check: only Host, any SECRETARY, or ADMIN
+        if (!isHostOrAdmin(meeting, requester) && requester.getRole() != com.example.kolla.enums.Role.SECRETARY) {
             throw new ForbiddenException(
-                    "Only the Host or an ADMIN may activate a meeting");
+                    "Only the Host or a SECRETARY may activate a meeting");
         }
 
         // State check
         if (meeting.getStatus() != MeetingStatus.SCHEDULED) {
             throw new BadRequestException(
                     "Meeting is not in SCHEDULED state (current: " + meeting.getStatus() + ")");
+        }
+
+        // Time check: only allow activation within 30 minutes before startTime
+        LocalDateTime now = LocalDateTime.now(clock);
+        LocalDateTime thirtyMinBefore = meeting.getStartTime().minusMinutes(30);
+        if (now.isBefore(thirtyMinBefore)) {
+            throw new BadRequestException(
+                    "Meeting can only be activated within 30 minutes before the scheduled start time");
         }
 
         meeting.setStatus(MeetingStatus.ACTIVE);
@@ -124,7 +132,7 @@ public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
         // Permission check: Host, Secretary, or ADMIN
         if (!isHostSecretaryOrAdmin(meeting, requester)) {
             throw new ForbiddenException(
-                    "Only the Host, Secretary, or an ADMIN may end a meeting");
+                    "Only the Host or Secretary may end a meeting");
         }
 
         // State check
@@ -288,9 +296,6 @@ public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
      */
     @Override
     public boolean isHostOrAdmin(Meeting meeting, User user) {
-        if (user.getRole() == Role.ADMIN) {
-            return true;
-        }
         return meeting.getHost() != null
                 && meeting.getHost().getId().equals(user.getId());
     }
@@ -298,12 +303,9 @@ public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
     // ── Private helpers ───────────────────────────────────────────────────────
 
     /**
-     * Returns true if the user is Host, Secretary, or ADMIN.
+     * Returns true if the user is Host or Secretary of the meeting.
      */
     private boolean isHostSecretaryOrAdmin(Meeting meeting, User user) {
-        if (user.getRole() == Role.ADMIN) {
-            return true;
-        }
         if (meeting.getHost() != null && meeting.getHost().getId().equals(user.getId())) {
             return true;
         }

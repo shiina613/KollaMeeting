@@ -4,9 +4,12 @@ import com.example.kolla.dto.CreateUserRequest;
 import com.example.kolla.dto.ResetPasswordRequest;
 import com.example.kolla.dto.UpdateUserRequest;
 import com.example.kolla.models.User;
+import com.example.kolla.enums.Role;
 import com.example.kolla.responses.UserResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+
+import java.util.List;
 
 /**
  * User management service interface.
@@ -19,6 +22,24 @@ public interface UserService {
      * Accessible by ADMIN only.
      */
     Page<UserResponse> listUsers(Pageable pageable);
+
+    /**
+     * List active SECRETARY users for meeting host/secretary dropdowns.
+     * Accessible by any authenticated user (used to populate form dropdowns).
+     */
+    List<UserResponse> listMeetingCandidates();
+
+    /**
+     * List all active users ordered by full name.
+     * Accessible by any authenticated user (used to populate member picker).
+     */
+    List<UserResponse> listAllActiveUsers();
+
+    /**
+     * Search active users by name or username (partial, case-insensitive).
+     * Accessible by any authenticated user (used to add meeting members).
+     */
+    List<UserResponse> searchUsers(String query);
 
     /**
      * Get a user by ID.

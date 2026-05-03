@@ -86,8 +86,8 @@ export default function AppRouter() {
             </Route>
           </Route>
 
-          {/* Protected routes — ADMIN and SECRETARY only */}
-          <Route element={<ProtectedRoute allowedRoles={['ADMIN', 'SECRETARY']} />}>
+          {/* Protected routes — SECRETARY only */}
+          <Route element={<ProtectedRoute allowedRoles={['SECRETARY']} />}>
             <Route element={<AppLayout />}>
               <Route path="/meetings/new" element={<MeetingFormPage />} />
               <Route path="/meetings/:id/edit" element={<MeetingFormPage />} />

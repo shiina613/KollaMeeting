@@ -28,11 +28,12 @@ public class UserResponse {
     private String email;
     private Role role;
     private Long departmentId;
+    private String departmentName;
     private boolean isActive;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    /** Convenience factory from entity. */
+    /** Convenience factory from entity (no department name). */
     public static UserResponse from(User user) {
         return UserResponse.builder()
                 .id(user.getId())
@@ -41,6 +42,22 @@ public class UserResponse {
                 .email(user.getEmail())
                 .role(user.getRole())
                 .departmentId(user.getDepartmentId())
+                .isActive(user.isActive())
+                .createdAt(user.getCreatedAt())
+                .updatedAt(user.getUpdatedAt())
+                .build();
+    }
+
+    /** Convenience factory from entity with resolved department name. */
+    public static UserResponse from(User user, String departmentName) {
+        return UserResponse.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .fullName(user.getFullName())
+                .email(user.getEmail())
+                .role(user.getRole())
+                .departmentId(user.getDepartmentId())
+                .departmentName(departmentName)
                 .isActive(user.isActive())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())

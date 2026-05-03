@@ -1,15 +1,14 @@
 #!/bin/sh
 # nginx/entrypoint.sh
-# Uses acme.sh with DuckDNS DNS challenge for SSL certificate issuance.
-# acme.sh has native DuckDNS support via dns_duckdns hook.
+# Self-signed SSL certificate for IP-based deployment (no domain required).
+# Falls back to HTTP-only if openssl fails.
 
 set -e
 
-DOMAIN="${DOMAIN:-kolla.local}"
-DUCKDNS_TOKEN="${DUCKDNS_TOKEN:-}"
-CERTBOT_EMAIL="${CERTBOT_EMAIL:-admin@example.com}"
-CERT_PATH="/etc/letsencrypt/live/${DOMAIN}/fullchain.pem"
-ACME_HOME="/root/.acme.sh"
+DOMAIN="${DOMAIN:-localhost}"
+CERT_DIR="/etc/letsencrypt/live/${DOMAIN}"
+CERT_PATH="${CERT_DIR}/fullchain.pem"
+KEY_PATH="${CERT_DIR}/privkey.pem"
 
 echo "[entrypoint] DOMAIN=${DOMAIN}"
 
@@ -21,52 +20,33 @@ envsubst '${DOMAIN}' \
 
 echo "[entrypoint] nginx config expanded"
 
-# ── Obtain SSL certificate if not present ─────────────────────────────────
+# ── Generate self-signed SSL certificate if not present ───────────────────
 if [ ! -f "$CERT_PATH" ]; then
-    echo "[entrypoint] SSL certificate not found. Obtaining via acme.sh + DuckDNS..."
+    echo "[entrypoint] Generating self-signed SSL certificate for ${DOMAIN}..."
 
-    if [ -z "$DUCKDNS_TOKEN" ]; then
-        echo "[entrypoint] ERROR: DUCKDNS_TOKEN not set. Starting without SSL."
-        exec nginx -c /etc/nginx/nginx-init.conf -g "daemon off;"
-    fi
+    mkdir -p "${CERT_DIR}"
 
-    # Install acme.sh if not present
-    if [ ! -f "${ACME_HOME}/acme.sh" ]; then
-        echo "[entrypoint] Installing acme.sh..."
-        wget -qO- https://get.acme.sh | sh -s email="${CERTBOT_EMAIL}" || {
-            echo "[entrypoint] acme.sh install failed. Starting without SSL."
-            exec nginx -c /etc/nginx/nginx-init.conf -g "daemon off;"
-        }
-    fi
-
-    # Export DuckDNS token for acme.sh dns_duckdns hook
-    export DuckDNS_Token="${DUCKDNS_TOKEN}"
-
-    echo "[entrypoint] Requesting certificate for ${DOMAIN}..."
-    "${ACME_HOME}/acme.sh" --issue \
-        --dns dns_duckdns \
-        -d "${DOMAIN}" \
-        --server letsencrypt \
-        --force \
-        || {
-            echo "[entrypoint] acme.sh failed. Starting without SSL."
+    # Generate self-signed cert valid for 3650 days (10 years)
+    # SAN (Subject Alternative Name) required for modern browsers
+    openssl req -x509 -nodes -newkey rsa:2048 \
+        -keyout "${KEY_PATH}" \
+        -out "${CERT_PATH}" \
+        -days 3650 \
+        -subj "/CN=${DOMAIN}/O=Kolla Meeting/C=VN" \
+        -addext "subjectAltName=IP:${DOMAIN}" \
+        2>/dev/null || \
+    openssl req -x509 -nodes -newkey rsa:2048 \
+        -keyout "${KEY_PATH}" \
+        -out "${CERT_PATH}" \
+        -days 3650 \
+        -subj "/CN=${DOMAIN}/O=Kolla Meeting/C=VN" \
+        2>/dev/null || {
+            echo "[entrypoint] openssl failed. Starting without SSL (HTTP only)."
             exec nginx -c /etc/nginx/nginx-init.conf -g "daemon off;"
         }
 
-    # Install cert to /etc/letsencrypt/live/${DOMAIN}/
-    mkdir -p "/etc/letsencrypt/live/${DOMAIN}"
-    "${ACME_HOME}/acme.sh" --install-cert \
-        -d "${DOMAIN}" \
-        --cert-file     "/etc/letsencrypt/live/${DOMAIN}/cert.pem" \
-        --key-file      "/etc/letsencrypt/live/${DOMAIN}/privkey.pem" \
-        --fullchain-file "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" \
-        || {
-            echo "[entrypoint] cert install failed. Starting without SSL."
-            exec nginx -c /etc/nginx/nginx-init.conf -g "daemon off;"
-        }
-
-    echo "[entrypoint] SSL certificate obtained successfully."
+    echo "[entrypoint] Self-signed certificate generated at ${CERT_DIR}"
 fi
 
-echo "[entrypoint] Starting nginx with SSL..."
+echo "[entrypoint] Starting nginx with SSL (self-signed)..."
 exec nginx -g "daemon off;"

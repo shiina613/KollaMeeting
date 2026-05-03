@@ -15,16 +15,19 @@ import {
   isSchedulingConflict,
   getConflictMessage,
 } from '../services/meetingService'
-import { listHostCandidates, listSecretaryCandidates } from '../services/userService'
-import type { Room, MeetingUser, TranscriptionPriority } from '../types/meeting'
+import { listHostCandidates, listSecretaryCandidates, searchUsers } from '../services/userService'
+import { listMeetingMembers, addMeetingMember, removeMeetingMember } from '../services/meetingService'
+import { formatUserLabel } from '../utils/userUtils'
+import type { Room, MeetingUser, MeetingMember, TranscriptionPriority } from '../types/meeting'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Convert local datetime-local input value to ISO8601 string */
+/** Convert local datetime-local input value to ISO8601 string for backend (UTC+7, no offset) */
 function localToIso(local: string): string {
   if (!local) return ''
-  // datetime-local gives "YYYY-MM-DDTHH:mm" — treat as UTC+7
-  return new Date(local + ':00+07:00').toISOString()
+  // datetime-local gives "YYYY-MM-DDTHH:mm"
+  // Backend uses LocalDateTime (UTC+7) — send as-is without timezone conversion
+  return local + ':00'
 }
 
 /** Convert ISO8601 to datetime-local input value (UTC+7) */
@@ -135,12 +138,14 @@ interface RoomAvailabilityIndicatorProps {
   roomId: number | ''
   startTime: string
   endTime: string
+  excludeMeetingId?: number
 }
 
 function RoomAvailabilityIndicator({
   roomId,
   startTime,
   endTime,
+  excludeMeetingId,
 }: RoomAvailabilityIndicatorProps) {
   const [conflicts, setConflicts] = useState<{ meetingTitle: string }[]>([])
   const [checking, setChecking] = useState(false)
@@ -161,10 +166,12 @@ function RoomAvailabilityIndicator({
     let cancelled = false
     setChecking(true)
 
+    // Send as local UTC+7 datetime string (no offset) — backend uses LocalDateTime
     getRoomAvailability(
       roomId as number,
-      start.toISOString(),
-      end.toISOString(),
+      startTime + ':00',
+      endTime + ':00',
+      excludeMeetingId,
     ).then((slots) => {
       if (!cancelled) {
         setConflicts(slots.map((s) => ({ meetingTitle: s.meetingTitle })))
@@ -173,7 +180,7 @@ function RoomAvailabilityIndicator({
     })
 
     return () => { cancelled = true }
-  }, [roomId, startTime, endTime])
+  }, [roomId, startTime, endTime, excludeMeetingId])
 
   if (!roomId || !startTime || !endTime) return null
 
@@ -231,6 +238,14 @@ export default function MeetingFormPage() {
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(isEdit)
   const [conflictError, setConflictError] = useState<string | null>(null)
+  const meetingId = id ? Number(id) : undefined
+
+  // Member management state (edit mode only)
+  const [members, setMembers] = useState<MeetingMember[]>([])
+  const [memberSearch, setMemberSearch] = useState('')
+  const [memberSearchResults, setMemberSearchResults] = useState<MeetingUser[]>([])
+  const [memberSearchLoading, setMemberSearchLoading] = useState(false)
+  const [memberActionLoading, setMemberActionLoading] = useState<number | null>(null)
 
   // Load rooms and user candidates
   useEffect(() => {
@@ -252,19 +267,23 @@ export default function MeetingFormPage() {
     if (!isEdit || !id) return
 
     setInitialLoading(true)
-    getMeeting(Number(id))
-      .then((res) => {
-        const m = res.data
+    Promise.all([
+      getMeeting(Number(id)),
+      listMeetingMembers(Number(id)),
+    ])
+      .then(([meetingRes, membersRes]) => {
+        const m = meetingRes.data
         setValues({
           title: m.title,
           description: m.description ?? '',
           startTime: isoToLocal(m.startTime),
           endTime: isoToLocal(m.endTime),
           roomId: m.room?.id ?? m.roomId ?? '',
-          hostUserId: m.hostUser?.id ?? m.hostUserId ?? '',
-          secretaryUserId: m.secretaryUser?.id ?? m.secretaryUserId ?? '',
+          hostUserId: m.hostUser?.id ?? m.hostUserId ?? m.hostId ?? '',
+          secretaryUserId: m.secretaryUser?.id ?? m.secretaryUserId ?? m.secretaryId ?? '',
           transcriptionPriority: m.transcriptionPriority,
         })
+        setMembers(membersRes.data ?? [])
       })
       .catch(() => {
         setErrors({ general: 'Không thể tải thông tin cuộc họp.' })
@@ -281,6 +300,52 @@ export default function MeetingFormPage() {
     },
     [],
   )
+
+  // Member search with debounce
+  useEffect(() => {
+    if (!memberSearch.trim()) {
+      setMemberSearchResults([])
+      return
+    }
+    const timer = setTimeout(() => {
+      setMemberSearchLoading(true)
+      searchUsers(memberSearch)
+        .then(setMemberSearchResults)
+        .catch(() => setMemberSearchResults([]))
+        .finally(() => setMemberSearchLoading(false))
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [memberSearch])
+
+  const handleAddMember = async (user: MeetingUser) => {
+    if (!meetingId) return
+    if (members.some((m) => m.userId === user.id)) return
+    setMemberActionLoading(user.id)
+    try {
+      await addMeetingMember(meetingId, user.id)
+      const res = await listMeetingMembers(meetingId)
+      setMembers(res.data ?? [])
+      setMemberSearch('')
+      setMemberSearchResults([])
+    } catch {
+      // non-critical, user may already be a member
+    } finally {
+      setMemberActionLoading(null)
+    }
+  }
+
+  const handleRemoveMember = async (userId: number) => {
+    if (!meetingId) return
+    setMemberActionLoading(userId)
+    try {
+      await removeMeetingMember(meetingId, userId)
+      setMembers((prev) => prev.filter((m) => m.id !== userId))
+    } catch {
+      // non-critical
+    } finally {
+      setMemberActionLoading(null)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -518,6 +583,7 @@ export default function MeetingFormPage() {
             roomId={values.roomId}
             startTime={values.startTime}
             endTime={values.endTime}
+            excludeMeetingId={meetingId}
           />
         </div>
 
@@ -546,7 +612,7 @@ export default function MeetingFormPage() {
             <option value="">-- Chọn chủ trì --</option>
             {hostCandidates.map((u) => (
               <option key={u.id} value={u.id} data-role={u.role}>
-                {u.fullName} ({u.role === 'ADMIN' ? 'Quản trị viên' : 'Thư ký'})
+                {formatUserLabel(u)}
               </option>
             ))}
           </select>
@@ -582,7 +648,7 @@ export default function MeetingFormPage() {
             <option value="">-- Chọn thư ký --</option>
             {secretaryCandidates.map((u) => (
               <option key={u.id} value={u.id} data-role={u.role}>
-                {u.fullName}
+                {formatUserLabel(u)}
               </option>
             ))}
           </select>
@@ -614,6 +680,96 @@ export default function MeetingFormPage() {
             <option value="HIGH_PRIORITY">Cao (phiên âm thời gian thực)</option>
           </select>
         </div>
+
+        {/* Member management — edit mode only */}
+        {isEdit && (
+          <div className="border-t border-outline-variant pt-5 space-y-3">
+            <h2 className="text-label-lg font-semibold text-on-surface">Thành viên cuộc họp</h2>
+
+            {/* Current members */}
+            {members.length > 0 ? (
+              <ul className="space-y-1.5">
+                {members.map((m) => (
+                  <li
+                    key={m.id}
+                    className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-surface-container"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                        <span className="text-primary text-label-sm font-semibold">
+                          {m.fullName?.charAt(0).toUpperCase() ?? '?'}
+                        </span>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-body-sm font-medium text-on-surface truncate">
+                          {formatUserLabel({ id: m.id, fullName: m.fullName, departmentName: m.department?.name })}
+                        </div>
+                        <div className="text-label-sm text-on-surface-variant">{m.username}</div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveMember(m.id)}
+                      disabled={memberActionLoading === m.id}
+                      className="p-1 rounded-lg hover:bg-error-container text-on-surface-variant hover:text-error transition-colors shrink-0 disabled:opacity-50"
+                      aria-label={`Xóa ${m.fullName} khỏi cuộc họp`}
+                    >
+                      {memberActionLoading === m.id
+                        ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                        : <span className="material-symbols-outlined text-[18px]">person_remove</span>
+                      }
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-body-sm text-on-surface-variant">Chưa có thành viên nào.</p>
+            )}
+
+            {/* Search to add member */}
+            <div className="relative">
+              <input
+                type="text"
+                value={memberSearch}
+                onChange={(e) => setMemberSearch(e.target.value)}
+                placeholder="Tìm kiếm thành viên theo tên hoặc username..."
+                className="w-full border border-outline-variant rounded-lg px-3 py-2 text-body-sm
+                           text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              {memberSearchLoading && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+              {memberSearchResults.length > 0 && (
+                <ul className="absolute z-10 mt-1 w-full bg-surface border border-outline-variant rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {memberSearchResults.map((u) => {
+                    const alreadyMember = members.some((m) => m.userId === u.id)
+                    return (
+                      <li key={u.id}>
+                        <button
+                          type="button"
+                          onClick={() => !alreadyMember && handleAddMember(u)}
+                          disabled={alreadyMember || memberActionLoading === u.id}
+                          className={`w-full text-left px-3 py-2 text-body-sm flex items-center justify-between gap-2
+                                      ${alreadyMember
+                                        ? 'text-on-surface-variant cursor-default'
+                                        : 'hover:bg-surface-container text-on-surface'}`}
+                        >
+                          <span>{formatUserLabel(u)}</span>
+                          {alreadyMember
+                            ? <span className="text-label-sm text-on-surface-variant">Đã thêm</span>
+                            : <span className="material-symbols-outlined text-[16px] text-primary">person_add</span>
+                          }
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Actions */}
         <div className="flex items-center justify-end gap-3 pt-2 border-t border-outline-variant">

@@ -1,5 +1,7 @@
 package com.example.kolla.filter;
 
+import com.example.kolla.models.User;
+import com.example.kolla.repositories.UserRepository;
 import com.example.kolla.utils.JwtUtils;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -9,7 +11,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
@@ -17,7 +18,6 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.List;
 
 /**
  * JWT authentication filter — runs once per request.
@@ -35,6 +35,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtils jwtUtils;
     private final StringRedisTemplate redisTemplate;
+    private final UserRepository userRepository;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -48,25 +49,34 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             try {
                 if (jwtUtils.validateToken(token) && !isBlacklisted(token)) {
                     Long userId = jwtUtils.getUserIdFromToken(token);
-                    String role = jwtUtils.getRoleFromToken(token);
-                    String username = jwtUtils.getUsernameFromToken(token);
 
-                    List<SimpleGrantedAuthority> authorities =
-                            List.of(new SimpleGrantedAuthority("ROLE_" + role));
+                    // Check per-user token invalidation (e.g. after role change or password reset)
+                    String userBlacklistKey = "jwt:blacklist:user:" + userId;
+                    String invalidatedAt = redisTemplate.opsForValue().get(userBlacklistKey);
+                    if (invalidatedAt != null) {
+                        long issuedAt = jwtUtils.getIssuedAtFromToken(token);
+                        if (issuedAt <= Long.parseLong(invalidatedAt)) {
+                            log.debug("Token for userId={} was issued before invalidation, rejecting", userId);
+                            filterChain.doFilter(request, response);
+                            return;
+                        }
+                    }
 
-                    // Use userId as principal name (consistent with convention in kolla-backend-conventions.md)
-                    UsernamePasswordAuthenticationToken authentication =
-                            new UsernamePasswordAuthenticationToken(
-                                    userId.toString(), null, authorities);
-                    authentication.setDetails(
-                            new WebAuthenticationDetailsSource().buildDetails(request));
+                    User user = userRepository.findById(userId).orElse(null);
+                    if (user != null && user.isActive()) {
+                        UsernamePasswordAuthenticationToken authentication =
+                                new UsernamePasswordAuthenticationToken(
+                                        user, null, user.getAuthorities());
+                        authentication.setDetails(
+                                new WebAuthenticationDetailsSource().buildDetails(request));
 
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
-                    log.debug("Authenticated user id={} username={} role={}", userId, username, role);
+                        SecurityContextHolder.getContext().setAuthentication(authentication);
+                        log.debug("Authenticated user id={} username={} role={}",
+                                userId, user.getUsername(), user.getRole());
+                    }
                 }
             } catch (Exception e) {
                 log.debug("Could not authenticate from JWT token: {}", e.getMessage());
-                // Let Spring Security handle the 401 — do not set authentication
             }
         }
 

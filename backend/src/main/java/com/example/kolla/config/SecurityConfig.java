@@ -91,8 +91,12 @@ public class SecurityConfig {
                     .requestMatchers(HttpMethod.GET, "/v3/api-docs/**").permitAll()
                     .requestMatchers(HttpMethod.GET, "/swagger-ui/**").permitAll()
                     .requestMatchers(HttpMethod.GET, "/swagger-ui.html").permitAll()
-                    // WebSocket SockJS handshake endpoints (JWT auth handled in STOMP CONNECT)
+                    // WebSocket endpoints (JWT auth handled in STOMP CONNECT)
+                    .requestMatchers("/ws").permitAll()
                     .requestMatchers("/ws/**").permitAll()
+                    .requestMatchers("/ws-sockjs/**").permitAll()
+                    .requestMatchers("/api/v1/ws").permitAll()
+                    .requestMatchers("/api/v1/ws/**").permitAll()
                     // All other endpoints require authentication
                     .anyRequest().authenticated()
             )
@@ -165,8 +169,14 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
 
+        // Support wildcard pattern "*" alongside specific origins.
+        // setAllowedOriginPatterns is required when allowCredentials=true and wildcard is needed.
         List<String> origins = Arrays.asList(corsAllowedOrigins.split(","));
-        config.setAllowedOrigins(origins);
+        if (origins.contains("*")) {
+            config.setAllowedOriginPatterns(List.of("*"));
+        } else {
+            config.setAllowedOriginPatterns(origins);
+        }
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
