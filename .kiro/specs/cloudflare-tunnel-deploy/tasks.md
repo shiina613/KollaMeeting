@@ -104,33 +104,33 @@ Thay thế cơ chế expose dịch vụ Kolla Meeting từ WSL2 portproxy + Ngin
     - Đặt `set -e` ở đầu script
     - _Requirements: 3.4, 11.2, 11.3_
 
-- [ ] 5. Viết `scripts/start.ps1` (Windows PowerShell)
-  - [ ] 5.1 Implement `Check-DockerRunning` và `Wait-DockerDaemon` — kiểm tra Docker Desktop
+- [x] 5. Viết `scripts/start.ps1` (Windows PowerShell)
+  - [x] 5.1 Implement `Check-DockerRunning` và `Wait-DockerDaemon` — kiểm tra Docker Desktop
     - `Check-DockerRunning`: kiểm tra process `Docker Desktop` đang chạy
     - `Wait-DockerDaemon`: poll `docker info` với timeout 60 giây, mỗi 5 giây
     - Nếu timeout: in "Docker daemon không sẵn sàng sau 60s" và `exit 1`
     - Script KHÔNG yêu cầu quyền Administrator
     - _Requirements: 11.1, 11.4, 11.5_
-  - [ ] 5.2 Implement `Start-Services` — khởi động services trừ frontend
+  - [x] 5.2 Implement `Start-Services` — khởi động services trừ frontend
     - Chạy `docker compose up -d --scale frontend=0`
     - Nếu thất bại: in output lỗi và `exit 1`
     - _Requirements: 11.1_
-  - [ ] 5.3 Implement `Get-TunnelUrl` — poll log cloudflared, extract URL
+  - [x] 5.3 Implement `Get-TunnelUrl` — poll log cloudflared, extract URL
     - Poll `docker logs kolla-cloudflared` mỗi 2 giây, timeout 30 giây
     - Dùng regex `https://[a-z0-9-]+\.trycloudflare\.com` để extract URL
     - Nếu timeout: in thông báo lỗi cụ thể và `exit 1`
     - _Requirements: 2.1, 2.2, 2.3, 2.4_
-  - [ ] 5.4 Implement `Update-EnvFile` — cập nhật .env với tunnel URL mới
+  - [x] 5.4 Implement `Update-EnvFile` — cập nhật .env với tunnel URL mới
     - Dùng PowerShell regex replace để update `VITE_API_BASE_URL`, `VITE_WS_URL`, `CORS_ALLOWED_ORIGINS`
     - Nếu `.env` không tồn tại: in hướng dẫn và `exit 1`
     - _Requirements: 3.1, 3.2, 7.1, 7.2, 7.3_
-  - [ ] 5.5 Viết property test cho PowerShell URL extraction và .env update (Property 1, 2, 3)
+  - [x] 5.5 Viết property test cho PowerShell URL extraction và .env update (Property 1, 2, 3)
     - **Property 1: URL extraction từ log**
     - **Property 2: .env update không phá vỡ các biến khác**
     - **Property 3: Derived URLs có scheme đúng**
     - **Validates: Requirements 2.1, 2.2, 3.1, 3.2, 7.2, 7.3**
     - Viết Pester tests hoặc dùng fast-check qua Node.js để test các helper functions
-  - [ ] 5.6 Implement `Build-Frontend` và `Print-Success`, wire toàn bộ script
+  - [x] 5.6 Implement `Build-Frontend` và `Print-Success`, wire toàn bộ script
     - `Build-Frontend`: chạy `docker compose up -d --build frontend`
     - `Print-Success`: in `✅ Kolla đang chạy tại: https://<tunnel-url>`
     - Gọi các hàm theo thứ tự đúng với error handling ở mỗi bước
