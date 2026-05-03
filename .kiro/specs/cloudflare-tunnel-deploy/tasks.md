@@ -38,7 +38,7 @@ Thay thế cơ chế expose dịch vụ Kolla Meeting từ WSL2 portproxy + Ngin
   - Đảm bảo Nginx vẫn expose port `8443` và `8888` ra host (LAN backward compat)
   - _Requirements: 1.1, 1.2, 1.4, 1.5, 1.6, 3.5, 6.1, 6.2, 6.3, 6.4, 10.4_
 
-- [-] 2. Cập nhật `nginx/nginx.conf` cho Cloudflare Tunnel
+- [x] 2. Cập nhật `nginx/nginx.conf` cho Cloudflare Tunnel
   - [x] 2.1 Cập nhật block `server { listen 8888 }` — forward `CF-Connecting-IP` và set `X-Forwarded-Proto: https`
     - Thay `X-Real-IP $remote_addr` → `X-Real-IP $http_cf_connecting_ip` trong tất cả location blocks của port 8888
     - Đảm bảo `X-Forwarded-Proto https` đã có trong tất cả location blocks của port 8888
@@ -49,7 +49,7 @@ Thay thế cơ chế expose dịch vụ Kolla Meeting từ WSL2 portproxy + Ngin
     - Xóa toàn bộ location block proxy đến `kolla-jitsi` trong server block port 8443
     - _Requirements: 5.3, 6.1_
 
-- [ ] 3. Checkpoint — Kiểm tra cấu hình docker-compose và nginx
+- [x] 3. Checkpoint — Kiểm tra cấu hình docker-compose và nginx
   - Chạy các smoke tests sau để xác nhận cấu hình đúng:
     - `grep -q "cloudflared" docker-compose.yml`
     - `! grep -q "jitsi/web" docker-compose.yml`
