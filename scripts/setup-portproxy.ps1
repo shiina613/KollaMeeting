@@ -1,3 +1,10 @@
+# DEPRECATED: Không còn cần thiết khi dùng Cloudflare Tunnel.
+# Script này chỉ được giữ lại cho mục đích LAN fallback (truy cập nội bộ
+# qua Nginx port 8443/8888 khi không có internet hoặc không dùng tunnel).
+# Để khởi động Kolla với Cloudflare Tunnel, dùng:
+#   .\scripts\start.ps1   (Windows)
+#   ./scripts/start.sh    (WSL2)
+
 # setup-portproxy.ps1
 # Tự động cập nhật portproxy khi WSL2 IP thay đổi sau restart
 # Chạy script này với quyền Administrator

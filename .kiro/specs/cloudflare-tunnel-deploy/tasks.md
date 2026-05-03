@@ -142,17 +142,17 @@ Thay thế cơ chế expose dịch vụ Kolla Meeting từ WSL2 portproxy + Ngin
   - Chạy dry-run kiểm tra syntax: `bash -n scripts/start.sh`
   - Hỏi người dùng nếu có vấn đề.
 
-- [ ] 7. Cập nhật `.env.example`, README và đánh dấu deprecated `setup-portproxy.ps1`
-  - [ ] 7.1 Cập nhật `.env.example`
+- [-] 7. Cập nhật `.env.example`, README và đánh dấu deprecated `setup-portproxy.ps1`
+  - [x] 7.1 Cập nhật `.env.example`
     - Xóa section "DOMAIN & SSL (Nginx + Certbot)": `DOMAIN`, `DUCKDNS_TOKEN`, `DUCKDNS_SUBDOMAIN`, `CERTBOT_EMAIL`
     - Thêm section "CLOUDFLARE TUNNEL" với `CLOUDFLARE_TUNNEL_TOKEN` (optional), `VITE_API_BASE_URL`, `VITE_WS_URL`, `CORS_ALLOWED_ORIGINS` với placeholder `<cloudflare-domain>` và comment hướng dẫn
     - Cập nhật `VITE_JITSI_URL` và `JITSI_SERVER_URL` default → `https://meet.jit.si`
     - _Requirements: 5.1, 6.6, 7.5_
-  - [ ] 7.2 Đánh dấu deprecated `scripts/setup-portproxy.ps1`
+  - [x] 7.2 Đánh dấu deprecated `scripts/setup-portproxy.ps1`
     - Thêm comment header `# DEPRECATED: Không còn cần thiết khi dùng Cloudflare Tunnel.` vào đầu file
     - Giữ nguyên nội dung script (chỉ thêm comment, không xóa)
     - _Requirements: 4.1_
-  - [ ] 7.3 Cập nhật `README.md` với hướng dẫn Cloudflare Tunnel
+  - [x] 7.3 Cập nhật `README.md` với hướng dẫn Cloudflare Tunnel
     - Thêm section "Khởi động nhanh" với 1 lệnh duy nhất: `.\scripts\start.ps1` (Windows) hoặc `./scripts/start.sh` (WSL2)
     - Ghi rõ `setup-portproxy.ps1` không còn cần thiết, chỉ giữ cho LAN fallback
     - Giải thích lý do Jitsi self-hosted bị thay bằng `meet.jit.si` (UDP/WebRTC không qua tunnel được)
