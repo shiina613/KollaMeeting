@@ -34,7 +34,7 @@ Tích hợp JaaS (Jitsi as a Service) của 8x8 vào Kolla Meeting. Backend thê
   - Tạo file `backend/src/main/java/com/example/kolla/responses/JaasTokenResponse.java` với field `token` (String) và `roomName` (String), dùng `@Data @AllArgsConstructor`
   - _Requirements: 1.18_
 
-- [~] 4. Implement `JaasTokenService` và `JaasTokenServiceImpl`
+- [-] 4. Implement `JaasTokenService` và `JaasTokenServiceImpl`
   - Tạo interface `backend/src/main/java/com/example/kolla/services/JaasTokenService.java` với method `generateToken(Long meetingId, User currentUser)`
   - Tạo `backend/src/main/java/com/example/kolla/services/impl/JaasTokenServiceImpl.java`:
     - Inject `JaasProperties`, `MeetingRepository`, `MemberRepository`
@@ -49,7 +49,7 @@ Tích hợp JaaS (Jitsi as a Service) của 8x8 vào Kolla Meeting. Backend thê
     - Trả về `JaasTokenResponse(token, appId + "/" + meetingCode)`
   - _Requirements: 1.1–1.19, 2.4, 6.1, 6.2, 6.3, 6.4_
 
-  - [~] 4.1 Viết property test — Property 1: JWT claims integrity
+  - [x] 4.1 Viết property test — Property 1: JWT claims integrity
     - **Property 1: JWT claims integrity**
     - **Validates: Requirements 1.7, 1.8, 1.9, 1.10, 1.13, 1.15, 1.16**
     - Dùng jqwik `@Property(tries = 100)` với `@ForAll` generators cho meeting và member user
