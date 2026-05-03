@@ -3,6 +3,7 @@ package com.example.kolla.responses;
 import com.example.kolla.enums.Role;
 import com.example.kolla.models.User;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -29,6 +30,7 @@ public class UserResponse {
     private Role role;
     private Long departmentId;
     private String departmentName;
+    @JsonProperty("isActive")
     private boolean isActive;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

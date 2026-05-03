@@ -219,6 +219,40 @@ public class UserServiceImpl implements UserService {
         return UserResponse.from(saved, deptName);
     }
 
+    // ── Toggle active ─────────────────────────────────────────────────────────
+
+    @Override
+    @Transactional
+    public UserResponse toggleUserActive(Long id, User requester) {
+        User target = findUserOrThrow(id);
+
+        // Prevent deactivating own account
+        if (requester.getId().equals(id)) {
+            throw new BadRequestException("You cannot deactivate your own account");
+        }
+
+        boolean newStatus = !target.isActive();
+        target.setActive(newStatus);
+        User saved = userRepository.save(target);
+
+        // Invalidate all tokens when deactivating so the user is logged out immediately
+        if (!newStatus) {
+            invalidateUserTokens(id);
+            log.info("Deactivated user '{}' (id={}) by '{}'; tokens invalidated",
+                    target.getUsername(), id, requester.getUsername());
+        } else {
+            log.info("Activated user '{}' (id={}) by '{}'",
+                    target.getUsername(), id, requester.getUsername());
+        }
+
+        String deptName = null;
+        if (saved.getDepartmentId() != null) {
+            deptName = departmentRepository.findById(saved.getDepartmentId())
+                    .map(Department::getName).orElse(null);
+        }
+        return UserResponse.from(saved, deptName);
+    }
+
     // ── Delete ────────────────────────────────────────────────────────────────
 
     @Override

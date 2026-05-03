@@ -29,6 +29,7 @@ export interface UpdateUserRequest {
   fullName?: string
   role?: 'ADMIN' | 'SECRETARY' | 'USER'
   departmentId?: number
+  isActive?: boolean
 }
 
 /**
@@ -85,6 +86,14 @@ export async function updateUser(
   data: UpdateUserRequest,
 ): Promise<ApiResponse<MeetingUser>> {
   const response = await api.put<ApiResponse<MeetingUser>>(`/users/${id}`, data)
+  return response.data
+}
+
+/**
+ * Toggle a user's active/inactive status. ADMIN only.
+ */
+export async function toggleUserActive(id: number): Promise<ApiResponse<MeetingUser>> {
+  const response = await api.patch<ApiResponse<MeetingUser>>(`/users/${id}/toggle-active`)
   return response.data
 }
 

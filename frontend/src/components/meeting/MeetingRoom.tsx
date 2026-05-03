@@ -302,8 +302,7 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
           <JitsiFrame
             ref={jitsiRef}
             meetingCode={meeting.meetingCode}
-            displayName={user?.username ?? 'Khách'}
-            jwt={useAuthStore.getState().token ?? undefined}
+            displayName={user?.fullName ?? user?.username ?? 'Khách'}
             onVideoConferenceLeft={handleVideoConferenceLeft}
             className="w-full h-full"
           />

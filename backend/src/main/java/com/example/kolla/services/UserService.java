@@ -72,6 +72,16 @@ public interface UserService {
     UserResponse updateUser(Long id, UpdateUserRequest request, User requester);
 
     /**
+     * Toggle a user's active status (active ↔ inactive). ADMIN only.
+     * Inactive users cannot log in but their data is preserved.
+     * When deactivating, all existing JWT tokens are invalidated.
+     *
+     * @param id        target user ID
+     * @param requester the authenticated user making the request
+     */
+    UserResponse toggleUserActive(Long id, User requester);
+
+    /**
      * Delete a user by ID. ADMIN only.
      * Throws BadRequestException if the user has active meeting memberships.
      *

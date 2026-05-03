@@ -25,6 +25,7 @@ public class MeetingResponse {
 
     private Long id;
     private String code;
+    private String meetingCode; // alias for code — used by frontend
     private String title;
     private String description;
     private LocalDateTime startTime;
@@ -66,6 +67,7 @@ public class MeetingResponse {
         MeetingResponse.MeetingResponseBuilder builder = MeetingResponse.builder()
                 .id(meeting.getId())
                 .code(meeting.getCode())
+                .meetingCode(meeting.getCode())   // alias so frontend meetingCode field works
                 .title(meeting.getTitle())
                 .description(meeting.getDescription())
                 .startTime(meeting.getStartTime())
