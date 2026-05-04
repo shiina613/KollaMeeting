@@ -111,7 +111,7 @@ Tích hợp JaaS (Jitsi as a Service) của 8x8 vào Kolla Meeting. Backend thê
     - Test 503 khi JaaS chưa được cấu hình
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.19_
 
-- [~] 6. Checkpoint — Backend
+- [x] 6. Checkpoint — Backend
   - Ensure all backend tests pass, ask the user if questions arise.
 
 - [~] 7. Cập nhật `.env.example` với các biến JaaS

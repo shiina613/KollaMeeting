@@ -1,7 +1,10 @@
 package com.example.kolla.security;
 
 import com.example.kolla.config.SecurityConfig;
+import com.example.kolla.enums.Role;
 import com.example.kolla.filter.JwtAuthenticationFilter;
+import com.example.kolla.models.User;
+import com.example.kolla.repositories.UserRepository;
 import com.example.kolla.services.impl.UserDetailsServiceImpl;
 import com.example.kolla.utils.JwtUtils;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,6 +18,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -25,12 +29,12 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.web.context.WebApplicationContext;
 
+import java.util.Optional;
+
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
-import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -82,6 +86,9 @@ class RoleBasedAccessControlTest {
     @MockBean
     private StringRedisTemplate redisTemplate;
 
+    @MockBean
+    private UserRepository userRepository;
+
     // ── Minimal security config for tests ────────────────────────────────────
 
     /**
@@ -126,14 +133,34 @@ class RoleBasedAccessControlTest {
         }
     }
 
+    // ── Helper: build a User object ──────────────────────────────────────────
+
+    private User buildUser(Long userId, String username, Role role) {
+        return User.builder()
+                .id(userId)
+                .username(username)
+                .email(username + "@test.com")
+                .passwordHash("hash")
+                .fullName("Test User")
+                .role(role)
+                .isActive(true)
+                .build();
+    }
+
     // ── Helper: stub a valid token for a given userId/role/username ──────────
 
     private void stubToken(String token, Long userId, String role, String username) {
         when(jwtUtils.validateToken(token)).thenReturn(true);
         when(redisTemplate.hasKey(anyString())).thenReturn(false);
         when(jwtUtils.getUserIdFromToken(token)).thenReturn(userId);
-        when(jwtUtils.getRoleFromToken(token)).thenReturn(role);
-        when(jwtUtils.getUsernameFromToken(token)).thenReturn(username);
+        // Per-user blacklist check
+        ValueOperations<String, String> valueOps = org.mockito.Mockito.mock(ValueOperations.class);
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        when(valueOps.get(anyString())).thenReturn(null);
+        // Return a real User from the repository
+        Role roleEnum = Role.valueOf(role);
+        User user = buildUser(userId, username, roleEnum);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
     }
 
     // ── Public endpoint tests ────────────────────────────────────────────────
