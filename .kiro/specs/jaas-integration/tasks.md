@@ -123,13 +123,13 @@ Tích hợp JaaS (Jitsi as a Service) của 8x8 vào Kolla Meeting. Backend thê
   - Khi `JAAS_APP_ID` trống, hệ thống fallback về `meet.jit.si` (không breaking change)
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
 
-- [~] 8. Tạo `jaasService.ts` ở frontend
+- [x] 8. Tạo `jaasService.ts` ở frontend
   - Tạo file `frontend/src/services/jaasService.ts`
   - Export interface `JaasTokenResponse { token: string; roomName: string }`
   - Export async function `fetchJaasToken(meetingId: number): Promise<JaasTokenResponse>` gọi `apiClient.get<ApiResponse<JaasTokenResponse>>(\`/meetings/${meetingId}/jaas-token\`)` và trả về `response.data.data`
   - _Requirements: 4.1_
 
-  - [~] 8.1 Viết unit test cho `jaasService.ts`
+  - [x] 8.1 Viết unit test cho `jaasService.ts`
     - Mock `apiClient`, verify request URL đúng format `/meetings/{id}/jaas-token`
     - Verify response mapping trả về `{ token, roomName }`
     - _Requirements: 4.1_
