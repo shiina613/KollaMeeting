@@ -134,7 +134,7 @@ Tích hợp JaaS (Jitsi as a Service) của 8x8 vào Kolla Meeting. Backend thê
     - Verify response mapping trả về `{ token, roomName }`
     - _Requirements: 4.1_
 
-- [~] 9. Cập nhật `JitsiFrame` để hỗ trợ JaaS domain và room name
+- [x] 9. Cập nhật `JitsiFrame` để hỗ trợ JaaS domain và room name
   - Trong `frontend/src/components/meeting/JitsiFrame.tsx`:
     - Thêm `const JAAS_APP_ID = import.meta.env.VITE_JAAS_APP_ID ?? ''` và `const IS_JAAS = JAAS_APP_ID.length > 0`
     - Tính `EFFECTIVE_DOMAIN`: `'8x8.vc'` nếu `IS_JAAS`, ngược lại giữ `JITSI_DOMAIN`
@@ -145,7 +145,7 @@ Tích hợp JaaS (Jitsi as a Service) của 8x8 vào Kolla Meeting. Backend thê
     - Prop `jwt` và `meetingCode` đã có sẵn — không thay đổi interface
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6_
 
-  - [~] 9.1 Viết unit test cho `JitsiFrame`
+  - [x] 9.1 Viết unit test cho `JitsiFrame`
     - Khi `VITE_JAAS_APP_ID` được set: domain là `8x8.vc`, script src là `https://8x8.vc/external_api.js`
     - Khi `VITE_JAAS_APP_ID` không set: domain là `VITE_JITSI_URL`, fallback behavior không thay đổi
     - Khi script load thất bại: hiển thị error message với domain thực tế

@@ -15,6 +15,17 @@ const JITSI_URL = import.meta.env.VITE_JITSI_URL ?? 'https://meet.jit.si'
 // Extract hostname for the API (e.g. "meet.jit.si")
 const JITSI_DOMAIN = JITSI_URL.replace(/^https?:\/\//, '').replace(/\/$/, '')
 
+const JAAS_APP_ID = import.meta.env.VITE_JAAS_APP_ID ?? ''
+const IS_JAAS = JAAS_APP_ID.length > 0
+
+// Domain: 8x8.vc if JaaS enabled, otherwise keep JITSI_DOMAIN
+const EFFECTIVE_DOMAIN = IS_JAAS ? '8x8.vc' : JITSI_DOMAIN
+
+// Script URL: load from the configured domain
+const SCRIPT_SRC = IS_JAAS
+  ? 'https://8x8.vc/external_api.js'
+  : `${JITSI_URL}/external_api.js`
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface JitsiFrameHandle {
@@ -80,7 +91,7 @@ const JitsiFrame = forwardRef<JitsiFrameHandle, JitsiFrameProps>(
 
       const script = document.createElement('script')
       script.id = scriptId
-      script.src = `${JITSI_URL}/external_api.js`
+      script.src = SCRIPT_SRC
       script.async = true
       script.onload = () => setScriptLoaded(true)
       script.onerror = () => setScriptError(true)
@@ -124,7 +135,7 @@ const JitsiFrame = forwardRef<JitsiFrameHandle, JitsiFrameProps>(
 
       if (jwt) options.jwt = jwt
 
-      const api = new window.JitsiMeetExternalAPI(JITSI_DOMAIN, options)
+      const api = new window.JitsiMeetExternalAPI(EFFECTIVE_DOMAIN, options)
       apiRef.current = api
 
       api.addEventListeners({
@@ -155,7 +166,7 @@ const JitsiFrame = forwardRef<JitsiFrameHandle, JitsiFrameProps>(
         <div className={`relative w-full h-full flex flex-col items-center justify-center bg-slate-900 text-white gap-4 ${className}`}>
           <span className="material-symbols-outlined text-5xl text-slate-400">videocam_off</span>
           <p className="text-body-sm text-slate-300">Không thể tải Jitsi Meet.</p>
-          <p className="text-label-md text-slate-500">Kiểm tra kết nối đến {JITSI_URL}</p>
+          <p className="text-label-md text-slate-500">Kiểm tra kết nối đến {IS_JAAS ? EFFECTIVE_DOMAIN : JITSI_URL}</p>
         </div>
       )
     }
