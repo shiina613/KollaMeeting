@@ -85,7 +85,7 @@ Tích hợp JaaS (Jitsi as a Service) của 8x8 vào Kolla Meeting. Backend thê
     - Dùng jqwik `@Property(tries = 100)` với các error scenario (invalid key, missing config, v.v.)
     - Assert exception message không chứa giá trị của `JAAS_PRIVATE_KEY`
 
-  - [~] 4.7 Viết unit test cho `JaasTokenServiceImpl` (example-based)
+  - [x] 4.7 Viết unit test cho `JaasTokenServiceImpl` (example-based)
     - Test generate token thành công cho member
     - Test `moderator: true` cho host, `moderator: true` cho secretary
     - Test `moderator: false` cho regular member
