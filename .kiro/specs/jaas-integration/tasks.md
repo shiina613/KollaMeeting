@@ -114,7 +114,7 @@ Tích hợp JaaS (Jitsi as a Service) của 8x8 vào Kolla Meeting. Backend thê
 - [x] 6. Checkpoint — Backend
   - Ensure all backend tests pass, ask the user if questions arise.
 
-- [~] 7. Cập nhật `.env.example` với các biến JaaS
+- [x] 7. Cập nhật `.env.example` với các biến JaaS
   - Thêm section `JAAS INTEGRATION` vào `.env.example` với:
     - `JAAS_APP_ID=` — AppID từ JaaS console (8x8.vc), ví dụ: `vpaas-magic-cookie-abc123`
     - `JAAS_API_KEY=` — Full API Key ID, format: `vpaas-magic-cookie-{AppID}/{keyId}`
