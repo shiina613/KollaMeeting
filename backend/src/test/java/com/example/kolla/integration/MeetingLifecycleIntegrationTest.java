@@ -132,7 +132,7 @@ class MeetingLifecycleIntegrationTest {
         void newMeetingStoresHostAndSecretary() {
             MeetingResponse response = createMeeting("Host Secretary Test");
 
-            assertThat(response.getHostId()).isEqualTo(admin.getId());
+            assertThat(response.getHostId()).isEqualTo(secretary.getId());
             assertThat(response.getSecretaryId()).isEqualTo(secretary.getId());
         }
     }
@@ -149,7 +149,7 @@ class MeetingLifecycleIntegrationTest {
             MeetingResponse created = createMeeting("Activate Test");
             Meeting meeting = meetingRepository.findById(created.getId()).orElseThrow();
 
-            meetingLifecycleService.activateMeeting(meeting.getId(), admin);
+            meetingLifecycleService.activateMeeting(meeting.getId(), secretary);
 
             Meeting activated = meetingRepository.findById(meeting.getId()).orElseThrow();
             assertThat(activated.getStatus()).isEqualTo(MeetingStatus.ACTIVE);
@@ -163,10 +163,10 @@ class MeetingLifecycleIntegrationTest {
             Meeting meeting = meetingRepository.findById(created.getId()).orElseThrow();
 
             // First activation
-            meetingLifecycleService.activateMeeting(meeting.getId(), admin);
+            meetingLifecycleService.activateMeeting(meeting.getId(), secretary);
 
             // Second activation should fail
-            assertThatThrownBy(() -> meetingLifecycleService.activateMeeting(meeting.getId(), admin))
+            assertThatThrownBy(() -> meetingLifecycleService.activateMeeting(meeting.getId(), secretary))
                     .isInstanceOf(BadRequestException.class);
         }
 
@@ -177,11 +177,11 @@ class MeetingLifecycleIntegrationTest {
             Meeting meeting = meetingRepository.findById(created.getId()).orElseThrow();
 
             // Activate then end
-            meetingLifecycleService.activateMeeting(meeting.getId(), admin);
-            meetingLifecycleService.endMeeting(meeting.getId(), admin);
+            meetingLifecycleService.activateMeeting(meeting.getId(), secretary);
+            meetingLifecycleService.endMeeting(meeting.getId(), secretary);
 
             // Re-activation should fail
-            assertThatThrownBy(() -> meetingLifecycleService.activateMeeting(meeting.getId(), admin))
+            assertThatThrownBy(() -> meetingLifecycleService.activateMeeting(meeting.getId(), secretary))
                     .isInstanceOf(BadRequestException.class);
         }
     }
@@ -198,8 +198,8 @@ class MeetingLifecycleIntegrationTest {
             MeetingResponse created = createMeeting("End Test");
             Meeting meeting = meetingRepository.findById(created.getId()).orElseThrow();
 
-            meetingLifecycleService.activateMeeting(meeting.getId(), admin);
-            meetingLifecycleService.endMeeting(meeting.getId(), admin);
+            meetingLifecycleService.activateMeeting(meeting.getId(), secretary);
+            meetingLifecycleService.endMeeting(meeting.getId(), secretary);
 
             Meeting ended = meetingRepository.findById(meeting.getId()).orElseThrow();
             assertThat(ended.getStatus()).isEqualTo(MeetingStatus.ENDED);
@@ -212,7 +212,7 @@ class MeetingLifecycleIntegrationTest {
             MeetingResponse created = createMeeting("End Scheduled Test");
             Meeting meeting = meetingRepository.findById(created.getId()).orElseThrow();
 
-            assertThatThrownBy(() -> meetingLifecycleService.endMeeting(meeting.getId(), admin))
+            assertThatThrownBy(() -> meetingLifecycleService.endMeeting(meeting.getId(), secretary))
                     .isInstanceOf(BadRequestException.class);
         }
 
@@ -222,10 +222,10 @@ class MeetingLifecycleIntegrationTest {
             MeetingResponse created = createMeeting("Double End Test");
             Meeting meeting = meetingRepository.findById(created.getId()).orElseThrow();
 
-            meetingLifecycleService.activateMeeting(meeting.getId(), admin);
-            meetingLifecycleService.endMeeting(meeting.getId(), admin);
+            meetingLifecycleService.activateMeeting(meeting.getId(), secretary);
+            meetingLifecycleService.endMeeting(meeting.getId(), secretary);
 
-            assertThatThrownBy(() -> meetingLifecycleService.endMeeting(meeting.getId(), admin))
+            assertThatThrownBy(() -> meetingLifecycleService.endMeeting(meeting.getId(), secretary))
                     .isInstanceOf(BadRequestException.class);
         }
     }
@@ -246,13 +246,13 @@ class MeetingLifecycleIntegrationTest {
             assertThat(meeting.getStatus()).isEqualTo(MeetingStatus.SCHEDULED);
 
             // → ACTIVE
-            meetingLifecycleService.activateMeeting(meeting.getId(), admin);
+            meetingLifecycleService.activateMeeting(meeting.getId(), secretary);
             meeting = meetingRepository.findById(meeting.getId()).orElseThrow();
             assertThat(meeting.getStatus()).isEqualTo(MeetingStatus.ACTIVE);
             assertThat(meeting.getActivatedAt()).isNotNull();
 
             // → ENDED
-            meetingLifecycleService.endMeeting(meeting.getId(), admin);
+            meetingLifecycleService.endMeeting(meeting.getId(), secretary);
             meeting = meetingRepository.findById(meeting.getId()).orElseThrow();
             assertThat(meeting.getStatus()).isEqualTo(MeetingStatus.ENDED);
             assertThat(meeting.getEndedAt()).isNotNull();
@@ -264,9 +264,9 @@ class MeetingLifecycleIntegrationTest {
             MeetingResponse created = createMeeting("Timestamp Order Test");
             Meeting meeting = meetingRepository.findById(created.getId()).orElseThrow();
 
-            meetingLifecycleService.activateMeeting(meeting.getId(), admin);
+            meetingLifecycleService.activateMeeting(meeting.getId(), secretary);
             Thread.sleep(10); // ensure time difference
-            meetingLifecycleService.endMeeting(meeting.getId(), admin);
+            meetingLifecycleService.endMeeting(meeting.getId(), secretary);
 
             meeting = meetingRepository.findById(meeting.getId()).orElseThrow();
             assertThat(meeting.getEndedAt()).isAfterOrEqualTo(meeting.getActivatedAt());
@@ -276,7 +276,7 @@ class MeetingLifecycleIntegrationTest {
     // ── Helper ────────────────────────────────────────────────────────────────
 
     private MeetingResponse createMeeting(String title) {
-        LocalDateTime start = LocalDateTime.now().plusDays(1);
+        LocalDateTime start = LocalDateTime.now().plusMinutes(5);
         return createMeetingAt(title, start, start.plusHours(1));
     }
 
@@ -288,7 +288,7 @@ class MeetingLifecycleIntegrationTest {
                         .startTime(start)
                         .endTime(end)
                         .roomId(room.getId())
-                        .hostUserId(admin.getId())
+                        .hostUserId(secretary.getId())
                         .secretaryUserId(secretary.getId())
                         .build(),
                 admin);

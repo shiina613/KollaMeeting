@@ -2,6 +2,7 @@ package com.example.kolla.filter;
 
 import com.example.kolla.enums.Role;
 import com.example.kolla.models.User;
+import com.example.kolla.repositories.UserRepository;
 import com.example.kolla.utils.JwtUtils;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
@@ -20,10 +21,12 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.test.util.ReflectionTestUtils;
+
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
@@ -42,6 +45,9 @@ class JwtAuthenticationFilterTest {
 
     @Mock
     private ValueOperations<String, String> valueOperations;
+
+    @Mock
+    private UserRepository userRepository;
 
     @InjectMocks
     private JwtAuthenticationFilter filter;
@@ -71,12 +77,29 @@ class JwtAuthenticationFilterTest {
         return request;
     }
 
+    private User buildUser(Long userId, String username, Role role) {
+        return User.builder()
+                .id(userId)
+                .username(username)
+                .email(username + "@test.com")
+                .passwordHash("hash")
+                .fullName("Test User")
+                .role(role)
+                .isActive(true)
+                .build();
+    }
+
     private void stubValidToken(String token, Long userId, String role, String username) {
         when(jwtUtils.validateToken(token)).thenReturn(true);
         when(redisTemplate.hasKey("jwt:blacklist:" + token)).thenReturn(false);
         when(jwtUtils.getUserIdFromToken(token)).thenReturn(userId);
-        when(jwtUtils.getRoleFromToken(token)).thenReturn(role);
-        when(jwtUtils.getUsernameFromToken(token)).thenReturn(username);
+        // Per-user blacklist check
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("jwt:blacklist:user:" + userId)).thenReturn(null);
+        // Return a real User from the repository
+        Role roleEnum = Role.valueOf(role);
+        User user = buildUser(userId, username, roleEnum);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
     }
 
     // ── Tests ────────────────────────────────────────────────────────────────
@@ -98,7 +121,7 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
-    @DisplayName("Valid JWT → SecurityContextHolder contains the correct userId as principal")
+    @DisplayName("Valid JWT → SecurityContextHolder contains the User object as principal")
     void validJwt_principalIsUserId() throws Exception {
         stubValidToken(VALID_TOKEN, 42L, "USER", "alice");
 
@@ -108,7 +131,9 @@ class JwtAuthenticationFilterTest {
         filter.doFilterInternal(request, response, filterChain);
 
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        assertThat(auth.getPrincipal()).isEqualTo("42");
+        assertThat(auth.getPrincipal()).isInstanceOf(User.class);
+        User principal = (User) auth.getPrincipal();
+        assertThat(principal.getId()).isEqualTo(42L);
     }
 
     @Test
@@ -233,8 +258,10 @@ class JwtAuthenticationFilterTest {
         when(jwtUtils.validateToken(VALID_TOKEN)).thenReturn(true);
         when(redisTemplate.hasKey(anyString())).thenThrow(new RuntimeException("Redis down"));
         when(jwtUtils.getUserIdFromToken(VALID_TOKEN)).thenReturn(1L);
-        when(jwtUtils.getRoleFromToken(VALID_TOKEN)).thenReturn("USER");
-        when(jwtUtils.getUsernameFromToken(VALID_TOKEN)).thenReturn("alice");
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get(anyString())).thenReturn(null);
+        User user = buildUser(1L, "alice", Role.USER);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
 
         MockHttpServletRequest request = requestWithBearer(VALID_TOKEN);
         MockHttpServletResponse response = new MockHttpServletResponse();

@@ -105,7 +105,7 @@ class MeetingSchedulingConflictTest {
                 .startTime(baseTime)
                 .endTime(baseTime.plusHours(1))
                 .roomId(room.getId())
-                .hostUserId(admin.getId())
+                .hostUserId(secretary.getId())
                 .secretaryUserId(secretary.getId())
                 .build();
 
@@ -127,7 +127,7 @@ class MeetingSchedulingConflictTest {
                 .startTime(baseTime.plusHours(1))
                 .endTime(baseTime.plusHours(3))
                 .roomId(room.getId())
-                .hostUserId(admin.getId())
+                .hostUserId(secretary.getId())
                 .secretaryUserId(secretary.getId())
                 .build();
 
@@ -148,7 +148,7 @@ class MeetingSchedulingConflictTest {
                 .startTime(baseTime.minusHours(1))
                 .endTime(baseTime.plusHours(1))
                 .roomId(room.getId())
-                .hostUserId(admin.getId())
+                .hostUserId(secretary.getId())
                 .secretaryUserId(secretary.getId())
                 .build();
 
@@ -169,7 +169,7 @@ class MeetingSchedulingConflictTest {
                 .startTime(baseTime.minusHours(1))
                 .endTime(baseTime.plusHours(2))
                 .roomId(room.getId())
-                .hostUserId(admin.getId())
+                .hostUserId(secretary.getId())
                 .secretaryUserId(secretary.getId())
                 .build();
 
@@ -190,7 +190,7 @@ class MeetingSchedulingConflictTest {
                 .startTime(baseTime.minusHours(2))
                 .endTime(baseTime.minusHours(1))
                 .roomId(room.getId())
-                .hostUserId(admin.getId())
+                .hostUserId(secretary.getId())
                 .secretaryUserId(secretary.getId())
                 .build();
 
@@ -213,7 +213,7 @@ class MeetingSchedulingConflictTest {
                 .startTime(baseTime.plusHours(2))
                 .endTime(baseTime.plusHours(3))
                 .roomId(room.getId())
-                .hostUserId(admin.getId())
+                .hostUserId(secretary.getId())
                 .secretaryUserId(secretary.getId())
                 .build();
 
@@ -243,7 +243,7 @@ class MeetingSchedulingConflictTest {
                 .startTime(baseTime)
                 .endTime(baseTime.plusHours(1))
                 .roomId(room2.getId())
-                .hostUserId(admin.getId())
+                .hostUserId(secretary.getId())
                 .secretaryUserId(secretary.getId())
                 .build();
 
@@ -268,7 +268,7 @@ class MeetingSchedulingConflictTest {
                 .startTime(baseTime)
                 .endTime(baseTime.plusHours(1))
                 .roomId(room.getId())
-                .hostUserId(admin.getId())
+                .hostUserId(secretary.getId())
                 .secretaryUserId(secretary.getId())
                 .build();
 
@@ -291,7 +291,7 @@ class MeetingSchedulingConflictTest {
                 .endTime(baseTime.plusHours(2).plusMinutes(30))
                 .build();
 
-        assertThatThrownBy(() -> meetingService.updateMeeting(meeting2.getId(), request, admin))
+        assertThatThrownBy(() -> meetingService.updateMeeting(meeting2.getId(), request, secretary))
                 .isInstanceOf(SchedulingConflictException.class);
     }
 
@@ -313,7 +313,7 @@ class MeetingSchedulingConflictTest {
                 .roomId(room.getId())
                 .build();
 
-        assertThatThrownBy(() -> meetingService.updateMeeting(meetingInRoomB.getId(), request, admin))
+        assertThatThrownBy(() -> meetingService.updateMeeting(meetingInRoomB.getId(), request, secretary))
                 .isInstanceOf(SchedulingConflictException.class);
     }
 
@@ -329,7 +329,7 @@ class MeetingSchedulingConflictTest {
                 .build();
 
         // Then: should succeed
-        MeetingResponse response = meetingService.updateMeeting(meeting.getId(), request, admin);
+        MeetingResponse response = meetingService.updateMeeting(meeting.getId(), request, secretary);
         assertThat(response).isNotNull();
         assertThat(response.getTitle()).isEqualTo("Updated Title");
     }
@@ -347,7 +347,7 @@ class MeetingSchedulingConflictTest {
                 .build();
 
         // Then: should succeed
-        MeetingResponse response = meetingService.updateMeeting(meeting.getId(), request, admin);
+        MeetingResponse response = meetingService.updateMeeting(meeting.getId(), request, secretary);
         assertThat(response).isNotNull();
         assertThat(response.getStartTime()).isEqualTo(baseTime.plusHours(4));
         assertThat(response.getEndTime()).isEqualTo(baseTime.plusHours(5));
@@ -366,7 +366,7 @@ class MeetingSchedulingConflictTest {
                 .startTime(baseTime)
                 .endTime(baseTime.plusHours(1))
                 .roomId(room.getId())
-                .hostUserId(admin.getId())
+                .hostUserId(secretary.getId())
                 .secretaryUserId(secretary.getId())
                 .build();
 
@@ -387,14 +387,14 @@ class MeetingSchedulingConflictTest {
 
     private Meeting createTestMeetingInRoom(Room targetRoom, LocalDateTime start, LocalDateTime end) {
         Meeting meeting = Meeting.builder()
-                .code("TEST" + System.currentTimeMillis())
+                .code("TEST" + System.nanoTime())
                 .title("Test Meeting")
                 .description("Test")
                 .startTime(start)
                 .endTime(end)
                 .room(targetRoom)
                 .creator(admin)
-                .host(admin)
+                .host(secretary)
                 .secretary(secretary)
                 .status(MeetingStatus.SCHEDULED)
                 .build();

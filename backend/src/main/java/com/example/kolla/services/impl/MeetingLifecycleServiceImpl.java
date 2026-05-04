@@ -361,8 +361,13 @@ public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
         meetingRepository.save(meeting);
 
         // Set Redis TTL key as primary expiry signal
-        String key = String.format(WAITING_TIMEOUT_KEY_PREFIX, meeting.getId());
-        redisTemplate.opsForValue().set(key, "1", WAITING_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        try {
+            String key = String.format(WAITING_TIMEOUT_KEY_PREFIX, meeting.getId());
+            redisTemplate.opsForValue().set(key, "1", WAITING_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            log.warn("Failed to set waiting timeout Redis key for meeting id={}: {}",
+                    meeting.getId(), e.getMessage());
+        }
 
         log.info("Waiting timeout started for meeting id={} — expires at {}",
                 meeting.getId(), timeoutAt);
@@ -372,8 +377,13 @@ public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
      * Removes the Redis waiting timeout key.
      */
     private void cancelWaitingTimeout(Long meetingId) {
-        String key = String.format(WAITING_TIMEOUT_KEY_PREFIX, meetingId);
-        redisTemplate.delete(key);
+        try {
+            String key = String.format(WAITING_TIMEOUT_KEY_PREFIX, meetingId);
+            redisTemplate.delete(key);
+        } catch (Exception e) {
+            log.warn("Failed to cancel waiting timeout key for meeting id={}: {}",
+                    meetingId, e.getMessage());
+        }
     }
 
     /**
