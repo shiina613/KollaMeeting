@@ -34,7 +34,7 @@ Tích hợp JaaS (Jitsi as a Service) của 8x8 vào Kolla Meeting. Backend thê
   - Tạo file `backend/src/main/java/com/example/kolla/responses/JaasTokenResponse.java` với field `token` (String) và `roomName` (String), dùng `@Data @AllArgsConstructor`
   - _Requirements: 1.18_
 
-- [-] 4. Implement `JaasTokenService` và `JaasTokenServiceImpl`
+- [x] 4. Implement `JaasTokenService` và `JaasTokenServiceImpl`
   - Tạo interface `backend/src/main/java/com/example/kolla/services/JaasTokenService.java` với method `generateToken(Long meetingId, User currentUser)`
   - Tạo `backend/src/main/java/com/example/kolla/services/impl/JaasTokenServiceImpl.java`:
     - Inject `JaasProperties`, `MeetingRepository`, `MemberRepository`
