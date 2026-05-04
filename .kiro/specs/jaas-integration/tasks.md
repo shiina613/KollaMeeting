@@ -151,7 +151,7 @@ Tích hợp JaaS (Jitsi as a Service) của 8x8 vào Kolla Meeting. Backend thê
     - Khi script load thất bại: hiển thị error message với domain thực tế
     - _Requirements: 3.2, 3.4, 3.5, 3.6_
 
-- [~] 10. Cập nhật `MeetingRoom` để fetch JaaS token và truyền vào `JitsiFrame`
+- [x] 10. Cập nhật `MeetingRoom` để fetch JaaS token và truyền vào `JitsiFrame`
   - Trong `frontend/src/components/meeting/MeetingRoom.tsx`:
     - Thêm `const IS_JAAS = (import.meta.env.VITE_JAAS_APP_ID ?? '').length > 0`
     - Thêm state: `jaasToken`, `jaasRoomName`, `jaasLoading` (khởi tạo `IS_JAAS`), `jaasError`
@@ -164,7 +164,7 @@ Tích hợp JaaS (Jitsi as a Service) của 8x8 vào Kolla Meeting. Backend thê
     - Token chỉ lưu trong React state — KHÔNG lưu vào `localStorage` hoặc `sessionStorage`
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 6.5_
 
-  - [~] 10.1 Viết unit test cho `MeetingRoom` (JaaS scenarios)
+  - [x] 10.1 Viết unit test cho `MeetingRoom` (JaaS scenarios)
     - Khi JaaS enabled: hiển thị loading indicator trong khi fetch token
     - Khi token fetch thành công: `JitsiFrame` nhận đúng `jwt` và `meetingCode` (roomName format)
     - Khi token fetch thất bại: hiển thị error banner với nút retry

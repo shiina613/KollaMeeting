@@ -21,6 +21,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import JitsiFrame, { type JitsiFrameHandle } from './JitsiFrame'
+import { fetchJaasToken } from '../../services/jaasService'
 import TranscriptionPanel from './TranscriptionPanel'
 import TranscriptionPriorityControl from './TranscriptionPriorityControl'
 import RaiseHandPanel from './RaiseHandPanel'
@@ -35,6 +36,10 @@ import useAuthStore from '../../store/authStore'
 import useMeetingStore from '../../store/meetingStore'
 import { joinMeeting, leaveMeeting } from '../../services/meetingService'
 import type { Meeting, MeetingMode, MeetingEvent, TranscriptionPriority } from '../../types/meeting'
+
+// ─── JaaS config ──────────────────────────────────────────────────────────────
+
+const IS_JAAS = (import.meta.env.VITE_JAAS_APP_ID ?? '').length > 0
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -57,11 +62,19 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
 
   const jitsiRef = useRef<JitsiFrameHandle>(null)
   const hasJoinedRef = useRef(false)
+  const tokenRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [sidebarTab, setSidebarTab] = useState<'participants' | 'transcription' | 'raise-hand'>('participants')
   const [joinError, setJoinError] = useState<string | null>(null)
   const [currentPriority, setCurrentPriority] = useState<TranscriptionPriority>(
     meeting.transcriptionPriority,
   )
+
+  // ── JaaS token state ───────────────────────────────────────────────────────
+
+  const [jaasToken, setJaasToken] = useState<string | null>(null)
+  const [jaasRoomName, setJaasRoomName] = useState<string | null>(null)
+  const [jaasLoading, setJaasLoading] = useState<boolean>(IS_JAAS)
+  const [jaasError, setJaasError] = useState<string | null>(null)
 
   // ── Audio capture state ────────────────────────────────────────────────────
 
@@ -108,6 +121,32 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
       })
       clearActiveMeeting()
       clearSegments()
+    }
+  }, [meeting.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── JaaS token fetch ───────────────────────────────────────────────────────
+
+  async function fetchToken() {
+    setJaasLoading(true)
+    setJaasError(null)
+    try {
+      const { token, roomName } = await fetchJaasToken(meeting.id)
+      setJaasToken(token)
+      setJaasRoomName(roomName)
+      // Schedule refresh at 55-minute mark (token expires in 60 min)
+      tokenRefreshTimerRef.current = setTimeout(fetchToken, 55 * 60 * 1000)
+    } catch (err) {
+      setJaasError('Không thể lấy token JaaS. Vui lòng thử lại.')
+    } finally {
+      setJaasLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!IS_JAAS) return
+    fetchToken()
+    return () => {
+      if (tokenRefreshTimerRef.current) clearTimeout(tokenRefreshTimerRef.current)
     }
   }, [meeting.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -299,13 +338,42 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
 
         {/* Jitsi iframe */}
         <div className="flex-1 min-h-0">
-          <JitsiFrame
-            ref={jitsiRef}
-            meetingCode={meeting.meetingCode}
-            displayName={user?.fullName ?? user?.username ?? 'Khách'}
-            onVideoConferenceLeft={handleVideoConferenceLeft}
-            className="w-full h-full"
-          />
+          {IS_JAAS && jaasLoading ? (
+            <div
+              className="w-full h-full flex flex-col items-center justify-center bg-slate-900 text-white"
+              aria-live="polite"
+              data-testid="jaas-loading"
+            >
+              <div className="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin mb-4" />
+              <p className="text-body-sm text-slate-300">Đang kết nối JaaS...</p>
+            </div>
+          ) : IS_JAAS && jaasError ? (
+            <div
+              className="w-full h-full flex flex-col items-center justify-center bg-slate-900 text-white gap-4"
+              data-testid="jaas-error"
+            >
+              <span className="material-symbols-outlined text-5xl text-red-400" aria-hidden="true">
+                error
+              </span>
+              <p className="text-body-sm text-slate-300">{jaasError}</p>
+              <button
+                onClick={fetchToken}
+                className="px-4 py-2 bg-primary text-white rounded-lg text-body-sm font-medium hover:bg-primary/90 transition-colors"
+                data-testid="jaas-retry-button"
+              >
+                Thử lại
+              </button>
+            </div>
+          ) : (
+            <JitsiFrame
+              ref={jitsiRef}
+              meetingCode={IS_JAAS && jaasRoomName ? jaasRoomName : meeting.meetingCode}
+              displayName={user?.fullName ?? user?.username ?? 'Khách'}
+              jwt={IS_JAAS ? jaasToken ?? undefined : undefined}
+              onVideoConferenceLeft={handleVideoConferenceLeft}
+              className="w-full h-full"
+            />
+          )}
         </div>
 
         {/* Raise hand button — shown to non-host participants in MEETING_MODE */}
