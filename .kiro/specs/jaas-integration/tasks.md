@@ -95,7 +95,7 @@ Tích hợp JaaS (Jitsi as a Service) của 8x8 vào Kolla Meeting. Backend thê
     - Test 503 khi `JAAS_APP_ID` trống
     - _Requirements: 1.2, 1.3, 1.15, 1.16, 1.19_
 
-- [~] 5. Tạo `JaasTokenController`
+- [x] 5. Tạo `JaasTokenController`
   - Tạo file `backend/src/main/java/com/example/kolla/controllers/JaasTokenController.java`
   - Endpoint `GET /meetings/{id}/jaas-token` với `@AuthenticationPrincipal User currentUser`
   - Gọi `jaasTokenService.generateToken(id, currentUser)` và trả về `ResponseEntity.ok(ApiResponse.success(response))`
@@ -103,7 +103,7 @@ Tích hợp JaaS (Jitsi as a Service) của 8x8 vào Kolla Meeting. Backend thê
   - Không thêm endpoint vào `permitAll()` trong `SecurityConfig` — endpoint được bảo vệ bởi `JwtAuthenticationFilter` như các endpoint khác
   - _Requirements: 1.1, 1.6_
 
-  - [~] 5.1 Viết integration test cho `JaasTokenController` với MockMvc
+  - [x] 5.1 Viết integration test cho `JaasTokenController` với MockMvc
     - Test 200 OK với valid Kolla JWT và user là member
     - Test 401 khi không có Kolla JWT
     - Test 403 khi user không phải member
