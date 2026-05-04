@@ -171,7 +171,7 @@ Tích hợp JaaS (Jitsi as a Service) của 8x8 vào Kolla Meeting. Backend thê
     - Khi JaaS disabled: `JitsiFrame` render với `meeting.meetingCode` và không có `jwt`
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.6_
 
-- [~] 11. Final checkpoint — Ensure all tests pass
+- [x] 11. Final checkpoint — Ensure all tests pass
   - Ensure all backend and frontend tests pass, ask the user if questions arise.
 
 ## Notes
