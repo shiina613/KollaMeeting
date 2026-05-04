@@ -17,7 +17,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.security.KeyFactory;
-import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.PKCS8EncodedKeySpec;
@@ -27,8 +26,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Implementation of {@link JaasTokenService} that builds and signs JaaS JWTs
- * using JJWT 0.11.5 and an RSA private key from configuration.
+ * Implementation of {@link JaasTokenService} that generates JaaS JWT tokens
+ * signed with RS256 using the configured RSA private key.
  * Requirements: 1.1–1.19, 2.4, 6.1, 6.2, 6.3, 6.4
  */
 @Slf4j
@@ -56,33 +55,39 @@ public class JaasTokenServiceImpl implements JaasTokenService {
             throw new ForbiddenException("User is not a member of this meeting");
         }
 
-        // 4. Determine moderator status: host or secretary
-        boolean isModerator = false;
-        User host = meeting.getHost();
-        User secretary = meeting.getSecretary();
-        if (host != null && host.getId() != null && host.getId().equals(currentUser.getId())) {
-            isModerator = true;
-        } else if (secretary != null && secretary.getId() != null && secretary.getId().equals(currentUser.getId())) {
-            isModerator = true;
-        }
+        // 4. Determine moderator flag — host or secretary
+        boolean isModerator = (meeting.getHost() != null
+                && currentUser.getId().equals(meeting.getHost().getId()))
+                || (meeting.getSecretary() != null
+                && currentUser.getId().equals(meeting.getSecretary().getId()));
 
-        // 5. Parse RSA private key
-        PrivateKey privateKey = parsePrivateKey(jaasProperties.getPrivateKey());
+        // 5. Build and sign JWT
+        String token = buildJwt(meeting, currentUser, isModerator);
+        String roomName = jaasProperties.getAppId() + "/" + meeting.getCode();
 
-        // 6. Build JWT claims
-        long nowMillis = System.currentTimeMillis();
-        Date now = new Date(nowMillis);
-        Date nbf = new Date(nowMillis - 10_000L);       // now - 10 seconds
-        Date exp = new Date(nowMillis + 3_600_000L);    // now + 1 hour
+        return new JaasTokenResponse(token, roomName);
+    }
 
+    /**
+     * Builds and signs the JaaS JWT.
+     * Requirements: 1.5–1.17, 6.1
+     */
+    private String buildJwt(Meeting meeting, User user, boolean isModerator) {
         String appId = jaasProperties.getAppId();
-        String kid = "vpaas-magic-cookie-" + appId + "/" + jaasProperties.extractKeyId();
+        String keyId = jaasProperties.extractKeyId();
+        String kid = "vpaas-magic-cookie-" + appId + "/" + keyId;
+
+        long nowMillis = System.currentTimeMillis();
+        long nowSec = nowMillis / 1000;
+        Date iat = new Date(nowMillis);
+        Date nbf = new Date((nowSec - 10) * 1000);
+        Date exp = new Date((nowSec + 3600) * 1000);
 
         // Build context.user map
         Map<String, Object> contextUser = new HashMap<>();
-        contextUser.put("id", String.valueOf(currentUser.getId()));
-        contextUser.put("name", currentUser.getFullName());
-        contextUser.put("email", currentUser.getEmail() != null ? currentUser.getEmail() : "");
+        contextUser.put("id", String.valueOf(user.getId()));
+        contextUser.put("name", user.getFullName());
+        contextUser.put("email", user.getEmail() != null ? user.getEmail() : "");
         contextUser.put("avatar", "");
         contextUser.put("moderator", isModerator);
 
@@ -98,54 +103,62 @@ public class JaasTokenServiceImpl implements JaasTokenService {
         context.put("user", contextUser);
         context.put("features", contextFeatures);
 
-        // 7. Build and sign JWT
-        String token = Jwts.builder()
-                .setHeaderParam("alg", "RS256")
+        PrivateKey privateKey = parsePrivateKey();
+
+        return Jwts.builder()
                 .setHeaderParam("kid", kid)
-                .claim("iss", "chat")
-                .claim("aud", "jitsi")
+                .setIssuer("chat")
+                .setAudience("jitsi")
                 .setSubject(appId)
                 .claim("room", meeting.getCode())
-                .setIssuedAt(now)
+                .setIssuedAt(iat)
                 .setNotBefore(nbf)
                 .setExpiration(exp)
                 .claim("context", context)
                 .signWith(privateKey, SignatureAlgorithm.RS256)
                 .compact();
-
-        // 8. Return response
-        return new JaasTokenResponse(token, appId + "/" + meeting.getCode());
     }
 
     /**
-     * Parses a PEM-encoded RSA private key string into a {@link PrivateKey}.
-     * <p>
-     * Handles literal {@code \n} sequences (backslash + n) in the PEM string,
-     * strips PEM headers/footers, and decodes the Base64 body.
+     * Parses the RSA private key from the PEM string stored in {@link JaasProperties}.
+     * Replaces literal {@code \n} sequences with real newlines, strips PEM headers,
+     * Base64-decodes the body, and constructs a {@link PrivateKey} via PKCS8EncodedKeySpec.
      *
-     * @param pemKey the PEM-encoded private key string
-     * @return the parsed {@link PrivateKey}
-     * @throws ServiceUnavailableException if the key cannot be parsed
+     * <p>SECURITY: The private key value is NEVER logged or included in any exception message.
+     * Requirements: 6.1
      */
-    private PrivateKey parsePrivateKey(String pemKey) {
+    private PrivateKey parsePrivateKey() {
         try {
-            // Replace literal \n (two chars: backslash + n) with actual newline
-            String normalized = pemKey.replace("\\n", "\n");
+            String pem = jaasProperties.getPrivateKey();
+            if (pem == null || pem.isBlank()) {
+                throw new ServiceUnavailableException("JaaS private key is not configured");
+            }
 
-            // Strip PEM headers/footers and all whitespace
-            String base64 = normalized
-                    .replace("-----BEGIN PRIVATE KEY-----", "")
+            // Replace literal \n with real newlines (env var encoding)
+            pem = pem.replace("\\n", "\n");
+
+            // Strip PEM headers/footers
+            pem = pem.replace("-----BEGIN PRIVATE KEY-----", "")
                     .replace("-----END PRIVATE KEY-----", "")
+                    .replace("-----BEGIN RSA PRIVATE KEY-----", "")
+                    .replace("-----END RSA PRIVATE KEY-----", "")
                     .replaceAll("\\s", "");
 
-            byte[] keyBytes = Base64.getDecoder().decode(base64);
+            byte[] keyBytes = Base64.getDecoder().decode(pem);
             PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(keyBytes);
             KeyFactory keyFactory = KeyFactory.getInstance("RSA");
             return keyFactory.generatePrivate(keySpec);
-        } catch (NoSuchAlgorithmException | InvalidKeySpecException | IllegalArgumentException e) {
-            // Log a generic message — never log the private key value
-            log.error("Failed to parse JaaS RSA private key: {}", e.getMessage());
-            throw new ServiceUnavailableException("JaaS is not configured");
+
+        } catch (ServiceUnavailableException e) {
+            throw e;
+        } catch (java.security.spec.InvalidKeySpecException e) {
+            // SECURITY: never log the private key value
+            log.error("Failed to parse JaaS private key: invalid key format");
+            throw new ServiceUnavailableException("JaaS private key is invalid");
+        } catch (Exception e) {
+            // SECURITY: never log the private key value
+            log.error("Failed to parse JaaS private key: {}", e.getClass().getSimpleName());
+            throw new ServiceUnavailableException("JaaS private key could not be loaded");
         }
     }
 }
