@@ -75,7 +75,7 @@ public class JaasTokenServiceImpl implements JaasTokenService {
     private String buildJwt(Meeting meeting, User user, boolean isModerator) {
         String appId = jaasProperties.getAppId();
         String keyId = jaasProperties.extractKeyId();
-        String kid = "vpaas-magic-cookie-" + appId + "/" + keyId;
+        String kid = jaasProperties.getApiKey();
 
         long nowMillis = System.currentTimeMillis();
         long nowSec = nowMillis / 1000;
@@ -106,6 +106,7 @@ public class JaasTokenServiceImpl implements JaasTokenService {
         PrivateKey privateKey = parsePrivateKey();
 
         return Jwts.builder()
+                .setHeaderParam("typ", "JWT")
                 .setHeaderParam("kid", kid)
                 .setIssuer("chat")
                 .setAudience("jitsi")

@@ -36,6 +36,6 @@ ENV TZ=Asia/Ho_Chi_Minh
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
-    CMD wget -qO- http://localhost:8080/actuator/health || exit 1
+    CMD wget -qO- http://localhost:8080/api/v1/actuator/health || exit 1
 
 ENTRYPOINT ["java", "-jar", "-Duser.timezone=Asia/Ho_Chi_Minh", "app.jar"]

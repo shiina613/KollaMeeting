@@ -98,6 +98,10 @@ services:
       JITSI_APP_SECRET: ${JITSI_APP_SECRET:-}
       # Gipformer callback API key
       GIPFORMER_CALLBACK_API_KEY: ${GIPFORMER_CALLBACK_API_KEY:-}
+      # JaaS integration
+      JAAS_APP_ID: ${JAAS_APP_ID:-}
+      JAAS_API_KEY: ${JAAS_API_KEY:-}
+      JAAS_PRIVATE_KEY: ${JAAS_PRIVATE_KEY:-}
       # Timezone
       TZ: Asia/Ho_Chi_Minh
       JAVA_OPTS: "-Duser.timezone=Asia/Ho_Chi_Minh"
@@ -156,18 +160,16 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
+        # All VITE_* vars must be build args — Vite bakes them into the bundle at build time
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080/api/v1}
+        VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:8080/ws}
         VITE_JITSI_URL: ${VITE_JITSI_URL:-https://meet.jit.si}
-        # VITE_API_BASE_URL and VITE_WS_URL are injected via .env by startup scripts
-        # (scripts/start.ps1 or scripts/start.sh) — do not hardcode here
+        VITE_JAAS_APP_ID: ${VITE_JAAS_APP_ID:-}
     container_name: kolla-frontend
     restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
-      # Requirement 14.6 – API base URL
-      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080/api/v1}
-      # Requirement 14.7 – Jitsi server URL
-      VITE_JITSI_URL: ${VITE_JITSI_URL:-https://meet.jit.si}
       TZ: Asia/Ho_Chi_Minh
     depends_on:
       - backend

@@ -17,12 +17,15 @@ $ErrorActionPreference = "Stop"
 # =============================================================================
 function Extract-TunnelUrl {
     param(
-        [Parameter(Mandatory = $true)]
-        [string]$LogContent
+        [Parameter(Mandatory = $false)]
+        [AllowEmptyString()]
+        [string]$LogContent = ""
     )
-    $match = [regex]::Match($LogContent, 'https://[a-z0-9-]+\.trycloudflare\.com')
-    if ($match.Success) {
-        return $match.Value
+    if ([string]::IsNullOrEmpty($LogContent)) { return $null }
+    # Lay tat ca matches, tra ve cai cuoi cung (URL moi nhat trong log)
+    $matches = [regex]::Matches($LogContent, 'https://[a-z0-9-]+\.trycloudflare\.com')
+    if ($matches.Count -gt 0) {
+        return $matches[$matches.Count - 1].Value
     }
     return $null
 }
@@ -85,7 +88,17 @@ function Wait-DockerDaemon {
 # Start-Services - Khoi dong tat ca services tru frontend
 # =============================================================================
 function Start-Services {
+    Write-Host "[*] Build backend (apply migrations + code moi)..."
+    cmd /c "docker compose build backend"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Khong the build backend. Chay thu: docker compose build backend"
+        exit 1
+    }
+    Write-Host "[OK] Backend image da duoc build."
+
     Write-Host "[*] Khoi dong services (tru frontend)..."
+    # Restart cloudflared truoc de dam bao lay duoc URL moi (xoa log cu)
+    cmd /c "docker compose rm -sf cloudflared > nul 2>&1"
     # Dung cmd /c de tranh PowerShell bat stderr cua docker thanh exception
     cmd /c "docker compose up -d --scale frontend=0"
     if ($LASTEXITCODE -ne 0) {
@@ -141,7 +154,16 @@ function Update-EnvFile {
     $wsUrl   = ($TunnelUrl -replace '^https://', 'wss://') + "/ws"
     $corsUrl = $TunnelUrl
 
-    $content = Get-Content $envFile -Raw
+    # Dung ReadAllText thay vi Get-Content -Raw de tranh OutOfMemoryException
+    # khi file .env bi corrupt/phinh to
+    $content = [System.IO.File]::ReadAllText((Resolve-Path $envFile).Path, [System.Text.UTF8Encoding]::new($false))
+
+    # Kiem tra kich thuoc file hop ly (< 1MB)
+    $fileSize = (Get-Item $envFile).Length
+    if ($fileSize -gt 1MB) {
+        Write-Host "[ERROR] .env bi corrupt (kich thuoc: $([math]::Round($fileSize/1MB, 1)) MB). Xoa va tao lai tu .env.example"
+        exit 1
+    }
 
     $content = $content -replace '(?m)^VITE_API_BASE_URL=.*', "VITE_API_BASE_URL=$apiUrl"
     $content = $content -replace '(?m)^VITE_WS_URL=.*',       "VITE_WS_URL=$wsUrl"
@@ -153,16 +175,48 @@ function Update-EnvFile {
 }
 
 # =============================================================================
-# Build-Frontend - Rebuild va khoi dong frontend container
+# Wait-Backend - Cho backend Spring Boot san sang (timeout 60s)
 # =============================================================================
+function Wait-Backend {
+    Write-Host "[*] Cho backend khoi dong (timeout 120s)..."
+    $timeout = 120
+    $elapsed = 0
+    $interval = 3
+
+    while ($elapsed -lt $timeout) {
+        $status = cmd /c "docker inspect kolla-backend --format={{.State.Health.Status}} 2>&1"
+        if ($status -eq "healthy") {
+            Write-Host "[OK] Backend san sang."
+            return
+        }
+        Write-Host "    Backend dang khoi dong... ($elapsed/$timeout giay) [$status]"
+        Start-Sleep -Seconds $interval
+        $elapsed += $interval
+    }
+
+    Write-Host "[WARN] Backend chua healthy sau 120s, tiep tuc anyway..."
+}
 function Build-Frontend {
-    Write-Host "[*] Rebuild frontend container..."
-    cmd /c "docker compose up -d --build frontend"
+    Write-Host "[*] Rebuild frontend container (no cache)..."
+    # --no-cache dam bao VITE_* env vars (VITE_JAAS_APP_ID, VITE_API_BASE_URL, v.v.)
+    # luon duoc bake vao Vite bundle moi, khong bi dung lai tu cache cu
+    cmd /c "docker compose build --no-cache frontend"
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "[ERROR] Khong the build frontend. Chay thu: docker compose up -d --build frontend"
+        Write-Host "[ERROR] Khong the build frontend. Chay thu: docker compose build --no-cache frontend"
+        exit 1
+    }
+    cmd /c "docker compose up -d frontend"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Khong the khoi dong frontend."
         exit 1
     }
     Write-Host "[OK] Frontend da duoc build va khoi dong."
+
+    # Restart nginx de resolve lai DNS sau khi frontend container duoc tao moi
+    # (nginx cache IP cu cua container truoc, gay ra 502 Bad Gateway)
+    Write-Host "[*] Restart nginx de cap nhat DNS..."
+    cmd /c "docker compose restart nginx > nul 2>&1"
+    Write-Host "[OK] Nginx da duoc restart."
 }
 
 # =============================================================================
@@ -189,6 +243,7 @@ function Main {
     $tunnelUrl = Get-TunnelUrl
 
     Update-EnvFile -TunnelUrl $tunnelUrl
+    Wait-Backend
     Build-Frontend
     Print-Success -TunnelUrl $tunnelUrl
 }
