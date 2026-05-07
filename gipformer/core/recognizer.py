@@ -196,9 +196,10 @@ class WhisperRecognizer:
         self._model: "FasterWhisperModel | None" = None
 
         device   = settings.DEVICE.lower()          # "cuda" | "cpu"
-        # float16 trên GPU — tốt nhất về tốc độ + chất lượng.
-        # int8 trên CPU — nhanh hơn float32 khi không có GPU.
-        compute  = "float16" if device == "cuda" else "int8"
+        # int8_float16 trên GPU: weights int8 (tiết kiệm VRAM) + compute float16 (nhanh)
+        # large-v3 float16: ~3.1GB VRAM — có thể OOM với 4GB GPU
+        # large-v3 int8_float16: ~2.2GB VRAM — an toàn cho 4GB GPU, tốc độ tốt
+        compute  = "int8_float16" if device == "cuda" else "int8"
 
         logger.info(
             "Loading Whisper model via faster-whisper "
