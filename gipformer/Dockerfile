@@ -50,6 +50,14 @@ RUN pip install --no-cache-dir \
     "soundfile>=0.12.0" \
     sentencepiece==0.2.1
 
+# ── Layer 4b: faster-whisper (GPU Whisper via CTranslate2) ─────────────────
+# faster-whisper dùng CTranslate2 backend — hỗ trợ CUDA native, chỉ cần pip install.
+# Không cần build sherpa-onnx từ source với -DSHERPA_ONNX_ENABLE_GPU=ON.
+# GPU memory: distil-large-v3 ~2GB VRAM, RTF ~0.05 trên GPU (cực nhanh).
+RUN pip install --no-cache-dir \
+    "faster-whisper>=1.0.0"
+
+
 # ── Layer 5: App/API packages (hay thay đổi → đặt cuối để cache hiệu quả) ──
 RUN pip install --no-cache-dir \
     "fastapi>=0.110.0" \
