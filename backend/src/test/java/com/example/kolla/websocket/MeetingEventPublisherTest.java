@@ -329,13 +329,15 @@ class MeetingEventPublisherTest {
         void sendsSegment() {
             ZonedDateTime segmentTime = ZonedDateTime.now();
             publisher.publishTranscriptionSegment(
-                    MEETING_ID, 3L, "Eve", "turn-abc", 2, "Xin chào", segmentTime);
+                    MEETING_ID, "job-123", 3L, "Eve", "Phòng CNTT", "turn-abc", 2, "Xin chào", segmentTime);
 
             MeetingEvent event = captureEvent();
             assertThat(event.getType()).isEqualTo(MeetingEventType.TRANSCRIPTION_SEGMENT);
             Map<String, Object> payload = payload(event);
+            assertThat(payload).containsEntry("jobId", "job-123");
             assertThat(payload).containsEntry("speakerId", 3L);
             assertThat(payload).containsEntry("speakerName", "Eve");
+            assertThat(payload).containsEntry("speakerDept", "Phòng CNTT");
             assertThat(payload).containsEntry("speakerTurnId", "turn-abc");
             assertThat(payload).containsEntry("sequenceNumber", 2);
             assertThat(payload).containsEntry("text", "Xin chào");

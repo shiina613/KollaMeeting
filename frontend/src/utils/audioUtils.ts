@@ -36,6 +36,7 @@ export interface TranscriptionSegment {
   jobId: string
   speakerId: number
   speakerName: string
+  speakerDept: string
   speakerTurnId: string
   sequenceNumber: number
   text: string

@@ -228,16 +228,19 @@ public class MeetingEventPublisher {
      * Broadcast TRANSCRIPTION_SEGMENT for HIGH_PRIORITY meetings.
      * Requirements: 8.12
      */
-    public void publishTranscriptionSegment(Long meetingId, Long speakerId,
-                                             String speakerName, String speakerTurnId,
+    public void publishTranscriptionSegment(Long meetingId, String jobId, Long speakerId,
+                                             String speakerName, String speakerDept,
+                                             String speakerTurnId,
                                              int sequenceNumber, String text,
                                              ZonedDateTime segmentStartTime) {
         broadcast(meetingId, MeetingEvent.builder()
                 .type(MeetingEventType.TRANSCRIPTION_SEGMENT)
                 .meetingId(meetingId)
                 .payload(Map.of(
+                        "jobId", jobId,
                         "speakerId", speakerId,
                         "speakerName", speakerName,
+                        "speakerDept", speakerDept != null ? speakerDept : "",
                         "speakerTurnId", speakerTurnId,
                         "sequenceNumber", sequenceNumber,
                         "text", text,

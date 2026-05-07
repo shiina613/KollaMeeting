@@ -64,10 +64,10 @@ public class SpeakingPermissionServiceImpl implements SpeakingPermissionService 
                                                        User granter) {
         Meeting meeting = findMeetingOrThrow(meetingId);
 
-        // Only Host (or ADMIN) may grant permission (Requirement 22.4)
+        // Only the Host may grant permission (TASK-001 — ADMIN authority removed; Requirement 22.4)
         if (!meetingLifecycleService.isHostOrAdmin(meeting, granter)) {
             throw new ForbiddenException(
-                    "Only the Host or an ADMIN may grant speaking permission");
+                    "Only the Host may grant speaking permission");
         }
 
         // Meeting must be ACTIVE and in MEETING_MODE (Requirement 22.4)
@@ -139,10 +139,10 @@ public class SpeakingPermissionServiceImpl implements SpeakingPermissionService 
     public SpeakingPermissionResponse revokePermission(Long meetingId, User revoker) {
         Meeting meeting = findMeetingOrThrow(meetingId);
 
-        // Only Host (or ADMIN) may revoke (Requirement 22.6)
+        // Only the Host may revoke (TASK-001 — ADMIN authority removed; Requirement 22.6)
         if (!meetingLifecycleService.isHostOrAdmin(meeting, revoker)) {
             throw new ForbiddenException(
-                    "Only the Host or an ADMIN may revoke speaking permission");
+                    "Only the Host may revoke speaking permission");
         }
 
         // Acquire lock and find active permission

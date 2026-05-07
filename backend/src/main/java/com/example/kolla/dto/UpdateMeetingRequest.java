@@ -1,5 +1,6 @@
 package com.example.kolla.dto;
 
+import com.example.kolla.enums.TranscriptionPriority;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -35,4 +36,10 @@ public class UpdateMeetingRequest {
     private Long hostUserId;
 
     private Long secretaryUserId;
+
+    /**
+     * Transcription priority. Null means no change.
+     * Can only be changed while meeting is still SCHEDULED.
+     */
+    private TranscriptionPriority transcriptionPriority;
 }

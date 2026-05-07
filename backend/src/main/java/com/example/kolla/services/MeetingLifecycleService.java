@@ -13,7 +13,8 @@ public interface MeetingLifecycleService {
 
     /**
      * Activate a meeting: SCHEDULED → ACTIVE.
-     * Only the Host (or ADMIN) may activate.
+     * Only the Host or the designated Secretary of this meeting may activate.
+     * (ADMIN authority removed — TASK-001)
      * Sets activatedAt timestamp and broadcasts MEETING_STARTED event.
      * Requirements: 3.10
      */
@@ -21,7 +22,8 @@ public interface MeetingLifecycleService {
 
     /**
      * End a meeting: ACTIVE → ENDED.
-     * Host, Secretary, or ADMIN may end the meeting.
+     * Only the Host or Secretary of this meeting may end it.
+     * (ADMIN authority removed — TASK-001)
      * Revokes any active speaking permission, closes attendance logs, and
      * triggers minutes generation.
      * Requirements: 3.11
@@ -37,7 +39,8 @@ public interface MeetingLifecycleService {
 
     /**
      * Called when a participant leaves an active meeting.
-     * Starts the waiting timeout if neither Host nor Secretary remains.
+     * Starts the 5-minute waiting timeout if neither Host nor Secretary remains.
+     * (Timeout reduced from 10 min → 5 min — TASK-002)
      * Requirements: 3.11
      */
     void onParticipantLeft(Long meetingId, User user);
@@ -51,7 +54,8 @@ public interface MeetingLifecycleService {
 
     /**
      * Check whether the given user has Host authority over the meeting.
-     * Host authority = user is the designated Host, OR user is ADMIN.
+     * Host authority = user is the designated Host only.
+     * NOTE: ADMIN role no longer confers host authority (TASK-001).
      * Requirements: 3.10, 21.7
      */
     boolean isHostOrAdmin(Meeting meeting, User user);

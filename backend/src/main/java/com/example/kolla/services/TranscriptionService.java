@@ -1,7 +1,9 @@
 package com.example.kolla.services;
 
 import com.example.kolla.dto.TranscriptionCallbackRequest;
+import com.example.kolla.responses.AudioJobResponse;
 import com.example.kolla.responses.TranscriptionSegmentResponse;
+import org.springframework.core.io.Resource;
 
 import java.util.List;
 
@@ -36,4 +38,22 @@ public interface TranscriptionService {
      * Requirements: 8.12
      */
     List<TranscriptionSegmentResponse> getSegmentsForMeeting(Long meetingId);
+
+    /**
+     * Retrieve all audio jobs for a meeting, ordered chronologically
+     * (same order as meeting minutes).
+     *
+     * @param meetingId the meeting ID
+     * @return jobs ordered by createdAt then sequenceNumber
+     */
+    List<AudioJobResponse> getAudioJobsForMeeting(Long meetingId);
+
+    /**
+     * Load the audio WAV file for a specific job as a streamable Resource.
+     *
+     * @param meetingId the meeting ID (used for access validation)
+     * @param jobId     the transcription job UUID
+     * @return a file Resource for streaming
+     */
+    Resource getAudioResource(Long meetingId, String jobId);
 }

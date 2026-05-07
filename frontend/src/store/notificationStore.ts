@@ -75,8 +75,8 @@ const useNotificationStore = create<NotificationState>((set, get) => ({
   fetchNotifications: async () => {
     set({ isLoading: true })
     try {
-      const response = await api.get<Notification[]>('/notifications')
-      const notifications = response.data
+      const response = await api.get<{ data: Notification[]; success: boolean; message?: string }>('/notifications')
+      const notifications = response.data.data ?? []
       set({ notifications, unreadCount: countUnread(notifications), isLoading: false })
     } catch (error) {
       console.error('[notificationStore] Failed to fetch notifications:', error)

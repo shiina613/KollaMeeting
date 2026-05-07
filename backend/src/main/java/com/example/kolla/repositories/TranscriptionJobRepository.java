@@ -35,4 +35,12 @@ public interface TranscriptionJobRepository extends JpaRepository<TranscriptionJ
      * Count jobs by meeting and status.
      */
     long countByMeeting_IdAndStatus(Long meetingId, TranscriptionJobStatus status);
+
+    /**
+     * Find all jobs for a meeting ordered chronologically (same order as meeting minutes).
+     * Jobs without a matching segment (PENDING/FAILED) are included.
+     */
+    @Query("SELECT j FROM TranscriptionJob j WHERE j.meeting.id = :meetingId "
+            + "ORDER BY j.createdAt ASC, j.sequenceNumber ASC")
+    List<TranscriptionJob> findByMeetingIdOrdered(@Param("meetingId") Long meetingId);
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import { Client, type IMessage, type StompSubscription } from '@stomp/stompjs'
 import useAuthStore from '../store/authStore'
 import type { MeetingEvent } from '../types/meeting'
@@ -71,11 +71,15 @@ export function useWebSocket({
   onDisconnected,
 }: UseWebSocketOptions): UseWebSocketReturn {
   const clientRef = useRef<Client | null>(null)
-  const isConnectedRef = useRef(false)
+  const [isConnected, setIsConnected] = useState(false)
   const reconnectAttemptRef = useRef(0)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isMountedRef = useRef(true)
   const subscriptionsRef = useRef<StompSubscription[]>([])
+  /** Separate ref for the meeting-scoped subscription so we can re-subscribe on meetingId change */
+  const meetingSubRef = useRef<StompSubscription | null>(null)
+  /** Heartbeat interval — sends STOMP frame to keep attendance record alive */
+  const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Keep callbacks in refs so the STOMP handlers always see the latest version
   // without needing to recreate the client on every render.
@@ -89,7 +93,11 @@ export function useWebSocket({
   useEffect(() => { onNotificationRef.current = onNotification }, [onNotification])
   useEffect(() => { onConnectedRef.current = onConnected }, [onConnected])
   useEffect(() => { onDisconnectedRef.current = onDisconnected }, [onDisconnected])
-  useEffect(() => { meetingIdRef.current = meetingId }, [meetingId])
+  // Keep meetingIdRef synchronously up-to-date on every render (same pattern as
+  // useAudioCapture's speakerTurnIdRef) so subscribeMeetingTopic always sees the
+  // correct meetingId even when called from an onConnect handler that fires before
+  // effects have had a chance to flush.
+  meetingIdRef.current = meetingId
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -105,6 +113,38 @@ export function useWebSocket({
       try { sub.unsubscribe() } catch { /* ignore stale unsubscribe */ }
     })
     subscriptionsRef.current = []
+    meetingSubRef.current = null
+  }, [])
+
+  /**
+   * Subscribe (or re-subscribe) to a meeting-scoped topic.
+   * Unsubscribes from the previous meeting topic if any.
+   */
+  const subscribeMeetingTopic = useCallback((newMeetingId: number | null) => {
+    const client = clientRef.current
+    if (!client || !client.connected) return
+
+    // Unsubscribe from previous meeting topic
+    if (meetingSubRef.current) {
+      try { meetingSubRef.current.unsubscribe() } catch { /* ignore */ }
+      meetingSubRef.current = null
+    }
+
+    if (newMeetingId === null) return
+
+    const meetingSub = client.subscribe(
+      `/topic/meeting/${newMeetingId}`,
+      (message: IMessage) => {
+        try {
+          const event: MeetingEvent = JSON.parse(message.body)
+          onMeetingEventRef.current?.(event)
+        } catch {
+          console.error('[useWebSocket] Failed to parse meeting event:', message.body)
+        }
+      },
+    )
+    meetingSubRef.current = meetingSub
+    subscriptionsRef.current.push(meetingSub)
   }, [])
 
   // ── Connect ────────────────────────────────────────────────────────────────
@@ -130,7 +170,7 @@ export function useWebSocket({
       onConnect: () => {
         if (!isMountedRef.current) return
 
-        isConnectedRef.current = true
+        setIsConnected(true)
         reconnectAttemptRef.current = 0
         clearReconnectTimer()
 
@@ -149,29 +189,34 @@ export function useWebSocket({
         subscriptionsRef.current.push(notifSub)
 
         // Subscribe to meeting-scoped topic if meetingId is provided
-        const currentMeetingId = meetingIdRef.current
-        if (currentMeetingId !== null) {
-          const meetingSub = client.subscribe(
-            `/topic/meeting/${currentMeetingId}`,
-            (message: IMessage) => {
-              try {
-                const event: MeetingEvent = JSON.parse(message.body)
-                onMeetingEventRef.current?.(event)
-              } catch {
-                console.error('[useWebSocket] Failed to parse meeting event:', message.body)
-              }
-            },
-          )
-          subscriptionsRef.current.push(meetingSub)
-        }
+        subscribeMeetingTopic(meetingIdRef.current)
+
+        // Start heartbeat: publish to backend every 15s to keep attendance record alive.
+        // Without this the HeartbeatMonitor marks the session stale and closes the
+        // attendance log, causing audio upload to fail with 403.
+        if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current)
+        heartbeatIntervalRef.current = setInterval(() => {
+          const mid = meetingIdRef.current
+          if (!mid || !clientRef.current?.connected) return
+          try {
+            clientRef.current.publish({
+              destination: `/app/meeting/${mid}/heartbeat`,
+              body: '',
+            })
+          } catch { /* ignore publish errors */ }
+        }, 15_000)
 
         onConnectedRef.current?.()
       },
 
       onDisconnect: () => {
         if (!isMountedRef.current) return
-        isConnectedRef.current = false
+        setIsConnected(false)
         unsubscribeAll()
+        if (heartbeatIntervalRef.current) {
+          clearInterval(heartbeatIntervalRef.current)
+          heartbeatIntervalRef.current = null
+        }
         onDisconnectedRef.current?.()
         scheduleReconnect()
       },
@@ -179,7 +224,7 @@ export function useWebSocket({
       onStompError: (frame) => {
         console.error('[useWebSocket] STOMP error:', frame.headers['message'], frame.body)
         if (!isMountedRef.current) return
-        isConnectedRef.current = false
+        setIsConnected(false)
         unsubscribeAll()
         scheduleReconnect()
       },
@@ -187,7 +232,7 @@ export function useWebSocket({
       onWebSocketError: (event) => {
         console.error('[useWebSocket] WebSocket error:', event)
         if (!isMountedRef.current) return
-        isConnectedRef.current = false
+        setIsConnected(false)
         unsubscribeAll()
         scheduleReconnect()
       },
@@ -232,7 +277,7 @@ export function useWebSocket({
       try { clientRef.current.deactivate() } catch { /* ignore */ }
       clientRef.current = null
     }
-    isConnectedRef.current = false
+    setIsConnected(false)
   }, [clearReconnectTimer, unsubscribeAll])
 
   // ── Public reconnect ───────────────────────────────────────────────────────
@@ -259,6 +304,10 @@ export function useWebSocket({
       isMountedRef.current = false
       clearReconnectTimer()
       unsubscribeAll()
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current)
+        heartbeatIntervalRef.current = null
+      }
       if (clientRef.current) {
         try { clientRef.current.deactivate() } catch { /* ignore */ }
         clientRef.current = null
@@ -268,8 +317,14 @@ export function useWebSocket({
   // Intentionally empty deps — we only want to connect once on mount.
   // meetingId changes are handled via meetingIdRef.
 
+  // Re-subscribe when meetingId changes (while already connected)
+  useEffect(() => {
+    meetingIdRef.current = meetingId
+    subscribeMeetingTopic(meetingId)
+  }, [meetingId, subscribeMeetingTopic])
+
   return {
-    isConnected: isConnectedRef.current,
+    isConnected,
     disconnect,
     reconnect,
   }

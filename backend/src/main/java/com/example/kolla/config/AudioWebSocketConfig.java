@@ -33,6 +33,6 @@ public class AudioWebSocketConfig implements WebSocketConfigurer {
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         String[] origins = corsAllowedOrigins.split(",");
         registry.addHandler(audioStreamHandler, "/ws/audio")
-                .setAllowedOrigins(origins);
+                .setAllowedOrigins("*");
     }
 }

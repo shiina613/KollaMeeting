@@ -12,14 +12,17 @@ import { getMeeting,
   removeMeetingMember,
   activateMeeting,
   endMeeting,
+  listAudioJobs,
+  fetchAudioJobBlob,
 } from '../services/meetingService'
-import { listRecordings, triggerRecordingDownload, formatFileSize } from '../services/recordingService'
+import type { AudioJob } from '../services/meetingService'
+import { formatFileSize } from '../services/recordingService'
 import { getMinutes } from '../services/minutesService'
 import { listAllActiveUsers } from '../services/userService'
 import useAuthStore from '../store/authStore'
 import api from '../services/api'
 import { formatMeetingUserLabel, formatUserLabel } from '../utils/userUtils'
-import type { Meeting, MeetingMember, MeetingUser, Recording, MeetingDocument, AttendanceLog, MeetingStatus } from '../types/meeting'
+import type { Meeting, MeetingMember, MeetingUser, MeetingDocument, AttendanceLog, MeetingStatus } from '../types/meeting'
 import type { Minutes } from '../types/minutes'
 import type { ApiResponse } from '../types/api'
 import MinutesViewer from '../components/minutes/MinutesViewer'
@@ -186,14 +189,15 @@ export default function MeetingDetailPage() {
 
   const [meeting, setMeeting] = useState<Meeting | null>(null)
   const [members, setMembers] = useState<MeetingMember[]>([])
-  const [recordings, setRecordings] = useState<Recording[]>([])
+  const [audioJobs, setAudioJobs] = useState<AudioJob[]>([])
+  const [audioBlobUrls, setAudioBlobUrls] = useState<Record<string, string>>({})
+  const [audioLoadingId, setAudioLoadingId] = useState<string | null>(null)
   const [documents, setDocuments] = useState<MeetingDocument[]>([])
   const [attendance, setAttendance] = useState<AttendanceLog[]>([])
   const [minutes, setMinutes] = useState<Minutes | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TabKey>('info')
-  const [downloadingId, setDownloadingId] = useState<number | null>(null)
   const [lifecycleLoading, setLifecycleLoading] = useState(false)
   const [lifecycleError, setLifecycleError] = useState<string | null>(null)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
@@ -217,16 +221,16 @@ export default function MeetingDetailPage() {
     setLoading(true)
     setError(null)
     try {
-      const [meetingRes, membersRes, recordingsRes, docsRes, attendanceRes] = await Promise.all([
+      const [meetingRes, membersRes, audioJobsRes, docsRes, attendanceRes] = await Promise.all([
         getMeeting(meetingId),
         listMeetingMembers(meetingId),
-        listRecordings(meetingId),
+        listAudioJobs(meetingId).catch(() => ({ data: [] as AudioJob[] })),
         api.get<ApiResponse<MeetingDocument[]>>(`/meetings/${meetingId}/documents`).catch(() => ({ data: { data: [] } })),
         api.get<ApiResponse<AttendanceLog[]>>(`/meetings/${meetingId}/attendance`).catch(() => ({ data: { data: [] } })),
       ])
       setMeeting(meetingRes.data)
       setMembers(membersRes.data ?? [])
-      setRecordings(recordingsRes.data ?? [])
+      setAudioJobs((audioJobsRes as ApiResponse<AudioJob[]>).data ?? [])
       setDocuments((docsRes as { data: ApiResponse<MeetingDocument[]> }).data?.data ?? [])
       setAttendance((attendanceRes as { data: ApiResponse<AttendanceLog[]> }).data?.data ?? [])
       if (meetingRes.data?.status === 'ENDED') {
@@ -363,11 +367,24 @@ export default function MeetingDetailPage() {
     }
   }
 
-  const handleDownloadRecording = async (rec: Recording) => {
-    setDownloadingId(rec.id)
-    try { await triggerRecordingDownload(rec.id, rec.fileName) }
-    catch { /* toast handled by interceptor */ }
-    finally { setDownloadingId(null) }
+  // Revoke blob URLs when unmounted to avoid memory leaks
+  useEffect(() => {
+    return () => {
+      Object.values(audioBlobUrls).forEach((url) => URL.revokeObjectURL(url))
+    }
+  }, [audioBlobUrls])
+
+  const handleLoadAudio = async (job: AudioJob) => {
+    if (audioBlobUrls[job.jobId]) return // already loaded
+    setAudioLoadingId(job.jobId)
+    try {
+      const blobUrl = await fetchAudioJobBlob(meetingId, job.jobId)
+      setAudioBlobUrls((prev) => ({ ...prev, [job.jobId]: blobUrl }))
+    } catch {
+      // ignore — audio will show load error in browser
+    } finally {
+      setAudioLoadingId(null)
+    }
   }
 
   if (loading) {
@@ -394,7 +411,7 @@ export default function MeetingDetailPage() {
     { key: 'info', label: 'Thông tin', icon: 'info' },
     { key: 'members', label: 'Thành viên', icon: 'group', count: members.length },
     { key: 'documents', label: 'Tài liệu', icon: 'description', count: documents.length },
-    { key: 'recordings', label: 'Ghi âm', icon: 'mic', count: recordings.length },
+    { key: 'recordings', label: 'Ghi âm', icon: 'mic', count: audioJobs.length },
     { key: 'attendance', label: 'Điểm danh', icon: 'fact_check', count: attendance.length },
     ...(meeting.status === 'ENDED' ? [{ key: 'minutes' as TabKey, label: 'Biên bản', icon: 'article' }] : []),
   ]
@@ -750,41 +767,94 @@ export default function MeetingDetailPage() {
         )}
 
         {activeTab === 'recordings' && (
-          <Section title={`Ghi âm (${recordings.length})`} icon="mic">
-            {recordings.length === 0 ? (
-              <p className="text-body-sm text-on-surface-variant text-center py-4">Chưa có bản ghi âm nào</p>
+          <Section title={`Ghi âm (${audioJobs.length})`} icon="mic">
+            {audioJobs.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-on-surface-variant">
+                <span className="material-symbols-outlined text-5xl mb-3" aria-hidden="true">mic_off</span>
+                <p className="text-body-md">Chưa có đoạn ghi âm nào</p>
+                <p className="text-body-sm mt-1 text-center">Các đoạn âm thanh được ghi lại khi phiên họp ở chế độ MEETING_MODE và ưu tiên Cao.</p>
+              </div>
             ) : (
               <ul className="divide-y divide-outline-variant">
-                {recordings.map((rec) => (
-                  <li key={rec.id} className="flex items-center gap-3 py-3">
-                    <span
-                      className={`material-symbols-outlined text-[24px] shrink-0 ${rec.status === 'COMPLETED' ? 'text-green-600' : rec.status === 'RECORDING' ? 'text-primary' : 'text-error'}`}
-                      aria-hidden="true"
-                    >
-                      {rec.status === 'COMPLETED' ? 'check_circle' : rec.status === 'RECORDING' ? 'radio_button_checked' : 'error'}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-body-sm font-medium text-on-surface truncate">{rec.fileName}</div>
-                      <div className="text-label-md text-on-surface-variant">
-                        {formatFileSize(rec.fileSize)} · {formatDateTime(rec.startTime)}
-                        {rec.endTime && ` – ${formatDateTime(rec.endTime)}`}
+                {audioJobs.map((job) => {
+                  const seqNo = String(job.sequenceNumber).padStart(2, '0')
+                  const dept = job.speakerDept?.trim()
+                  const speakerLabel = dept
+                    ? `${job.speakerName} - ${dept} - ${seqNo}`
+                    : `${job.speakerName} - ${seqNo}`
+
+                  const rawTime = job.createdAt ?? ''
+                  const normalizedTime = /[Z]$|[+-]\d{2}:\d{2}$/.test(rawTime)
+                    ? rawTime : rawTime + '+07:00'
+                  const timeLabel = rawTime
+                    ? new Date(normalizedTime).toLocaleTimeString('vi-VN', {
+                        hour: '2-digit', minute: '2-digit', second: '2-digit',
+                        timeZone: 'Asia/Ho_Chi_Minh',
+                      })
+                    : '—'
+
+                  const statusColor: Record<string, string> = {
+                    COMPLETED: 'text-green-600 bg-green-50',
+                    FAILED: 'text-red-600 bg-red-50',
+                    PROCESSING: 'text-blue-600 bg-blue-50',
+                    QUEUED: 'text-yellow-600 bg-yellow-50',
+                    PENDING: 'text-slate-500 bg-slate-100',
+                  }
+                  const statusLabel: Record<string, string> = {
+                    COMPLETED: 'Hoàn thành', FAILED: 'Lỗi',
+                    PROCESSING: 'Đang xử lý', QUEUED: 'Chờ xử lý', PENDING: 'Chờ',
+                  }
+
+                  const blobUrl = audioBlobUrls[job.jobId]
+                  const isLoadingThis = audioLoadingId === job.jobId
+
+                  return (
+                    <li key={job.jobId} className="py-4 space-y-2">
+                      {/* Header row */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="material-symbols-outlined text-[18px] text-primary shrink-0" aria-hidden="true">mic</span>
+                        <span className="text-body-sm font-semibold text-on-surface flex-1 min-w-0 truncate">{speakerLabel}</span>
+                        <span className={`text-label-sm px-2 py-0.5 rounded-full font-medium shrink-0 ${statusColor[job.status] ?? 'text-slate-500 bg-slate-100'}`}>
+                          {statusLabel[job.status] ?? job.status}
+                        </span>
+                        <span className="text-label-sm text-on-surface-variant font-mono shrink-0">{timeLabel}</span>
                       </div>
-                    </div>
-                    {rec.status === 'COMPLETED' && (
-                      <button
-                        onClick={() => handleDownloadRecording(rec)}
-                        disabled={downloadingId === rec.id}
-                        className="flex items-center gap-1.5 text-primary hover:underline text-body-sm disabled:opacity-60 disabled:cursor-not-allowed shrink-0"
-                        aria-label={`Tải xuống ${rec.fileName}`}
-                      >
-                        {downloadingId === rec.id
-                          ? <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                          : <span className="material-symbols-outlined text-[16px]" aria-hidden="true">download</span>}
-                        Tải xuống
-                      </button>
-                    )}
-                  </li>
-                ))}
+
+                      {/* Transcription text */}
+                      {job.text && (
+                        <p className="text-body-sm text-on-surface-variant italic pl-7 leading-relaxed">
+                          &ldquo;{job.text}&rdquo;
+                        </p>
+                      )}
+
+                      {/* Audio player */}
+                      {job.status === 'COMPLETED' && (
+                        <div className="pl-7">
+                          {blobUrl ? (
+                            <audio
+                              controls
+                              src={blobUrl}
+                              className="w-full h-10 rounded-lg"
+                              aria-label={`Audio của ${speakerLabel}`}
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleLoadAudio(job)}
+                              disabled={isLoadingThis}
+                              className="inline-flex items-center gap-2 border border-outline-variant text-primary px-3 py-1.5 rounded-lg text-body-sm font-medium hover:bg-surface-container transition-colors disabled:opacity-60"
+                            >
+                              {isLoadingThis
+                                ? <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                : <span className="material-symbols-outlined text-[18px]" aria-hidden="true">play_circle</span>}
+                              {isLoadingThis ? 'Đang tải...' : 'Nghe lại'}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </Section>
@@ -808,10 +878,17 @@ export default function MeetingDetailPage() {
                   <tbody>
                     {attendance.map((log) => (
                       <tr key={log.id} className="border-b border-outline-variant last:border-0">
-                        <td className="py-3 pr-4 text-on-surface font-medium">{log.user?.fullName ?? '—'}</td>
+                        <td className="py-3 pr-4 text-on-surface font-medium">
+                          <div>{log.userFullName ?? '—'}</div>
+                          {log.username && <div className="text-label-sm text-on-surface-variant">{log.username}</div>}
+                        </td>
                         <td className="py-3 pr-4 text-on-surface-variant whitespace-nowrap">{formatDateTime(log.joinTime)}</td>
                         <td className="py-3 pr-4 text-on-surface-variant whitespace-nowrap">{log.leaveTime ? formatDateTime(log.leaveTime) : '—'}</td>
-                        <td className="py-3 text-on-surface-variant">{formatDuration(log.durationMinutes)}</td>
+                        <td className="py-3 text-on-surface-variant">
+                          {log.durationSeconds != null
+                            ? formatDuration(Math.round(log.durationSeconds / 60))
+                            : '—'}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

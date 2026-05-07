@@ -17,6 +17,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import useAuthStore from '../store/authStore'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -26,9 +27,21 @@ const TARGET_SAMPLE_RATE = 16_000
 /** ScriptProcessorNode buffer size (samples per channel per callback). */
 const BUFFER_SIZE = 4_096
 
-/** WebSocket URL for the audio stream endpoint. */
-const AUDIO_WS_URL =
-  import.meta.env.VITE_AUDIO_WS_URL ?? 'ws://localhost:8080/ws/audio'
+/**
+ * Build WebSocket URL for the audio stream endpoint dynamically.
+ * Uses VITE_AUDIO_WS_URL env var if set, otherwise derives from current
+ * window location so it works through Nginx reverse proxy.
+ */
+function buildAudioWsUrl(): string {
+  const envUrl = import.meta.env.VITE_AUDIO_WS_URL
+  if (envUrl) {
+    return envUrl.replace(/^http:\/\//, 'ws://').replace(/^https:\/\//, 'wss://')
+  }
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${proto}//${window.location.host}/ws/audio`
+}
+
+const AUDIO_WS_URL = buildAudioWsUrl()
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -57,8 +70,10 @@ export interface UseAudioCaptureOptions {
 export interface UseAudioCaptureReturn {
   /** Current capture status. */
   status: AudioCaptureStatus
-  /** Start capturing audio and streaming to the backend. */
-  startCapture: () => Promise<void>
+  /** Start capturing audio and streaming to the backend.
+   *  @param turnIdOverride — if provided, used instead of the current speakerTurnId prop
+   *  (avoids race when setState hasn't re-rendered yet). */
+  startCapture: (turnIdOverride?: string) => Promise<void>
   /** Stop capturing audio and close the WebSocket. */
   stopCapture: () => void
   /** Whether the hook is actively streaming audio. */
@@ -95,8 +110,9 @@ export function useAudioCapture({
   const onDisconnectedRef = useRef(onDisconnected)
   const onErrorRef = useRef(onError)
 
-  // Keep callback refs fresh
-  useEffect(() => { speakerTurnIdRef.current = speakerTurnId }, [speakerTurnId])
+  // Keep refs synchronously up-to-date so startCapture() always reads the
+  // latest speakerTurnId even when called in the same tick as setState.
+  speakerTurnIdRef.current = speakerTurnId
   useEffect(() => { onConnectedRef.current = onConnected }, [onConnected])
   useEffect(() => { onDisconnectedRef.current = onDisconnected }, [onDisconnected])
   useEffect(() => { onErrorRef.current = onError }, [onError])
@@ -136,6 +152,11 @@ export function useAudioCapture({
   // ── stopCapture ────────────────────────────────────────────────────────────
 
   const stopCapture = useCallback(() => {
+    // Send FINALIZE before closing so the backend flushes the current PCM buffer
+    // and creates a TranscriptionJob from the accumulated audio.
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      try { wsRef.current.send('FINALIZE') } catch { /* ignore */ }
+    }
     stopAudioPipeline()
     closeWebSocket()
     if (isMountedRef.current) {
@@ -145,7 +166,7 @@ export function useAudioCapture({
 
   // ── startCapture ───────────────────────────────────────────────────────────
 
-  const startCapture = useCallback(async () => {
+  const startCapture = useCallback(async (turnIdOverride?: string) => {
     if (!isMountedRef.current) return
 
     // Stop any existing capture first
@@ -205,7 +226,9 @@ export function useAudioCapture({
 
     // ── 4. Open binary WebSocket ──────────────────────────────────────────
 
-    const wsUrl = `${AUDIO_WS_URL}?meetingId=${meetingId}&speakerTurnId=${speakerTurnIdRef.current ?? ''}`
+    const effectiveTurnId = turnIdOverride ?? speakerTurnIdRef.current ?? ''
+    const token = useAuthStore.getState().token ?? ''
+    const wsUrl = `${AUDIO_WS_URL}?meetingId=${meetingId}&speakerTurnId=${effectiveTurnId}&token=${token}`
     const ws = new WebSocket(wsUrl)
     ws.binaryType = 'arraybuffer'
     wsRef.current = ws

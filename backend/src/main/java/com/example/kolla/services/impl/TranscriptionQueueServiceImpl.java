@@ -171,16 +171,17 @@ public class TranscriptionQueueServiceImpl implements TranscriptionQueueService 
     private void storeJobHash(TranscriptionJob job) {
         String hashKey = jobHashPrefix + job.getId();
         Map<String, String> fields = new HashMap<>();
-        fields.put("jobId", job.getId());
-        fields.put("meetingId", String.valueOf(job.getMeeting().getId()));
-        fields.put("speakerId", String.valueOf(job.getSpeakerId()));
-        fields.put("speakerName", job.getSpeakerName());
-        fields.put("speakerTurnId", job.getSpeakerTurnId());
-        fields.put("sequenceNumber", String.valueOf(job.getSequenceNumber()));
+        // Keys must be snake_case to match Gipformer Python worker's Redis Hash reads
+        fields.put("job_id", job.getId());
+        fields.put("meeting_id", String.valueOf(job.getMeeting().getId()));
+        fields.put("speaker_id", String.valueOf(job.getSpeakerId()));
+        fields.put("speaker_name", job.getSpeakerName());
+        fields.put("speaker_turn_id", job.getSpeakerTurnId());
+        fields.put("sequence_number", String.valueOf(job.getSequenceNumber()));
         fields.put("priority", job.getPriority().name());
-        fields.put("audioPath", job.getAudioPath() != null ? job.getAudioPath() : "");
-        fields.put("callbackUrl", "/api/v1/transcription/callback");
-        fields.put("createdAt", job.getCreatedAt().toString());
+        fields.put("audio_path", job.getAudioPath() != null ? job.getAudioPath() : "");
+        fields.put("callback_url", "/api/v1/transcription/callback");
+        fields.put("created_at", job.getCreatedAt().toString());
         fields.put("status", job.getStatus().name());
 
         redisTemplate.opsForHash().putAll(hashKey, fields);

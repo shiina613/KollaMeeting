@@ -10,7 +10,10 @@
 # =============================================================================
 
 Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
+# NOTE: Do NOT set ErrorActionPreference=Stop globally — Docker writes build progress
+# to stderr which PowerShell would treat as a terminating error. Each critical
+# step checks $LASTEXITCODE explicitly via cmd /c instead.
+$ErrorActionPreference = "Continue"
 
 # =============================================================================
 # Helper: Extract-TunnelUrl
@@ -89,7 +92,8 @@ function Wait-DockerDaemon {
 # =============================================================================
 function Start-Services {
     Write-Host "[*] Build backend (apply migrations + code moi)..."
-    cmd /c "docker compose build backend"
+    # Dung cmd /c de absorb docker stderr (build progress) tranh PowerShell coi la loi
+    cmd /c "docker compose build backend 2>&1"
     if ($LASTEXITCODE -ne 0) {
         Write-Host "[ERROR] Khong the build backend. Chay thu: docker compose build backend"
         exit 1
@@ -167,7 +171,9 @@ function Update-EnvFile {
 
     $content = $content -replace '(?m)^VITE_API_BASE_URL=.*', "VITE_API_BASE_URL=$apiUrl"
     $content = $content -replace '(?m)^VITE_WS_URL=.*',       "VITE_WS_URL=$wsUrl"
-    $content = $content -replace '(?m)^CORS_ALLOWED_ORIGINS=.*', "CORS_ALLOWED_ORIGINS=$corsUrl"
+    # NOTE: CORS_ALLOWED_ORIGINS is intentionally NOT updated here.
+    # It is set to "*" in .env so it works regardless of Cloudflare tunnel URL rotation.
+    # JWT token validation on every request provides the actual security boundary.
 
     [System.IO.File]::WriteAllText((Resolve-Path $envFile).Path, $content, [System.Text.UTF8Encoding]::new($false))
 
@@ -200,12 +206,12 @@ function Build-Frontend {
     Write-Host "[*] Rebuild frontend container (no cache)..."
     # --no-cache dam bao VITE_* env vars (VITE_JAAS_APP_ID, VITE_API_BASE_URL, v.v.)
     # luon duoc bake vao Vite bundle moi, khong bi dung lai tu cache cu
-    cmd /c "docker compose build --no-cache frontend"
+    cmd /c "docker compose build --no-cache frontend 2>&1"
     if ($LASTEXITCODE -ne 0) {
         Write-Host "[ERROR] Khong the build frontend. Chay thu: docker compose build --no-cache frontend"
         exit 1
     }
-    cmd /c "docker compose up -d frontend"
+    cmd /c "docker compose up -d frontend 2>&1"
     if ($LASTEXITCODE -ne 0) {
         Write-Host "[ERROR] Khong the khoi dong frontend."
         exit 1

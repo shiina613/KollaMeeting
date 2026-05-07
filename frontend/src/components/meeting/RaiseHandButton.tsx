@@ -61,7 +61,7 @@ export default function RaiseHandButton({ meetingId, currentUserId }: RaiseHandB
     try {
       if (hasRaisedHand) {
         await lowerHand(meetingId)
-        // The WebSocket RAISE_HAND_CANCELLED event will update the store
+        // The WebSocket HAND_LOWERED event will update the store
       } else {
         await raiseHand(meetingId)
         // The WebSocket RAISE_HAND event will update the store

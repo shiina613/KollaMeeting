@@ -1,5 +1,6 @@
 package com.example.kolla.websocket;
 
+import com.example.kolla.enums.MeetingMode;
 import com.example.kolla.enums.MeetingStatus;
 import com.example.kolla.enums.Role;
 import com.example.kolla.models.Meeting;
@@ -11,6 +12,7 @@ import com.example.kolla.repositories.ParticipantSessionRepository;
 import com.example.kolla.repositories.UserRepository;
 import com.example.kolla.services.AttendanceService;
 import com.example.kolla.services.MeetingLifecycleService;
+import com.example.kolla.services.MeetingModeService;
 import com.example.kolla.services.SpeakingPermissionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,6 +50,8 @@ import java.util.Optional;
  *   <li>Notify {@link MeetingLifecycleService#onParticipantLeft} so the waiting
  *       timeout can be started if no Host/Secretary remains.</li>
  *   <li>Broadcast {@code PARTICIPANT_LEFT} to all meeting subscribers.</li>
+ *   <li>If meeting is in MEETING_MODE and both Host + Secretary are offline,
+ *       downgrade to FREE_MODE immediately (TASK-002).</li>
  * </ol>
  *
  * <p><b>Host authority transfer:</b> If the disconnected user is the Host and the
@@ -63,13 +67,14 @@ import java.util.Optional;
 public class HeartbeatMonitor {
 
     /** Seconds without a heartbeat before a session is considered stale. */
-    static final long HEARTBEAT_TIMEOUT_SECONDS = 10L;
+    static final long HEARTBEAT_TIMEOUT_SECONDS = 60L;
 
     private final ParticipantSessionRepository sessionRepository;
     private final AttendanceLogRepository attendanceLogRepository;
     private final MeetingRepository meetingRepository;
     private final UserRepository userRepository;
     private final MeetingLifecycleService meetingLifecycleService;
+    private final MeetingModeService meetingModeService;
     private final AttendanceService attendanceService;
     private final MeetingEventPublisher eventPublisher;
     private final Clock clock;
@@ -267,9 +272,38 @@ public class HeartbeatMonitor {
         Meeting meeting = meetingRepository.findById(meetingId).orElse(null);
         if (meeting != null && meeting.getStatus() == MeetingStatus.ACTIVE) {
             handleHostTransferIfNeeded(meeting, user);
+            // Step 6: If MEETING_MODE and both Host + Secretary offline, downgrade (TASK-002)
+            handleModeDowngradeIfNeeded(meeting);
         }
 
         log.info("Disconnect fallback complete: userId={} meetingId={}", userId, meetingId);
+    }
+
+    // ── Mode downgrade on both-offline (TASK-002) ─────────────────────────────────
+
+    /**
+     * If both Host and Secretary are offline and the meeting is in MEETING_MODE,
+     * downgrade to FREE_MODE immediately. (TASK-002)
+     */
+    private void handleModeDowngradeIfNeeded(Meeting meeting) {
+        if (meeting.getMode() != MeetingMode.MEETING_MODE) {
+            return; // Already FREE_MODE or no action needed
+        }
+
+        boolean hostOnline = meeting.getHost() != null
+                && sessionRepository.isUserConnected(meeting.getId(), meeting.getHost().getId());
+        boolean secretaryOnline = meeting.getSecretary() != null
+                && sessionRepository.isUserConnected(meeting.getId(), meeting.getSecretary().getId());
+
+        if (!hostOnline && !secretaryOnline) {
+            log.info("Both Host and Secretary offline in meeting id={}; downgrading to FREE_MODE (TASK-002)",
+                    meeting.getId());
+            try {
+                meetingModeService.switchModeInternal(meeting.getId(), MeetingMode.FREE_MODE);
+            } catch (Exception e) {
+                log.warn("Failed to downgrade mode for meeting id={}: {}", meeting.getId(), e.getMessage());
+            }
+        }
     }
 
     // ── Host authority transfer ─────────────────────────────────────────────

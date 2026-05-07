@@ -24,7 +24,7 @@ ENV VITE_JAAS_APP_ID=$VITE_JAAS_APP_ID
 # Copy source and build
 COPY . .
 
-RUN npx vite build
+RUN npm run build
 
 # ── Stage 2: Serve ─────────────────────────────────────────────────────────
 FROM nginx:1.25-alpine
@@ -50,6 +50,6 @@ RUN printf 'server {\n\
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:3000/ || exit 1
+    CMD wget -qO- http://localhost:3000/ || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]

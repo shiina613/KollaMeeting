@@ -11,8 +11,6 @@
  */
 
 import { useEffect, useRef } from 'react'
-import useTranscription from '../../hooks/useTranscription'
-import useMeetingStore from '../../store/meetingStore'
 import type { TranscriptionSegment } from '../../utils/audioUtils'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -20,6 +18,12 @@ import type { TranscriptionSegment } from '../../utils/audioUtils'
 export interface TranscriptionPanelProps {
   meetingId: number
   isHighPriority: boolean
+  /** Sorted transcription segments — passed from MeetingRoom's useTranscription instance.
+   *  Must NOT be read from a separate useTranscription() call inside this component,
+   *  which would create an isolated instance that never receives events. */
+  segments: TranscriptionSegment[]
+  /** Whether the Gipformer service is currently available. */
+  isTranscriptionAvailable: boolean
 }
 
 // ─── Speaker block (consecutive segments from the same speaker turn) ──────────
@@ -89,35 +93,46 @@ interface SpeakerBlockCardProps {
 function SpeakerBlockCard({ block, isLast }: SpeakerBlockCardProps) {
   const text = block.segments.map((s) => s.text).join(' ')
   const firstSegment = block.segments[0]
-  const time = new Date(firstSegment.segmentStartTime).toLocaleTimeString('vi-VN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    timeZone: 'Asia/Ho_Chi_Minh',
-  })
+
+  // Normalize segmentStartTime:
+  // Java ZonedDateTime.toString() produces e.g. "2026-05-07T17:10:41+07:00[Asia/Ho_Chi_Minh]"
+  // Strip the trailing [Zone/ID] part, then append +07:00 if still no offset.
+  const rawTime = (firstSegment.segmentStartTime ?? '').replace(/\[.*\]$/, '').trim()
+  const normalizedTime = /[Z]$|[+-]\d{2}:\d{2}$/.test(rawTime)
+    ? rawTime
+    : rawTime + '+07:00'
+  const time = normalizedTime
+    ? new Date(normalizedTime).toLocaleTimeString('vi-VN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        timeZone: 'Asia/Ho_Chi_Minh',
+      })
+    : '--:--:--'
+
+  // Format: "Tên - Phòng ban - UserId (2 digits)"
+  const userId = String(firstSegment.speakerId).padStart(2, '0')
+  const dept = firstSegment.speakerDept?.trim()
+  const speakerInfo = dept
+    ? `${block.speakerName} - ${dept} - ${userId}`
+    : `${block.speakerName} - ${userId}`
 
   return (
     <div
-      className={`px-4 py-3 ${isLast ? '' : 'border-b border-outline-variant'}`}
+      className={`px-3 py-2.5 ${isLast ? '' : 'border-b border-outline-variant'}`}
       data-testid="transcription-segment-block"
       data-speaker-turn-id={block.speakerTurnId}
     >
-      {/* Speaker name + timestamp */}
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-label-sm font-semibold text-primary truncate max-w-[70%]">
-          {block.speakerName}
-        </span>
-        <span className="text-label-sm text-on-surface-variant shrink-0 ml-2">
-          {time}
-        </span>
-      </div>
-      {/* Transcription text */}
-      <p className="text-body-sm text-on-surface leading-relaxed">
-        {text}
+      {/* Format: Tên - Phòng - UserId: Nội dung <HH:MM:SS> */}
+      <p className="text-body-sm text-on-surface leading-relaxed break-words">
+        <span className="font-semibold text-primary">{speakerInfo}:</span>
+        <span className="text-on-surface"> {text} </span>
+        <span className="text-on-surface-variant font-mono text-label-sm">&lt;{time}&gt;</span>
       </p>
     </div>
   )
 }
+
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -126,20 +141,32 @@ function SpeakerBlockCard({ block, isLast }: SpeakerBlockCardProps) {
  *
  * Requirements: 8.12, 8.13
  */
-export default function TranscriptionPanel({ meetingId: _meetingId, isHighPriority }: TranscriptionPanelProps) {
+export default function TranscriptionPanel({
+  meetingId: _meetingId,
+  isHighPriority,
+  segments,
+  isTranscriptionAvailable,
+}: TranscriptionPanelProps) {
   // Only render for HIGH_PRIORITY meetings (Req 8.13)
   if (!isHighPriority) return null
 
-  return <TranscriptionPanelInner />
+  return (
+    <TranscriptionPanelInner
+      segments={segments}
+      isTranscriptionAvailable={isTranscriptionAvailable}
+    />
+  )
 }
 
 /**
  * Inner component — separated so the hook is only called when isHighPriority is true.
- * This avoids running the transcription hook for NORMAL_PRIORITY meetings.
+ * Receives segments and availability from the parent to avoid creating a separate
+ * hook instance that would never receive events.
  */
-function TranscriptionPanelInner() {
-  const { isTranscriptionAvailable } = useMeetingStore()
-  const { segments } = useTranscription()
+function TranscriptionPanelInner({
+  segments,
+  isTranscriptionAvailable,
+}: Pick<TranscriptionPanelProps, 'segments' | 'isTranscriptionAvailable'>) {
 
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -196,15 +223,6 @@ function TranscriptionPanelInner() {
           ))
         )}
       </div>
-
-      {/* Footer: segment count */}
-      {!isEmpty && (
-        <div className="px-4 py-2 border-t border-outline-variant shrink-0">
-          <p className="text-label-sm text-on-surface-variant">
-            {segments.length} đoạn phiên âm
-          </p>
-        </div>
-      )}
     </div>
   )
 }

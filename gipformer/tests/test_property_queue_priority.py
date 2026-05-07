@@ -33,7 +33,7 @@ import importlib.util
 # by its file path to avoid the naming conflict.
 _redis_queue_path = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "queue", "redis_queue.py"
+    "job_queue", "redis_queue.py"
 )
 _spec = importlib.util.spec_from_file_location("gipformer_redis_queue", _redis_queue_path)
 _redis_queue_mod = importlib.util.module_from_spec(_spec)

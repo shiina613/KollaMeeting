@@ -26,6 +26,8 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.font.PDFont;
+import org.apache.pdfbox.pdmodel.font.PDType0Font;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.jsoup.Jsoup;
@@ -35,10 +37,12 @@ import org.jsoup.select.Elements;
 import org.springframework.core.io.Resource;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -91,7 +95,13 @@ public class MinutesServiceImpl implements MinutesService {
      * Requirements: 25.1–25.3
      */
     @Override
-    @Transactional
+    // REQUIRES_NEW: run in a separate transaction so that a failure here
+    // (e.g. PDF font error, IO error) does NOT contaminate the caller's
+    // transaction (endMeeting / processExpiredWaitingTimeouts).
+    // Without this, an exception inside compileDraftMinutes marks the outer
+    // @Transactional as rollback-only, causing UnexpectedRollbackException
+    // even when the caller has a try-catch around this call.
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void compileDraftMinutes(Meeting meeting) throws IOException {
         Long meetingId = meeting.getId();
 
@@ -388,8 +398,10 @@ public class MinutesServiceImpl implements MinutesService {
         try (PDDocument doc = new PDDocument();
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
 
-            PDType1Font fontBold = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
-            PDType1Font fontRegular = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+            // Use Roboto (PDType0Font) for full Unicode / Vietnamese support.
+            // Helvetica is WinAnsiEncoding only and cannot render Vietnamese characters.
+            PDFont fontBold    = loadFont(doc, "/fonts/Roboto-Bold.ttf");
+            PDFont fontRegular = loadFont(doc, "/fonts/Roboto-Regular.ttf");
 
             // Build lines to render
             List<String> lines = buildTranscriptLines(meeting, segments);
@@ -496,8 +508,8 @@ public class MinutesServiceImpl implements MinutesService {
      */
     private void renderLinesToDocument(PDDocument doc,
                                         List<String> lines,
-                                        PDType1Font fontBold,
-                                        PDType1Font fontRegular) throws IOException {
+                                        PDFont fontBold,
+                                        PDFont fontRegular) throws IOException {
 
         PDPage page = new PDPage(PDRectangle.A4);
         doc.addPage(page);
@@ -518,7 +530,7 @@ public class MinutesServiceImpl implements MinutesService {
                     : isSpeaker ? FONT_SIZE_HEADING
                     : FONT_SIZE_BODY;
             float lineHeight = (isTitle || isSpeaker) ? LINE_HEIGHT_HEADING : LINE_HEIGHT_BODY;
-            PDType1Font font = (isTitle || isSpeaker) ? fontBold : fontRegular;
+            PDFont font = (isTitle || isSpeaker) ? fontBold : fontRegular;
 
             // Check if we need a new page
             if (yPos - lineHeight < MARGIN) {
@@ -533,9 +545,7 @@ public class MinutesServiceImpl implements MinutesService {
                 cs.beginText();
                 cs.setFont(font, fontSize);
                 cs.newLineAtOffset(MARGIN, yPos);
-                // Sanitize: PDFBox Type1 fonts only support Latin-1; replace non-Latin chars
-                String safeLine = sanitizeForPdf(line);
-                cs.showText(safeLine);
+                cs.showText(line);
                 cs.endText();
             }
 
@@ -556,8 +566,8 @@ public class MinutesServiceImpl implements MinutesService {
         try (PDDocument doc = Loader.loadPDF(originalPdfBytes);
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
 
-            PDType1Font fontBold = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
-            PDType1Font fontRegular = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+            PDFont fontBold = loadFont(doc, "/fonts/Roboto-Bold.ttf");
+            PDFont fontRegular = loadFont(doc, "/fonts/Roboto-Regular.ttf");
 
             // Add a new page for the confirmation stamp
             PDPage stampPage = new PDPage(PDRectangle.A4);
@@ -579,7 +589,7 @@ public class MinutesServiceImpl implements MinutesService {
                 cs.beginText();
                 cs.setFont(fontRegular, FONT_SIZE_BODY);
                 cs.newLineAtOffset(MARGIN, yPos);
-                cs.showText(sanitizeForPdf(stampText));
+                cs.showText(stampText);
                 cs.endText();
                 yPos -= LINE_HEIGHT_BODY * 2;
 
@@ -625,8 +635,8 @@ public class MinutesServiceImpl implements MinutesService {
         try (PDDocument doc = new PDDocument();
              ByteArrayOutputStream out = new ByteArrayOutputStream()) {
 
-            PDType1Font fontBold = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
-            PDType1Font fontRegular = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+            PDFont fontBold = loadFont(doc, "/fonts/Roboto-Bold.ttf");
+            PDFont fontRegular = loadFont(doc, "/fonts/Roboto-Regular.ttf");
 
             renderLinesToDocument(doc, lines, fontBold, fontRegular);
 
@@ -684,23 +694,17 @@ public class MinutesServiceImpl implements MinutesService {
     }
 
     /**
-     * Replace non-Latin-1 characters with '?' for PDFBox Type1 font compatibility.
-     * Vietnamese characters (outside Latin-1) are transliterated to ASCII approximations.
+     * Load a TrueType font from the classpath.
+     * Uses PDType0Font which supports full Unicode including Vietnamese characters.
      */
-    private String sanitizeForPdf(String text) {
-        if (text == null) {
-            return "";
-        }
-        StringBuilder sb = new StringBuilder(text.length());
-        for (char c : text.toCharArray()) {
-            if (c < 256) {
-                sb.append(c);
-            } else {
-                // Replace non-Latin-1 with '?'
-                sb.append('?');
+    private PDFont loadFont(PDDocument doc, String classpathPath) throws IOException {
+        try (InputStream fontStream = getClass().getResourceAsStream(classpathPath)) {
+            if (fontStream == null) {
+                log.warn("Font not found at classpath:{}, falling back to Helvetica", classpathPath);
+                return new PDType1Font(Standard14Fonts.FontName.HELVETICA);
             }
+            return PDType0Font.load(doc, fontStream);
         }
-        return sb.toString();
     }
 
     /**

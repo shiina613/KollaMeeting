@@ -9,7 +9,7 @@ import com.example.kolla.responses.MeetingResponse;
  *
  * <p>Mode switch rules:
  * <ul>
- *   <li>Only the Host (or ADMIN) may switch modes.</li>
+ *   <li>Only the Host may switch modes. (ADMIN authority removed — TASK-001)</li>
  *   <li>Switching to MEETING_MODE: mutes all participants via WebSocket event.</li>
  *   <li>Switching to FREE_MODE: finalizes any active audio chunk, pushes it to
  *       the Redis queue, revokes speaking permission, then broadcasts the mode change.
@@ -42,6 +42,14 @@ public interface MeetingModeService {
      * Requirements: 21.1–21.10
      */
     MeetingResponse switchMode(Long meetingId, MeetingMode targetMode, User requester);
+
+    /**
+     * Switch mode without a requester permission check.
+     * Used for system-initiated transitions (e.g., Host + Secretary both disconnect).
+     * Must NOT be exposed via REST.
+     * (TASK-002)
+     */
+    void switchModeInternal(Long meetingId, MeetingMode mode);
 
     /**
      * Get the current mode of an active meeting.

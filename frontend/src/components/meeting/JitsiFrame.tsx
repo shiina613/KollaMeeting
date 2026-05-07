@@ -31,6 +31,8 @@ const SCRIPT_SRC = IS_JAAS
 export interface JitsiFrameHandle {
   mute: () => void
   unmute: () => void
+  muteLocal: () => void
+  unmuteLocal: () => void
   muteAll: () => void
   isReady: boolean
 }
@@ -43,28 +45,34 @@ export interface JitsiFrameProps {
   onParticipantJoined?: (event: JitsiParticipantEvent) => void
   onParticipantLeft?: (event: JitsiParticipantEvent) => void
   onVideoConferenceLeft?: () => void
+  /** Fired when local user's mic mute state changes. `isMuted=false` = mic is ON. */
+  onAudioMuteStatusChanged?: (isMuted: boolean) => void
   className?: string
 }
 
 // Extend window for JitsiMeetExternalAPI
+interface JitsiAPI {
+  executeCommand: (cmd: string, ...args: unknown[]) => void
+  dispose: () => void
+  addEventListeners: (listeners: Record<string, (e: unknown) => void>) => void
+  isAudioMuted: () => Promise<boolean>
+}
+
 declare global {
   interface Window {
-    JitsiMeetExternalAPI?: new (domain: string, options: object) => {
-      executeCommand: (cmd: string, ...args: unknown[]) => void
-      dispose: () => void
-      addEventListeners: (listeners: Record<string, (e: unknown) => void>) => void
-    }
+    JitsiMeetExternalAPI?: new (domain: string, options: object) => JitsiAPI
   }
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const JitsiFrame = forwardRef<JitsiFrameHandle, JitsiFrameProps>(
-  function JitsiFrame({ meetingCode, displayName, jwt, onVideoConferenceLeft, className = '' }, ref) {
+  function JitsiFrame({ meetingCode, displayName, jwt, onVideoConferenceLeft, onAudioMuteStatusChanged, className = '' }, ref) {
     const containerRef = useRef<HTMLDivElement>(null)
-    const apiRef = useRef<ReturnType<NonNullable<typeof window.JitsiMeetExternalAPI>> | null>(null)
+    const apiRef = useRef<JitsiAPI | null>(null)
     const [isReady, setIsReady] = useState(false)
     const [scriptError, setScriptError] = useState(false)
+    const onAudioMuteStatusChangedRef = useRef(onAudioMuteStatusChanged)
 
     const [scriptLoaded, setScriptLoaded] = useState(false)
 
@@ -117,7 +125,8 @@ const JitsiFrame = forwardRef<JitsiFrameHandle, JitsiFrameProps>(
         height: '100%',
         userInfo: { displayName },
         configOverwrite: {
-          startWithAudioMuted: false,
+          // Always start muted — meeting mode and permission system control when mic is on.
+          startWithAudioMuted: true,
           disableDeepLinking: true,
           prejoinPageEnabled: false,
           disableInviteFunctions: true,
@@ -141,6 +150,11 @@ const JitsiFrame = forwardRef<JitsiFrameHandle, JitsiFrameProps>(
       api.addEventListeners({
         videoConferenceJoined: () => setIsReady(true),
         videoConferenceLeft: () => onVideoConferenceLeft?.(),
+        audioMuteStatusChanged: (data: unknown) => {
+          const { muted } = data as { muted: boolean }
+          // Use ref so we always call the latest callback without re-initialising Jitsi
+          onAudioMuteStatusChangedRef.current?.(muted)
+        },
       })
 
       // Fallback: hide loading overlay after 8s regardless of event
@@ -153,11 +167,35 @@ const JitsiFrame = forwardRef<JitsiFrameHandle, JitsiFrameProps>(
       }
     }, [scriptLoaded, meetingCode, displayName, jwt, onVideoConferenceLeft])
 
-    // Expose controls
     useImperativeHandle(ref, () => ({
       mute: () => apiRef.current?.executeCommand('toggleAudio'),
       unmute: () => apiRef.current?.executeCommand('toggleAudio'),
-      muteAll: () => apiRef.current?.executeCommand('muteEveryone', 'audio'),
+      muteLocal: () => {
+        // Only toggle if currently unmuted — prevents accidental unmuting
+        apiRef.current?.isAudioMuted().then((muted: boolean) => {
+          if (!muted) {
+            apiRef.current?.executeCommand('toggleAudio')
+          }
+        }).catch(() => { /* ignore */ })
+      },
+      unmuteLocal: () => {
+        // Only toggle if currently muted — prevents accidental muting
+        apiRef.current?.isAudioMuted().then((muted: boolean) => {
+          if (muted) {
+            apiRef.current?.executeCommand('toggleAudio')
+          }
+        }).catch(() => { /* ignore */ })
+      },
+      muteAll: () => {
+        // muteEveryone only mutes remote participants, so also mute self
+        apiRef.current?.executeCommand('muteEveryone', 'audio')
+        // Mute local user as well
+        apiRef.current?.isAudioMuted().then((muted: boolean) => {
+          if (!muted) {
+            apiRef.current?.executeCommand('toggleAudio')
+          }
+        }).catch(() => { /* ignore */ })
+      },
       isReady,
     }), [isReady])
 

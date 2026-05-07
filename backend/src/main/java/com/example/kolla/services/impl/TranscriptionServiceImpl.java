@@ -10,20 +10,26 @@ import com.example.kolla.models.TranscriptionSegment;
 import com.example.kolla.repositories.MeetingRepository;
 import com.example.kolla.repositories.TranscriptionJobRepository;
 import com.example.kolla.repositories.TranscriptionSegmentRepository;
+import com.example.kolla.responses.AudioJobResponse;
 import com.example.kolla.responses.TranscriptionSegmentResponse;
 import com.example.kolla.services.TranscriptionService;
 import com.example.kolla.websocket.MeetingEventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -109,8 +115,10 @@ public class TranscriptionServiceImpl implements TranscriptionService {
             ZonedDateTime segmentStartZoned = segmentStartTime.atZone(ZONE);
             meetingEventPublisher.publishTranscriptionSegment(
                     meeting.getId(),
+                    jobId,
                     job.getSpeakerId(),
                     job.getSpeakerName(),
+                    job.getSpeakerDept() != null ? job.getSpeakerDept() : "",
                     job.getSpeakerTurnId(),
                     job.getSequenceNumber(),
                     request.getText(),
@@ -135,6 +143,65 @@ public class TranscriptionServiceImpl implements TranscriptionService {
                 .stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<AudioJobResponse> getAudioJobsForMeeting(Long meetingId) {
+        if (!meetingRepository.existsById(meetingId)) {
+            throw new ResourceNotFoundException("Meeting not found: " + meetingId);
+        }
+
+        // Build a map of jobId → segment text/confidence for completed jobs
+        Map<String, TranscriptionSegment> segmentByJobId =
+                transcriptionSegmentRepository.findByMeetingIdOrderedForMinutes(meetingId)
+                        .stream()
+                        .collect(Collectors.toMap(TranscriptionSegment::getJobId,
+                                                  s -> s,
+                                                  (a, b) -> a)); // keep first on duplicate
+
+        return transcriptionJobRepository.findByMeetingIdOrdered(meetingId)
+                .stream()
+                .map(job -> {
+                    TranscriptionSegment seg = segmentByJobId.get(job.getId());
+                    return AudioJobResponse.builder()
+                            .jobId(job.getId())
+                            .speakerName(job.getSpeakerName())
+                            .speakerDept(job.getSpeakerDept())
+                            .speakerTurnId(job.getSpeakerTurnId())
+                            .sequenceNumber(job.getSequenceNumber())
+                            .status(job.getStatus().name())
+                            .createdAt(job.getCreatedAt() != null
+                                    ? job.getCreatedAt().atZone(ZONE).toString()
+                                    : null)
+                            .text(seg != null ? seg.getText() : null)
+                            .confidence(seg != null ? seg.getConfidence() : null)
+                            .build();
+                })
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public Resource getAudioResource(Long meetingId, String jobId) {
+        TranscriptionJob job = transcriptionJobRepository.findById(jobId)
+                .orElseThrow(() -> new ResourceNotFoundException("Job not found: " + jobId));
+
+        // Validate job belongs to the requested meeting
+        if (!job.getMeeting().getId().equals(meetingId)) {
+            throw new ResourceNotFoundException("Job " + jobId + " does not belong to meeting " + meetingId);
+        }
+
+        String audioPath = job.getAudioPath();
+        if (audioPath == null || audioPath.isBlank()) {
+            throw new ResourceNotFoundException("No audio file for job: " + jobId);
+        }
+
+        Path filePath = Paths.get(audioPath);
+        Resource resource = new FileSystemResource(filePath);
+        if (!resource.exists() || !resource.isReadable()) {
+            throw new ResourceNotFoundException("Audio file not found or not readable: " + audioPath);
+        }
+
+        return resource;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

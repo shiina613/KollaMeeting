@@ -1,14 +1,16 @@
 /**
- * MinutesViewer — displays a PDF viewer (iframe) for a specific minutes version.
+ * MinutesViewer — displays a PDF inline for a specific minutes version.
  *
- * - Shows the PDF in an iframe using the authenticated download URL
- * - Shows a placeholder message if the version is not yet available
+ * Strategy: fetch the PDF via axios (so the JWT auth header is included
+ * automatically), convert to a blob object URL, then embed in an <iframe>.
+ * This avoids X-Frame-Options issues caused by direct API URLs being
+ * redirected to the Cloudflare landing page when auth fails.
  *
  * Requirements: 25.6
  */
 
-import { useMemo } from 'react'
-import { getMinutesDownloadUrl } from '../../services/minutesService'
+import { useEffect, useState, useRef } from 'react'
+import api from '../../services/api'
 import type { MinutesStatus, MinutesVersion } from '../../types/minutes'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -21,16 +23,10 @@ export interface MinutesViewerProps {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/**
- * Determine whether a given version is available based on the current status.
- * - draft: always available once minutes exist (status is at least DRAFT)
- * - confirmed: available when status is HOST_CONFIRMED or SECRETARY_CONFIRMED
- * - secretary: available only when status is SECRETARY_CONFIRMED
- */
 function isVersionAvailable(version: MinutesVersion, status: MinutesStatus): boolean {
   switch (version) {
     case 'draft':
-      return true // DRAFT status means draft PDF exists
+      return true
     case 'confirmed':
       return status === 'HOST_CONFIRMED' || status === 'SECRETARY_CONFIRMED'
     case 'secretary':
@@ -57,24 +53,84 @@ const UNAVAILABLE_MESSAGES: Record<MinutesVersion, string> = {
 /**
  * MinutesViewer
  *
- * Renders an iframe with the PDF for the given version, or a placeholder
- * message if the version is not yet available.
+ * Fetches the PDF via axios (with JWT auth header) and renders it as a blob
+ * object URL inside an <iframe>. Shows loading / error / unavailable states.
  *
  * Requirements: 25.6
  */
 export default function MinutesViewer({ meetingId, version, status }: MinutesViewerProps) {
   const available = isVersionAvailable(version, status)
-
-  const pdfUrl = useMemo(() => {
-    if (!available) return null
-    return getMinutesDownloadUrl(meetingId, version)
-  }, [available, meetingId, version])
-
   const label = VERSION_LABELS[version]
 
-  // ── Unavailable state ──────────────────────────────────────────────────────
+  const [blobUrl, setBlobUrl] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  if (!available || !pdfUrl) {
+  // Track previous blob URL to revoke it on unmount / re-fetch
+  const prevBlobRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!available) return
+
+    let cancelled = false
+
+    const fetchPdf = async () => {
+      setLoading(true)
+      setError(null)
+      setBlobUrl(null)
+
+      try {
+        const response = await api.get<Blob>(
+          `/meetings/${meetingId}/minutes/download`,
+          {
+            params: { version, inline: true },
+            responseType: 'blob',
+          },
+        )
+
+        if (cancelled) return
+
+        const blob = new Blob([response.data], { type: 'application/pdf' })
+        const url = URL.createObjectURL(blob)
+
+        // Revoke previous blob URL to free memory
+        if (prevBlobRef.current) {
+          URL.revokeObjectURL(prevBlobRef.current)
+        }
+        prevBlobRef.current = url
+        setBlobUrl(url)
+      } catch (err: unknown) {
+        if (cancelled) return
+        const status = (err as { response?: { status?: number } })?.response?.status
+        if (status === 404) {
+          setError('Biên bản chưa được tạo hoặc đã xảy ra lỗi khi tạo biên bản.')
+        } else {
+          setError('Không thể tải biên bản. Vui lòng thử lại sau.')
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    fetchPdf()
+
+    return () => {
+      cancelled = true
+    }
+  }, [available, meetingId, version])
+
+  // Revoke blob URL on unmount
+  useEffect(() => {
+    return () => {
+      if (prevBlobRef.current) {
+        URL.revokeObjectURL(prevBlobRef.current)
+      }
+    }
+  }, [])
+
+  // ── Version not yet available ───────────────────────────────────────────────
+
+  if (!available) {
     return (
       <div
         className="flex flex-col items-center justify-center h-64 rounded-lg border border-dashed border-outline-variant bg-surface-variant/30 text-on-surface-variant"
@@ -89,7 +145,43 @@ export default function MinutesViewer({ meetingId, version, status }: MinutesVie
     )
   }
 
-  // ── PDF iframe ─────────────────────────────────────────────────────────────
+  // ── Loading ─────────────────────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <div
+        className="flex flex-col items-center justify-center h-64 rounded-lg border border-outline-variant bg-surface-variant/30 text-on-surface-variant"
+        data-testid={`minutes-viewer-loading-${version}`}
+        aria-label={`Đang tải ${label}...`}
+        aria-busy="true"
+      >
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-3" />
+        <p className="text-body-sm">Đang tải biên bản...</p>
+      </div>
+    )
+  }
+
+  // ── Error ───────────────────────────────────────────────────────────────────
+
+  if (error) {
+    return (
+      <div
+        className="flex flex-col items-center justify-center h-64 rounded-lg border border-dashed border-error/40 bg-error-container/20 text-error"
+        data-testid={`minutes-viewer-error-${version}`}
+        role="alert"
+        aria-label={`Lỗi khi tải ${label}`}
+      >
+        <span className="material-symbols-outlined text-4xl mb-2" aria-hidden="true">
+          error_outline
+        </span>
+        <p className="text-body-sm text-center px-4">{error}</p>
+      </div>
+    )
+  }
+
+  // ── PDF iframe ──────────────────────────────────────────────────────────────
+
+  if (!blobUrl) return null
 
   return (
     <div
@@ -97,7 +189,7 @@ export default function MinutesViewer({ meetingId, version, status }: MinutesVie
       data-testid={`minutes-viewer-${version}`}
     >
       <iframe
-        src={pdfUrl}
+        src={blobUrl}
         title={`Biên bản cuộc họp — ${label}`}
         className="w-full h-[600px] border-0"
         aria-label={`Xem ${label} biên bản cuộc họp`}

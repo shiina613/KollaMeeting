@@ -57,6 +57,11 @@ export interface UseJitsiApiOptions {
   onParticipantLeft?: (event: JitsiParticipantEvent) => void
   /** Called when the local user leaves the video conference */
   onVideoConferenceLeft?: () => void
+  /**
+   * Called when the LOCAL user's audio mute state changes.
+   * `isMuted=false` means mic is ON (audio is live).
+   */
+  onAudioMuteStatusChanged?: (isMuted: boolean) => void
 }
 
 export interface UseJitsiApiReturn {
@@ -68,6 +73,8 @@ export interface UseJitsiApiReturn {
   mute: () => void
   /** Unmute the local user's microphone */
   unmute: () => void
+  /** Mute the local user (alias for mute, for clarity) */
+  muteLocal: () => void
   /** Mute all participants (Host action) */
   muteAll: () => void
   /** Unmute a specific participant by their Jitsi participant ID */
@@ -145,7 +152,9 @@ export function useJitsiApi({
   onParticipantJoined,
   onParticipantLeft,
   onVideoConferenceLeft,
+  onAudioMuteStatusChanged,
 }: UseJitsiApiOptions): UseJitsiApiReturn {
+  const onAudioMuteStatusChangedRef = useRef(onAudioMuteStatusChanged)
   const apiRef = useRef<JitsiMeetExternalAPI | null>(null)
   const [isReady, setIsReady] = useState(false)
   const [loadingStatus, setLoadingStatus] = useState('Đang tải Jitsi...')
@@ -160,6 +169,7 @@ export function useJitsiApi({
   useEffect(() => { onParticipantJoinedRef.current = onParticipantJoined }, [onParticipantJoined])
   useEffect(() => { onParticipantLeftRef.current = onParticipantLeft }, [onParticipantLeft])
   useEffect(() => { onVideoConferenceLeftRef.current = onVideoConferenceLeft }, [onVideoConferenceLeft])
+  useEffect(() => { onAudioMuteStatusChangedRef.current = onAudioMuteStatusChanged }, [onAudioMuteStatusChanged])
 
   // ── Initialise Jitsi ───────────────────────────────────────────────────────
 
@@ -192,7 +202,8 @@ export function useJitsiApi({
             ...(avatarUrl ? { avatarUrl } : {}),
           },
           configOverwrite: {
-            startWithAudioMuted: false,
+            // Always start muted — user/permission system controls when mic turns on.
+            startWithAudioMuted: true,
             startWithVideoMuted: false,
             disableDeepLinking: true,
           },
@@ -212,7 +223,7 @@ export function useJitsiApi({
           options.jwt = jwt
         }
 
-        const api: JitsiMeetExternalAPI = new JitsiAPI(domain, options)
+        const api: JitsiMeetExternalAPI = new JitsiAPI(JITSI_URL, options)
         apiRef.current = api
 
         // ── Event listeners ──────────────────────────────────────────────────
@@ -232,6 +243,13 @@ export function useJitsiApi({
         api.addEventListener('videoConferenceLeft', () => {
           if (!isMountedRef.current) return
           onVideoConferenceLeftRef.current?.()
+        })
+
+        // Track local mic state changes — used to start/stop audio capture for STT
+        api.addEventListener('audioMuteStatusChanged', (data: unknown) => {
+          if (!isMountedRef.current) return
+          const { muted } = data as { muted: boolean }
+          onAudioMuteStatusChangedRef.current?.(muted)
         })
 
         // Mark ready when Jitsi has actually joined the conference
@@ -322,6 +340,7 @@ export function useJitsiApi({
     loadingStatus,
     mute,
     unmute,
+    muteLocal: mute,
     muteAll,
     unmuteParticipant,
     apiRef,

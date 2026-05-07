@@ -104,6 +104,10 @@ public class MeetingServiceImpl implements MeetingService {
                 .host(host)
                 .secretary(secretary)
                 .status(MeetingStatus.SCHEDULED)
+                .transcriptionPriority(
+                        request.getTranscriptionPriority() != null
+                                ? request.getTranscriptionPriority()
+                                : com.example.kolla.enums.TranscriptionPriority.NORMAL_PRIORITY)
                 .build();
 
         Meeting saved = meetingRepository.save(meeting);
@@ -231,6 +235,15 @@ public class MeetingServiceImpl implements MeetingService {
                 throw new BadRequestException("Secretary must have SECRETARY role");
             }
             meeting.setSecretary(secretary);
+        }
+
+        // Transcription priority update (only while SCHEDULED)
+        if (request.getTranscriptionPriority() != null) {
+            if (meeting.getStatus() == MeetingStatus.ACTIVE) {
+                throw new BadRequestException(
+                        "Transcription priority cannot be changed while the meeting is active");
+            }
+            meeting.setTranscriptionPriority(request.getTranscriptionPriority());
         }
 
         Meeting saved = meetingRepository.save(meeting);
