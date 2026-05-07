@@ -201,7 +201,23 @@ private long getSilenceThreshold(int voicedBytes) { ... }
 
 /** Reset buffer + voiced counter + silence timer cho session. */
 private void resetSessionBuffer(String sessionId) { ... }
+
+/** Gửi thông báo flush ngược lại frontend qua WebSocket. */
+private void sendFlushNotification(WebSocketSession session, int seqNum, int voicedMs) {
+    try {
+        String json = String.format(
+            "{\"type\":\"CHUNK_FLUSHED\",\"seqNum\":%d,\"voicedMs\":%d}",
+            seqNum, voicedMs
+        );
+        session.sendMessage(new TextMessage(json));
+    } catch (IOException e) {
+        log.warn("AudioStream: failed to send flush notification: {}", e.getMessage());
+    }
+}
 ```
+
+> `flushBuffer()` cần gọi `sendFlushNotification()` sau khi tạo job thành công,
+> truyền `seqNum` và số ms voiced audio đã flush.
 
 ---
 
@@ -209,10 +225,24 @@ private void resetSessionBuffer(String sessionId) { ... }
 
 | File | Loại thay đổi |
 |------|--------------|
-| `backend/src/main/java/com/example/kolla/websocket/AudioStreamHandler.java` | Sửa chính: thêm VAD, adaptive flush, hard cap mới |
+| `backend/src/main/java/com/example/kolla/websocket/AudioStreamHandler.java` | Sửa chính: thêm VAD, adaptive flush, hard cap mới, gửi flush notification |
+| `frontend/src/hooks/useAudioCapture.ts` | ✅ Đã thêm `ws.onmessage` handler log `CHUNK_FLUSHED` |
 
-> Không cần sửa Gipformer, Frontend, hoặc các service khác.
-> `faster-whisper` đã có `vad_filter=True` server-side — đây là tầng lọc bổ sung độc lập.
+---
+
+## Flush notification protocol
+
+**Backend → Frontend** (sau mỗi lần flush thành công):
+```json
+{ "type": "CHUNK_FLUSHED", "seqNum": 2, "voicedMs": 12400 }
+```
+
+**Frontend console.log**:
+```
+[AudioCapture] 🟢 Chunk flushed — seq #2, voiced: 12.4s
+```
+
+Frontend nhận message này trong WebSocket `onmessage`, phân biệt với các message text khác bằng field `type`.
 
 ---
 

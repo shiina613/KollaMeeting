@@ -77,8 +77,35 @@ public class AudioStreamHandler extends AbstractWebSocketHandler {
     private static final int FRAME_SIZE = CHANNELS * (SAMPLE_SIZE_BITS / 8); // 2 bytes
     private static final boolean BIG_ENDIAN = false; // PCM LE
 
-    /** Maximum accumulated PCM bytes before auto-flush (30 s hard cap). */
-    private static final int MAX_BUFFER_BYTES = SAMPLE_RATE * FRAME_SIZE * 30; // 960 000 bytes
+    /** Hard cap Normal meeting: 10 phút voiced audio. */
+    private static final int NORMAL_MAX_VOICED_BYTES  = SAMPLE_RATE * FRAME_SIZE * 600;
+
+    /** Hard cap Priority meeting: 3 phút voiced audio. */
+    private static final int PRIORITY_MAX_VOICED_BYTES = SAMPLE_RATE * FRAME_SIZE * 180;
+
+    /** Ngưỡng RMS (PCM Int16, scale 0–32767) để phân biệt voice/silence. */
+    private static final double VAD_ENERGY_THRESHOLD  = 300.0;
+
+    /** Silence threshold (ms) cho Normal meeting — cố định. */
+    private static final long NORMAL_SILENCE_MS       = 2_500;
+
+    /** Silence threshold (ms) — Priority meeting, voiced ≤ 15s. */
+    private static final long PRIORITY_SILENCE_P1_MS  = 1_500;
+
+    /** Silence threshold (ms) — Priority meeting, voiced 15–30s. */
+    private static final long PRIORITY_SILENCE_P2_MS  =   800;
+
+    /** Silence threshold (ms) — Priority meeting, voiced > 30s (flush ngay). */
+    private static final long PRIORITY_SILENCE_P3_MS  =   300;
+
+    /** Voiced bytes tương đương 15s (boundary phase 1→2). */
+    private static final int PRIORITY_PHASE1_BYTES    = SAMPLE_RATE * FRAME_SIZE * 15;
+
+    /** Voiced bytes tương đương 30s (boundary phase 2→3). */
+    private static final int PRIORITY_PHASE2_BYTES    = SAMPLE_RATE * FRAME_SIZE * 30;
+
+    /** Tối thiểu voiced bytes trước khi cho phép auto-flush (1.5s). */
+    private static final int MIN_CHUNK_VOICED_BYTES   = SAMPLE_RATE * FRAME_SIZE * 3 / 2;
 
     private static final String FINALIZE_COMMAND = "FINALIZE";
 
@@ -95,7 +122,7 @@ public class AudioStreamHandler extends AbstractWebSocketHandler {
 
     // ── Per-session state ─────────────────────────────────────────────────────
 
-    /** Accumulated raw PCM bytes per WebSocket session. */
+    /** Accumulated voiced PCM bytes per WebSocket session. */
     private final Map<String, ByteBuffer> sessionBuffers = new ConcurrentHashMap<>();
 
     /** Metadata extracted from query params on connection. */
@@ -103,6 +130,12 @@ public class AudioStreamHandler extends AbstractWebSocketHandler {
 
     /** Sequence counter per speakerTurnId. */
     private final Map<String, AtomicInteger> sequenceCounters = new ConcurrentHashMap<>();
+
+    /** Total voiced bytes accumulated in current chunk (after VAD filtering), per session. */
+    private final Map<String, AtomicInteger> voicedBytesCounters = new ConcurrentHashMap<>();
+
+    /** Timestamp (ms) when current silence period started; -1L if voice is active. */
+    private final Map<String, Long> silenceStartTimes = new ConcurrentHashMap<>();
 
     // ── WebSocket lifecycle ───────────────────────────────────────────────────
 
@@ -169,9 +202,12 @@ public class AudioStreamHandler extends AbstractWebSocketHandler {
                     sessionId, userId, e.getMessage());
         }
 
-        sessionBuffers.put(sessionId, ByteBuffer.allocate(MAX_BUFFER_BYTES));
+        // Allocate at max Normal cap; hard cap check in handleBinaryMessage will limit Priority
+        sessionBuffers.put(sessionId, ByteBuffer.allocate(NORMAL_MAX_VOICED_BYTES));
         sessionMeta.put(sessionId, new SessionMeta(meetingId, userId, username, speakerName, departmentName, speakerTurnId));
         sequenceCounters.computeIfAbsent(speakerTurnId, k -> new AtomicInteger(0));
+        voicedBytesCounters.put(sessionId, new AtomicInteger(0));
+        silenceStartTimes.put(sessionId, -1L);
 
         log.info("AudioStream [{}]: connected — meetingId={}, userId={}, dept={}, speakerTurnId={}",
                 sessionId, meetingId, userId, departmentName, speakerTurnId);
@@ -186,30 +222,56 @@ public class AudioStreamHandler extends AbstractWebSocketHandler {
             return;
         }
 
-        // Safety check: only accept audio in MEETING_MODE (TASK-003)
         SessionMeta meta = sessionMeta.get(sessionId);
-        if (meta != null) {
-            Meeting meeting = meetingRepository.findById(meta.meetingId()).orElse(null);
-            if (meeting == null || meeting.getMode() != MeetingMode.MEETING_MODE) {
-                log.debug("AudioStream [{}]: meeting not in MEETING_MODE, dropping audio frame", sessionId);
-                return;
+        if (meta == null) return;
+
+        // Safety check: only accept audio in MEETING_MODE (TASK-003)
+        Meeting meeting = meetingRepository.findById(meta.meetingId()).orElse(null);
+        if (meeting == null || meeting.getMode() != MeetingMode.MEETING_MODE) {
+            log.debug("AudioStream [{}]: meeting not in MEETING_MODE, dropping audio frame", sessionId);
+            return;
+        }
+
+        boolean isPriority = meeting.getTranscriptionPriority() != TranscriptionPriority.NORMAL_PRIORITY;
+        byte[] payload = message.getPayload().array();
+        boolean isVoice = computeRms(payload) >= VAD_ENERGY_THRESHOLD;
+
+        if (isVoice) {
+            // Voice frame: check hard cap then buffer
+            int voicedBytes = voicedBytesCounters.get(sessionId).get();
+            int maxBytes = isPriority ? PRIORITY_MAX_VOICED_BYTES : NORMAL_MAX_VOICED_BYTES;
+            if (voicedBytes + payload.length > maxBytes) {
+                log.info("AudioStream [{}]: hard cap ({} s) reached, flushing",
+                        sessionId, isPriority ? 180 : 600);
+                flushBuffer(sessionId, session);
+                resetSessionBuffer(sessionId);
+                buffer = sessionBuffers.get(sessionId);
+            }
+            buffer.put(payload);
+            voicedBytesCounters.get(sessionId).addAndGet(payload.length);
+            silenceStartTimes.put(sessionId, -1L); // reset silence timer
+            log.trace("AudioStream [{}]: voice frame buffered (voiced={} bytes)",
+                    sessionId, voicedBytesCounters.get(sessionId).get());
+        } else {
+            // Silence frame: don't buffer, track silence duration for auto-flush
+            long now = System.currentTimeMillis();
+            Long silenceStart = silenceStartTimes.get(sessionId);
+            if (silenceStart == null || silenceStart == -1L) {
+                silenceStartTimes.put(sessionId, now); // silence just started
+            } else {
+                long silenceDurationMs = now - silenceStart;
+                int voicedBytes = voicedBytesCounters.get(sessionId).get();
+                long threshold = isPriority
+                        ? getSilenceThreshold(voicedBytes)
+                        : NORMAL_SILENCE_MS;
+                if (silenceDurationMs >= threshold && voicedBytes >= MIN_CHUNK_VOICED_BYTES) {
+                    log.info("AudioStream [{}]: silence {}ms \u2265 threshold {}ms \u2192 auto-flush (voiced={} bytes)",
+                            sessionId, silenceDurationMs, threshold, voicedBytes);
+                    flushBuffer(sessionId, session);
+                    resetSessionBuffer(sessionId);
+                }
             }
         }
-
-        byte[] payload = message.getPayload().array();
-        int remaining = buffer.remaining();
-
-        if (payload.length > remaining) {
-            // Buffer full — auto-flush before accepting more data (30 s hard cap)
-            log.info("AudioStream [{}]: buffer full ({} bytes), auto-flushing", sessionId, buffer.position());
-            flushBuffer(sessionId, session);
-            // Reset buffer
-            buffer = ByteBuffer.allocate(MAX_BUFFER_BYTES);
-            sessionBuffers.put(sessionId, buffer);
-        }
-
-        buffer.put(payload);
-        log.trace("AudioStream [{}]: buffered {} bytes (total={})", sessionId, payload.length, buffer.position());
     }
 
     @Override
@@ -220,8 +282,7 @@ public class AudioStreamHandler extends AbstractWebSocketHandler {
         if (FINALIZE_COMMAND.equalsIgnoreCase(text)) {
             log.info("AudioStream [{}]: FINALIZE received", sessionId);
             flushBuffer(sessionId, session);
-            // Reset buffer for potential next chunk in same session
-            sessionBuffers.put(sessionId, ByteBuffer.allocate(MAX_BUFFER_BYTES));
+            resetSessionBuffer(sessionId);
         } else {
             log.debug("AudioStream [{}]: unknown text message '{}'; ignoring", sessionId, text);
         }
@@ -232,7 +293,7 @@ public class AudioStreamHandler extends AbstractWebSocketHandler {
         String sessionId = session.getId();
         ByteBuffer buffer = sessionBuffers.get(sessionId);
 
-        // Auto-flush any remaining data on disconnect
+        // Auto-flush any remaining voiced data on disconnect
         if (buffer != null && buffer.position() > 0) {
             log.info("AudioStream [{}]: connection closed with {} buffered bytes; flushing",
                     sessionId, buffer.position());
@@ -241,6 +302,8 @@ public class AudioStreamHandler extends AbstractWebSocketHandler {
 
         sessionBuffers.remove(sessionId);
         sessionMeta.remove(sessionId);
+        voicedBytesCounters.remove(sessionId);
+        silenceStartTimes.remove(sessionId);
         log.info("AudioStream [{}]: connection closed — status={}", sessionId, status);
     }
 
@@ -319,6 +382,11 @@ public class AudioStreamHandler extends AbstractWebSocketHandler {
             // 4. Submit to Gipformer (handles availability check, retry, and queue push)
             gipformerClient.submitJob(job);
 
+            // 5. Notify frontend about successful flush
+            int voicedBytes = voicedBytesCounters.getOrDefault(sessionId, new AtomicInteger(0)).get();
+            int voicedMs = (int) ((long) voicedBytes * 1000 / (SAMPLE_RATE * FRAME_SIZE));
+            sendFlushNotification(session, seqNum, voicedMs);
+
         } catch (Exception e) {
             log.error("AudioStream [{}]: failed to flush buffer for job {}: {}",
                     sessionId, jobId, e.getMessage(), e);
@@ -374,6 +442,70 @@ public class AudioStreamHandler extends AbstractWebSocketHandler {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * Compute RMS energy of a PCM Int16 LE frame.
+     * Samples are interleaved as 2-byte little-endian signed integers.
+     *
+     * @param pcmFrame raw PCM bytes
+     * @return RMS value in range [0, 32767]; 0.0 for empty or too-short frames
+     */
+    private static double computeRms(byte[] pcmFrame) {
+        if (pcmFrame == null || pcmFrame.length < 2) return 0.0;
+        long sumSquares = 0;
+        int samples = pcmFrame.length / 2;
+        for (int i = 0; i < pcmFrame.length - 1; i += 2) {
+            // Little-endian Int16
+            int sample = (pcmFrame[i] & 0xFF) | (pcmFrame[i + 1] << 8);
+            sumSquares += (long) sample * sample;
+        }
+        return Math.sqrt((double) sumSquares / samples);
+    }
+
+    /**
+     * Return adaptive silence threshold (ms) for Priority meetings
+     * based on how much voiced audio has accumulated.
+     *
+     * @param voicedBytes bytes of voiced audio buffered so far
+     * @return silence duration (ms) that triggers a flush
+     */
+    private static long getSilenceThreshold(int voicedBytes) {
+        if (voicedBytes <= PRIORITY_PHASE1_BYTES) return PRIORITY_SILENCE_P1_MS;
+        if (voicedBytes <= PRIORITY_PHASE2_BYTES) return PRIORITY_SILENCE_P2_MS;
+        return PRIORITY_SILENCE_P3_MS;
+    }
+
+    /**
+     * Reset per-session buffer and VAD state after a flush.
+     * Allocates a fresh ByteBuffer and zeroes voiced counter and silence timer.
+     */
+    private void resetSessionBuffer(String sessionId) {
+        sessionBuffers.put(sessionId, ByteBuffer.allocate(NORMAL_MAX_VOICED_BYTES));
+        AtomicInteger vc = voicedBytesCounters.get(sessionId);
+        if (vc != null) vc.set(0);
+        silenceStartTimes.put(sessionId, -1L);
+    }
+
+    /**
+     * Send a {@code CHUNK_FLUSHED} notification back to the frontend
+     * so it can log the flush event in the browser console.
+     *
+     * @param session  WebSocket session to reply to
+     * @param seqNum   sequence number of the flushed chunk
+     * @param voicedMs duration of voiced audio (ms) in the flushed chunk
+     */
+    private void sendFlushNotification(WebSocketSession session, int seqNum, int voicedMs) {
+        if (session == null || !session.isOpen()) return;
+        try {
+            String json = String.format(
+                    "{\"type\":\"CHUNK_FLUSHED\",\"seqNum\":%d,\"voicedMs\":%d}",
+                    seqNum, voicedMs);
+            session.sendMessage(new TextMessage(json));
+        } catch (IOException e) {
+            log.warn("AudioStream [{}]: failed to send flush notification: {}",
+                    session.getId(), e.getMessage());
+        }
+    }
 
     /**
      * Parse query parameters from the WebSocket session URI.

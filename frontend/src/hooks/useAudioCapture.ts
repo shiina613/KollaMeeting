@@ -259,6 +259,18 @@ export function useAudioCapture({
       onErrorRef.current?.(new Error('Audio WebSocket connection error'))
     }
 
+    ws.onmessage = (event: MessageEvent) => {
+      try {
+        const msg = JSON.parse(event.data as string)
+        if (msg.type === 'CHUNK_FLUSHED') {
+          const voicedSec = (msg.voicedMs / 1000).toFixed(1)
+          console.log(`[AudioCapture] 🟢 Chunk flushed — seq #${msg.seqNum}, voiced: ${voicedSec}s`)
+        }
+      } catch {
+        // Không phải JSON — bỏ qua
+      }
+    }
+
     // ── 5. PCM callback: Float32 → Int16 → send binary ────────────────────
 
     processorNode.onaudioprocess = (event: AudioProcessingEvent) => {
