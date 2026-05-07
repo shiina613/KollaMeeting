@@ -3,7 +3,7 @@
  * Requirements: 1.4, 1.5, 2.1–2.4
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import useAuthStore from '../store/authStore'
@@ -34,8 +34,13 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
 
   // Already authenticated → redirect to dashboard
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/', { replace: true })
+    }
+  }, [isAuthenticated, navigate])
+
   if (isAuthenticated) {
-    navigate('/', { replace: true })
     return null
   }
 

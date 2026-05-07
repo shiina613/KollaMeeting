@@ -10,8 +10,6 @@ import {
   updateDepartment,
   deleteDepartment,
   type DepartmentDto,
-  type CreateDepartmentRequest,
-  type UpdateDepartmentRequest,
 } from '../../services/departmentService'
 import {
   listRooms,

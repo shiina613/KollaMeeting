@@ -23,7 +23,6 @@ import { useNavigate } from 'react-router-dom'
 import JitsiFrame, { type JitsiFrameHandle } from './JitsiFrame'
 import { fetchJaasToken } from '../../services/jaasService'
 import TranscriptionPanel from './TranscriptionPanel'
-import TranscriptionPriorityControl from './TranscriptionPriorityControl'
 import RaiseHandPanel from './RaiseHandPanel'
 import RaiseHandButton from './RaiseHandButton'
 import MeetingModeToggle from './MeetingModeToggle'
@@ -34,8 +33,8 @@ import useTranscription from '../../hooks/useTranscription'
 import useAudioCapture from '../../hooks/useAudioCapture'
 import useAuthStore from '../../store/authStore'
 import useMeetingStore from '../../store/meetingStore'
-import { joinMeeting, leaveMeeting } from '../../services/meetingService'
-import type { Meeting, MeetingMode, MeetingEvent, TranscriptionPriority } from '../../types/meeting'
+import { joinMeeting, leaveMeeting, revokeSpeakingPermission } from '../../services/meetingService'
+import type { Meeting, MeetingMode, MeetingEvent } from '../../types/meeting'
 
 // ─── JaaS config ──────────────────────────────────────────────────────────────
 
@@ -58,16 +57,51 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
   const navigate = useNavigate()
   const { user } = useAuthStore()
   const { setActiveMeeting, clearActiveMeeting, handleMeetingEvent, mode } = useMeetingStore()
-  const { handleTranscriptionEvent, clearSegments } = useTranscription()
+  const { handleTranscriptionEvent, clearSegments, segments, isTranscriptionAvailable } = useTranscription()
 
   const jitsiRef = useRef<JitsiFrameHandle>(null)
   const hasJoinedRef = useRef(false)
   const tokenRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [sidebarTab, setSidebarTab] = useState<'participants' | 'transcription' | 'raise-hand'>('participants')
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [joinError, setJoinError] = useState<string | null>(null)
-  const [currentPriority, setCurrentPriority] = useState<TranscriptionPriority>(
-    meeting.transcriptionPriority,
-  )
+
+  // ── Sidebar resize ─────────────────────────────────────────────────────────
+  const SIDEBAR_MIN = 200
+  const SIDEBAR_MAX = 600
+  const SIDEBAR_DEFAULT = 288 // w-72 = 18rem = 288px
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT)
+  const isDraggingRef = useRef(false)
+  const dragStartXRef = useRef(0)
+  const dragStartWidthRef = useRef(SIDEBAR_DEFAULT)
+
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    isDraggingRef.current = true
+    dragStartXRef.current = e.clientX
+    dragStartWidthRef.current = sidebarWidth
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!isDraggingRef.current) return
+      // Dragging left = increasing width (sidebar is on the right)
+      const delta = dragStartXRef.current - ev.clientX
+      const newWidth = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, dragStartWidthRef.current + delta))
+      setSidebarWidth(newWidth)
+    }
+
+    const onMouseUp = () => {
+      isDraggingRef.current = false
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+  }, [sidebarWidth])
 
   // ── JaaS token state ───────────────────────────────────────────────────────
 
@@ -78,17 +112,28 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
 
   // ── Audio capture state ────────────────────────────────────────────────────
 
-  // speakerTurnId is set when the local user receives SPEAKING_PERMISSION_GRANTED.
-  // In FREE_MODE, a stable turn ID is used so all participants can stream.
+  // In MEETING_MODE, audio capture is driven by the local mic state (audioMuteStatusChanged).
+  // speakerTurnId is auto-generated each time the mic turns ON.
+  // Host/Secretary can unmute directly; members must have permission granted first.
   const [speakerTurnId, setSpeakerTurnId] = useState<string | null>(null)
+
+  // Refs to avoid stale closures in the Jitsi event callback
+  const modeRef = useRef(mode)
+  const isHostRef = useRef(false)
+  const isSecretaryRef = useRef(false)
 
   // ── Derived state ──────────────────────────────────────────────────────────
 
-  const isHost = user?.id === meeting.hostUser?.id
-  const isSecretary = user?.id === meeting.secretaryUser?.id
-  const isHighPriority = currentPriority === 'HIGH_PRIORITY'
+  const isHost = user?.id === (meeting.hostUser?.id ?? meeting.hostId)
+  const isSecretary = user?.id === (meeting.secretaryUser?.id ?? meeting.secretaryId)
+  // Priority is fixed at meeting creation — cannot change during an active meeting.
+  const isHighPriority = meeting.transcriptionPriority === 'HIGH_PRIORITY'
   const isMeetingMode = mode === 'MEETING_MODE'
-  const canChangePriority = user?.role === 'SECRETARY'
+
+  // Keep refs up-to-date so the Jitsi callback always reads latest values
+  modeRef.current = mode
+  isHostRef.current = isHost
+  isSecretaryRef.current = isSecretary
 
   // ── Audio capture hook ─────────────────────────────────────────────────────
 
@@ -99,6 +144,45 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
       console.error('[MeetingRoom] Audio capture error:', err.message)
     },
   })
+
+  // ── Mic state → audio capture ──────────────────────────────────────────────
+
+  /**
+   * Called by JitsiFrame whenever the LOCAL user's mic mute state changes.
+   * Rules:
+   *  - Only MEETING_MODE triggers STT recording. FREE_MODE = no recording.
+   *  - mic ON  (isMuted=false) → generate a new turn ID → start audio capture
+   *  - mic OFF (isMuted=true)  → stop audio capture (sends FINALIZE to backend)
+   *  - Host/Secretary turning ON: auto-revoke any current speaking permission
+   *    so the previous member speaker is silenced in the permission system too.
+   */
+  const handleAudioMuteStatusChanged = useCallback((isMuted: boolean) => {
+    if (modeRef.current !== 'MEETING_MODE') {
+      // FREE_MODE: no STT, just stop any stray capture
+      if (!isMuted) stopCapture()
+      return
+    }
+
+    if (isMuted) {
+      // Mic turned OFF → finalize and stop recording
+      stopCapture()
+      setSpeakerTurnId(null)
+    } else {
+      // Mic turned ON in MEETING_MODE → start recording
+      // If Host/Secretary, revoke any current member speaking permission first
+      // so the previous speaker knows they've been superseded.
+      if (isHostRef.current || isSecretaryRef.current) {
+        // Only revoke if someone actually has permission (avoids 400 from backend)
+        const activePerm = useMeetingStore.getState().speakingPermission
+        if (activePerm) {
+          revokeSpeakingPermission(meeting.id).catch(() => { /* non-critical */ })
+        }
+      }
+      const newTurnId = `${meeting.id}-${Date.now()}`
+      setSpeakerTurnId(newTurnId)
+      startCapture(newTurnId)
+    }
+  }, [meeting.id, startCapture, stopCapture])
 
   // ── Join / leave ───────────────────────────────────────────────────────────
 
@@ -166,50 +250,51 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
       if (event.type === 'MODE_CHANGED') {
         const newMode = (event.payload as { mode: MeetingMode }).mode
         if (newMode === 'MEETING_MODE') {
-          // Mute all participants when entering Meeting Mode (Req 21.4)
+          // Entering MEETING_MODE: mute everyone — mic permission required to speak.
           jitsiRef.current?.muteAll()
-          // Stop audio capture for all participants — only the granted speaker
-          // will capture in MEETING_MODE (started on SPEAKING_PERMISSION_GRANTED)
           stopCapture()
           setSpeakerTurnId(null)
         } else {
-          // FREE_MODE: all participants can capture simultaneously (Req 21.5)
-          // Generate a stable turn ID for this free-mode session
-          const freeTurnId = `free-${meeting.id}-${user?.id ?? 'anon'}-${Date.now()}`
-          setSpeakerTurnId(freeTurnId)
-          startCapture()
+          // Returning to FREE_MODE: unmute everyone. No STT in free mode.
+          stopCapture()
+          setSpeakerTurnId(null)
         }
       }
 
       // SPEAKING_PERMISSION_GRANTED:
-      // - Mute all participants first (Req 4.9)
-      // - If the local user is the granted speaker → unmute + start audio capture (Req 4.10, 22.5, 8.14)
+      // Backend granted mic permission to a specific user.
+      // For the granted user: unmute their Jitsi mic → audioMuteStatusChanged fires → startCapture.
+      // For others: ensure they are muted.
       if (event.type === 'SPEAKING_PERMISSION_GRANTED') {
-        const { userId, speakerTurnId: newTurnId } = event.payload as {
+        const { userId } = event.payload as {
           userId: number
           userName: string
           speakerTurnId: string
         }
-        // Mute everyone first (Req 4.9)
-        jitsiRef.current?.muteAll()
         if (user?.id === userId) {
-          // Unmute the local speaker in Jitsi (Req 4.10)
-          jitsiRef.current?.unmute()
-          // Start audio capture with the new speaker turn ID (Req 8.14)
-          setSpeakerTurnId(newTurnId)
-          startCapture()
+          // I was granted permission — unmute my Jitsi mic.
+          // audioMuteStatusChanged(isMuted=false) will fire and startCapture.
+          jitsiRef.current?.muteAll()
+          setTimeout(() => {
+            jitsiRef.current?.unmuteLocal()
+          }, 300)
         } else {
-          // Another user got permission — stop our capture if running
+          // Another user got permission — ensure I am muted.
+          jitsiRef.current?.muteLocal()
           stopCapture()
           setSpeakerTurnId(null)
         }
       }
 
       // SPEAKING_PERMISSION_REVOKED:
-      // - If the local user was the speaker → mute + stop audio capture (Req 4.9, 22.5, 8.14)
+      // The speaker's mic turns OFF — audioMuteStatusChanged(isMuted=true) will fire
+      // and stopCapture() will be called from handleAudioMuteStatusChanged.
+      // We also explicitly mute via Jitsi to ensure the mic is off.
       if (event.type === 'SPEAKING_PERMISSION_REVOKED') {
         if (user?.id !== undefined && prevSpeakingPermission?.userId === user.id) {
-          jitsiRef.current?.mute()
+          jitsiRef.current?.muteLocal()
+          // stopCapture is handled by audioMuteStatusChanged, but call explicitly
+          // as fallback in case the Jitsi event is delayed.
           stopCapture()
           setSpeakerTurnId(null)
         }
@@ -230,19 +315,12 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
 
   // ── Mode change handler (from toggle button) ───────────────────────────────
 
-  const handleModeChanged = useCallback((newMode: MeetingMode) => {
-    if (newMode === 'MEETING_MODE') {
-      jitsiRef.current?.muteAll()
-      // Stop audio capture — only the granted speaker will capture in MEETING_MODE
-      stopCapture()
-      setSpeakerTurnId(null)
-    } else {
-      // FREE_MODE: start capturing for all participants
-      const freeTurnId = `free-${meeting.id}-${user?.id ?? 'anon'}-${Date.now()}`
-      setSpeakerTurnId(freeTurnId)
-      startCapture()
-    }
-  }, [meeting.id, user?.id, startCapture, stopCapture])
+  const handleModeChanged = useCallback((_newMode: MeetingMode) => {
+    // No-op: Jitsi mute and audio capture are handled by the onMeetingEvent
+    // WS handler when it receives the MODE_CHANGED broadcast. This avoids
+    // duplicate muteAll calls (the toggle API response arrives before the WS
+    // event, causing muteEveryone to fire twice).
+  }, [])
 
   // ── Jitsi event handlers ───────────────────────────────────────────────────
 
@@ -309,6 +387,18 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
                 REC
               </div>
             )}
+
+            {/* Sidebar toggle */}
+            <button
+              onClick={() => setIsSidebarOpen((prev) => !prev)}
+              className="p-1.5 rounded-md text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
+              aria-label={isSidebarOpen ? 'Ẩn thanh bên' : 'Hiện thanh bên'}
+              data-testid="sidebar-toggle"
+            >
+              <span className="material-symbols-outlined text-[20px]" aria-hidden="true">
+                {isSidebarOpen ? 'right_panel_close' : 'right_panel_open'}
+              </span>
+            </button>
           </div>
         </div>
 
@@ -371,6 +461,7 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
               displayName={user?.fullName ?? user?.username ?? 'Khách'}
               jwt={IS_JAAS ? jaasToken ?? undefined : undefined}
               onVideoConferenceLeft={handleVideoConferenceLeft}
+              onAudioMuteStatusChanged={handleAudioMuteStatusChanged}
               className="w-full h-full"
             />
           )}
@@ -387,57 +478,80 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
         )}
       </div>
 
-      {/* ── Sidebar ── */}
-      <div
-        className="w-72 bg-white border-l border-slate-200 flex flex-col shrink-0"
-        aria-label="Thanh bên cuộc họp"
-      >
-        {/* Sidebar tabs */}
-        <div className="flex border-b border-outline-variant overflow-x-auto shrink-0">
-          {sidebarTabs.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setSidebarTab(tab.key)}
-              className={`flex items-center gap-1 px-3 py-2.5 text-label-md font-medium whitespace-nowrap
-                          border-b-2 transition-colors flex-1 justify-center
-                          ${sidebarTab === tab.key
-                            ? 'border-primary text-primary'
-                            : 'border-transparent text-on-surface-variant hover:text-on-surface'
-                          }`}
-              aria-selected={sidebarTab === tab.key}
-              role="tab"
-            >
-              <span className="material-symbols-outlined text-[16px]" aria-hidden="true">
-                {tab.icon}
-              </span>
-              <span className="hidden sm:inline">{tab.label}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Sidebar content */}
-        <div className="flex-1 overflow-y-auto" role="tabpanel">
-          {sidebarTab === 'participants' && (
-            <div className="py-2">
-              <ParticipantList currentUserId={user?.id} />
+      {/* ── Sidebar (resizable) ── */}
+      {isSidebarOpen && (
+        <div
+          className="relative bg-white border-l border-slate-200 flex flex-col shrink-0"
+          style={{ width: sidebarWidth }}
+          aria-label="Thanh bên cuộc họp"
+          data-testid="meeting-sidebar"
+        >
+          {/* Drag handle — left edge */}
+          <div
+            onMouseDown={handleResizeMouseDown}
+            className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize z-10
+                       hover:bg-primary/40 active:bg-primary/60 transition-colors group"
+            aria-hidden="true"
+            title="Kéo để thay đổi kích thước"
+          >
+            {/* Visual indicator dots */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
+                            flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <span className="w-1 h-1 rounded-full bg-slate-400" />
+              <span className="w-1 h-1 rounded-full bg-slate-400" />
+              <span className="w-1 h-1 rounded-full bg-slate-400" />
             </div>
-          )}
+          </div>
 
-          {sidebarTab === 'raise-hand' && (
-            <RaiseHandPanel
-              meetingId={meeting.id}
-              isHost={isHost || isSecretary}
-            />
-          )}
+          {/* Sidebar tabs */}
+          <div className="flex border-b border-outline-variant overflow-x-auto shrink-0">
+            {sidebarTabs.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setSidebarTab(tab.key)}
+                className={`flex items-center gap-1 px-3 py-2.5 text-label-md font-medium whitespace-nowrap
+                            border-b-2 transition-colors flex-1 justify-center
+                            ${sidebarTab === tab.key
+                              ? 'border-primary text-primary'
+                              : 'border-transparent text-on-surface-variant hover:text-on-surface'
+                            }`}
+                aria-selected={sidebarTab === tab.key}
+                role="tab"
+              >
+                <span className="material-symbols-outlined text-[16px]" aria-hidden="true">
+                  {tab.icon}
+                </span>
+                <span className="hidden sm:inline">{tab.label}</span>
+              </button>
+            ))}
+          </div>
 
-          {sidebarTab === 'transcription' && (
-            <TranscriptionPanel
-              meetingId={meeting.id}
-              isHighPriority={isHighPriority}
-            />
-          )}
+          {/* Sidebar content */}
+          <div className="flex-1 overflow-y-auto" role="tabpanel">
+            {sidebarTab === 'participants' && (
+              <div className="py-2">
+                <ParticipantList currentUserId={user?.id} />
+              </div>
+            )}
+
+            {sidebarTab === 'raise-hand' && (
+              <RaiseHandPanel
+                meetingId={meeting.id}
+                isHost={isHost || isSecretary}
+              />
+            )}
+
+            {sidebarTab === 'transcription' && (
+              <TranscriptionPanel
+                meetingId={meeting.id}
+                isHighPriority={isHighPriority}
+                segments={segments}
+                isTranscriptionAvailable={isTranscriptionAvailable}
+              />
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

@@ -289,15 +289,16 @@ public class GipformerClient {
      */
     private Map<String, Object> buildJobRequest(TranscriptionJob job) {
         Map<String, Object> body = new HashMap<>();
-        body.put("jobId", job.getId());
-        body.put("meetingId", job.getMeeting().getId());
-        body.put("speakerId", job.getSpeakerId());
-        body.put("speakerName", job.getSpeakerName());
-        body.put("speakerTurnId", job.getSpeakerTurnId());
-        body.put("sequenceNumber", job.getSequenceNumber());
+        // Keys must be snake_case to match Gipformer FastAPI Pydantic schema
+        body.put("job_id", job.getId());
+        body.put("meeting_id", job.getMeeting().getId());
+        body.put("speaker_id", job.getSpeakerId());
+        body.put("speaker_name", job.getSpeakerName());
+        body.put("speaker_turn_id", job.getSpeakerTurnId());
+        body.put("sequence_number", job.getSequenceNumber());
         body.put("priority", job.getPriority().name());
-        body.put("audioPath", job.getAudioPath());
-        body.put("callbackUrl", "/api/v1/transcription/callback");
+        body.put("audio_path", job.getAudioPath());
+        body.put("callback_url", "/api/v1/transcription/callback");
         return body;
     }
 

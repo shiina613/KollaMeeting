@@ -1,7 +1,6 @@
 package com.example.kolla.services.impl;
 
 import com.example.kolla.enums.MeetingStatus;
-import com.example.kolla.enums.Role;
 import com.example.kolla.exceptions.BadRequestException;
 import com.example.kolla.exceptions.ForbiddenException;
 import com.example.kolla.exceptions.ResourceNotFoundException;
@@ -16,6 +15,7 @@ import com.example.kolla.services.MeetingLifecycleService;
 import com.example.kolla.services.MinutesService;
 import com.example.kolla.services.NotificationService;
 import com.example.kolla.services.SpeakingPermissionService;
+import com.example.kolla.websocket.MeetingEventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -38,7 +40,7 @@ import java.util.concurrent.TimeUnit;
  *
  * Waiting_Timeout logic:
  *   When neither Host nor Secretary is present in an ACTIVE meeting, a Redis TTL key
- *   `meeting:{id}:waiting_timeout` is set to 600 seconds. If neither returns before
+ *   `meeting:{id}:waiting_timeout` is set to 300 seconds. If neither returns before
  *   expiry, the scheduled job auto-ends the meeting.
  *
  * Requirements: 3.10, 3.11
@@ -48,8 +50,8 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
 
-    /** Redis TTL for the waiting timeout key (10 minutes). */
-    private static final long WAITING_TIMEOUT_SECONDS = 600L;
+    /** Redis TTL for the waiting timeout key (5 minutes — TASK-002). */
+    private static final long WAITING_TIMEOUT_SECONDS = 300L;
 
     /** Redis key prefix for waiting timeout. */
     private static final String WAITING_TIMEOUT_KEY_PREFIX = "meeting:%d:waiting_timeout";
@@ -59,6 +61,7 @@ public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
     private final NotificationService notificationService;
     private final StringRedisTemplate redisTemplate;
     private final RaiseHandRequestRepository raiseHandRequestRepository;
+    private final MeetingEventPublisher eventPublisher;
     private final Clock clock;
 
     @Autowired
@@ -73,7 +76,8 @@ public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
 
     /**
      * Transition a meeting from SCHEDULED → ACTIVE.
-     * Only the Host (or ADMIN) may activate.
+     * Only the Host or the designated Secretary of this meeting may activate.
+     * (ADMIN no longer has activation authority — TASK-001)
      * Requirements: 3.10
      */
     @Override
@@ -81,10 +85,10 @@ public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
     public MeetingResponse activateMeeting(Long meetingId, User requester) {
         Meeting meeting = findMeetingOrThrow(meetingId);
 
-        // Permission check: only Host, any SECRETARY, or ADMIN
-        if (!isHostOrAdmin(meeting, requester) && requester.getRole() != com.example.kolla.enums.Role.SECRETARY) {
+        // Permission check: only Host or the Secretary *of this meeting* (TASK-001)
+        if (!isHostOrAdmin(meeting, requester) && !isSecretaryOfMeeting(meeting, requester)) {
             throw new ForbiddenException(
-                    "Only the Host or a SECRETARY may activate a meeting");
+                    "Only the Host or Secretary of this meeting may activate it");
         }
 
         // State check
@@ -121,7 +125,8 @@ public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
 
     /**
      * Transition a meeting from ACTIVE → ENDED.
-     * Host, Secretary, or ADMIN may end the meeting.
+     * Only the Host or Secretary of this meeting may end it.
+     * (ADMIN no longer has this authority — TASK-001)
      * Requirements: 3.11
      */
     @Override
@@ -129,8 +134,8 @@ public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
     public MeetingResponse endMeeting(Long meetingId, User requester) {
         Meeting meeting = findMeetingOrThrow(meetingId);
 
-        // Permission check: Host, Secretary, or ADMIN
-        if (!isHostSecretaryOrAdmin(meeting, requester)) {
+        // Permission check: Host or Secretary only (TASK-001)
+        if (!isHostOrSecretary(meeting, requester)) {
             throw new ForbiddenException(
                     "Only the Host or Secretary may end a meeting");
         }
@@ -205,19 +210,26 @@ public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
         }
 
         boolean isKeyPerson = isHostOrSecretary(meeting, user);
-        if (isKeyPerson) {
-            // Cancel waiting timeout — a key person has arrived
+        if (isKeyPerson && meeting.getWaitingTimeoutAt() != null) {
+            // Cancel waiting timeout — a key person has arrived (TASK-002)
             cancelWaitingTimeout(meetingId);
             meeting.setWaitingTimeoutAt(null);
             meetingRepository.save(meeting);
-            log.debug("Waiting timeout cancelled for meeting id={} — {} joined",
+            log.info("Waiting timeout cancelled for meeting id={} — {} joined",
                     meetingId, user.getUsername());
+            try {
+                eventPublisher.publishWaitingTimeoutCancelled(meetingId);
+            } catch (Exception e) {
+                log.warn("Failed to broadcast WAITING_TIMEOUT_CANCELLED for meeting id={}: {}",
+                        meetingId, e.getMessage());
+            }
         }
     }
 
     /**
      * Called when a participant leaves an active meeting.
-     * If neither Host nor Secretary remains, start the 10-minute waiting timeout.
+     * If neither Host nor Secretary remains, start the 5-minute waiting timeout.
+     * (Timeout reduced from 10 min → 5 min per TASK-002)
      * Requirements: 3.11
      */
     @Override
@@ -291,11 +303,13 @@ public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
     // ── Host authority check ──────────────────────────────────────────────────
 
     /**
-     * Returns true if the user is the designated Host or has ADMIN role.
+     * Returns true if the user is the designated Host of this meeting.
+     * NOTE: ADMIN no longer has automatic host authority (TASK-001).
      * Requirements: 3.10, 21.7
      */
     @Override
     public boolean isHostOrAdmin(Meeting meeting, User user) {
+        // NOTE: ADMIN no longer bypasses this check (TASK-001)
         return meeting.getHost() != null
                 && meeting.getHost().getId().equals(user.getId());
     }
@@ -303,18 +317,8 @@ public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
     // ── Private helpers ───────────────────────────────────────────────────────
 
     /**
-     * Returns true if the user is Host or Secretary of the meeting.
-     */
-    private boolean isHostSecretaryOrAdmin(Meeting meeting, User user) {
-        if (meeting.getHost() != null && meeting.getHost().getId().equals(user.getId())) {
-            return true;
-        }
-        return meeting.getSecretary() != null
-                && meeting.getSecretary().getId().equals(user.getId());
-    }
-
-    /**
      * Returns true if the user is the Host or Secretary of the meeting.
+     * (Replaces the old isHostSecretaryOrAdmin — ADMIN branch removed per TASK-001)
      */
     private boolean isHostOrSecretary(Meeting meeting, User user) {
         boolean isHost = meeting.getHost() != null
@@ -322,6 +326,14 @@ public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
         boolean isSecretary = meeting.getSecretary() != null
                 && meeting.getSecretary().getId().equals(user.getId());
         return isHost || isSecretary;
+    }
+
+    /**
+     * Returns true if the user is the designated Secretary of this specific meeting.
+     */
+    private boolean isSecretaryOfMeeting(Meeting meeting, User user) {
+        return meeting.getSecretary() != null
+                && meeting.getSecretary().getId().equals(user.getId());
     }
 
     /**
@@ -347,6 +359,7 @@ public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
 
     /**
      * Sets the Redis TTL key and updates waiting_timeout_at in the DB.
+     * Broadcasts WAITING_TIMEOUT_STARTED so the frontend can display a countdown.
      * Requirements: 3.11
      */
     private void startWaitingTimeout(Meeting meeting) {
@@ -371,6 +384,15 @@ public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
 
         log.info("Waiting timeout started for meeting id={} — expires at {}",
                 meeting.getId(), timeoutAt);
+
+        // Broadcast WAITING_TIMEOUT_STARTED so frontend shows countdown (TASK-002)
+        try {
+            ZonedDateTime expiresAt = timeoutAt.atZone(ZoneId.systemDefault());
+            eventPublisher.publishWaitingTimeoutStarted(meeting.getId(), expiresAt);
+        } catch (Exception e) {
+            log.warn("Failed to broadcast WAITING_TIMEOUT_STARTED for meeting id={}: {}",
+                    meeting.getId(), e.getMessage());
+        }
     }
 
     /**

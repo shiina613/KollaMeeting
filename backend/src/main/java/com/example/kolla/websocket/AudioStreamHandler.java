@@ -1,12 +1,17 @@
 package com.example.kolla.websocket;
 
 import com.example.kolla.config.FileStorageProperties;
+import com.example.kolla.enums.MeetingMode;
 import com.example.kolla.enums.TranscriptionJobStatus;
 import com.example.kolla.enums.TranscriptionPriority;
+import com.example.kolla.models.Department;
 import com.example.kolla.models.Meeting;
 import com.example.kolla.models.TranscriptionJob;
+import com.example.kolla.models.User;
+import com.example.kolla.repositories.DepartmentRepository;
 import com.example.kolla.repositories.MeetingRepository;
 import com.example.kolla.repositories.TranscriptionJobRepository;
+import com.example.kolla.repositories.UserRepository;
 import com.example.kolla.services.GipformerClient;
 import com.example.kolla.utils.JwtUtils;
 import lombok.RequiredArgsConstructor;
@@ -82,6 +87,8 @@ public class AudioStreamHandler extends AbstractWebSocketHandler {
     private final FileStorageProperties storageProperties;
     private final MeetingRepository meetingRepository;
     private final TranscriptionJobRepository transcriptionJobRepository;
+    private final UserRepository userRepository;
+    private final DepartmentRepository departmentRepository;
     private final GipformerClient gipformerClient;
     private final JwtUtils jwtUtils;
     private final Clock clock;
@@ -140,12 +147,34 @@ public class AudioStreamHandler extends AbstractWebSocketHandler {
             return;
         }
 
+        // Lookup full name, username and department name
+        String username = speakerName; // fallback: JWT subject
+        String departmentName = "unknown";
+        try {
+            User user = userRepository.findById(userId).orElse(null);
+            if (user != null) {
+                username = user.getUsername();
+                // Use fullName for display; fall back to username if null
+                speakerName = (user.getFullName() != null && !user.getFullName().isBlank())
+                        ? user.getFullName()
+                        : user.getUsername();
+                if (user.getDepartmentId() != null) {
+                    departmentName = departmentRepository.findById(user.getDepartmentId())
+                            .map(Department::getName)
+                            .orElse("unknown");
+                }
+            }
+        } catch (Exception e) {
+            log.warn("AudioStream [{}]: failed to lookup user/department for userId={}: {}",
+                    sessionId, userId, e.getMessage());
+        }
+
         sessionBuffers.put(sessionId, ByteBuffer.allocate(MAX_BUFFER_BYTES));
-        sessionMeta.put(sessionId, new SessionMeta(meetingId, userId, speakerName, speakerTurnId));
+        sessionMeta.put(sessionId, new SessionMeta(meetingId, userId, username, speakerName, departmentName, speakerTurnId));
         sequenceCounters.computeIfAbsent(speakerTurnId, k -> new AtomicInteger(0));
 
-        log.info("AudioStream [{}]: connected — meetingId={}, userId={}, speakerTurnId={}",
-                sessionId, meetingId, userId, speakerTurnId);
+        log.info("AudioStream [{}]: connected — meetingId={}, userId={}, dept={}, speakerTurnId={}",
+                sessionId, meetingId, userId, departmentName, speakerTurnId);
     }
 
     @Override
@@ -155,6 +184,16 @@ public class AudioStreamHandler extends AbstractWebSocketHandler {
         if (buffer == null) {
             log.warn("AudioStream [{}]: received binary but no buffer; ignoring", sessionId);
             return;
+        }
+
+        // Safety check: only accept audio in MEETING_MODE (TASK-003)
+        SessionMeta meta = sessionMeta.get(sessionId);
+        if (meta != null) {
+            Meeting meeting = meetingRepository.findById(meta.meetingId()).orElse(null);
+            if (meeting == null || meeting.getMode() != MeetingMode.MEETING_MODE) {
+                log.debug("AudioStream [{}]: meeting not in MEETING_MODE, dropping audio frame", sessionId);
+                return;
+            }
         }
 
         byte[] payload = message.getPayload().array();
@@ -263,6 +302,7 @@ public class AudioStreamHandler extends AbstractWebSocketHandler {
                     .meeting(meeting)
                     .speakerId(meta.userId)
                     .speakerName(meta.speakerName)
+                    .speakerDept(meta.departmentName)
                     .speakerTurnId(meta.speakerTurnId)
                     .sequenceNumber(seqNum)
                     .priority(priority)
@@ -304,8 +344,10 @@ public class AudioStreamHandler extends AbstractWebSocketHandler {
                 .resolve(meta.speakerTurnId);
         Files.createDirectories(dir);
 
-        // Filename: chunk_{seqNum}_{jobId}.wav
-        String fileName = String.format("chunk_%d_%s.wav", seqNum, jobId);
+        // Filename: username-department-userId-seqNum.wav
+        String safeName = meta.username().replaceAll("[^a-zA-Z0-9._-]", "_");
+        String safeDept = meta.departmentName().replaceAll("[^a-zA-Z0-9._-]", "_");
+        String fileName = String.format("%s-%s-%d-%d.wav", safeName, safeDept, meta.userId(), seqNum);
         Path wavPath = dir.resolve(fileName);
 
         // AudioFormat: 16 kHz, 16-bit, mono, signed, little-endian
@@ -371,7 +413,9 @@ public class AudioStreamHandler extends AbstractWebSocketHandler {
     private record SessionMeta(
             Long meetingId,
             Long userId,
+            String username,
             String speakerName,
+            String departmentName,
             String speakerTurnId) {
     }
 }

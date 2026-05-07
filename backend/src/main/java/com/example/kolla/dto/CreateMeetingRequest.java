@@ -1,5 +1,6 @@
 package com.example.kolla.dto;
 
+import com.example.kolla.enums.TranscriptionPriority;
 import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -50,4 +51,12 @@ public class CreateMeetingRequest {
      */
     @NotNull(message = "Secretary user ID is required")
     private Long secretaryUserId;
+
+    /**
+     * Transcription priority for the meeting.
+     * HIGH_PRIORITY: real-time STT broadcast during meeting + saved to DB.
+     * NORMAL_PRIORITY: STT saved to DB only (used for minutes after meeting ends).
+     * Defaults to NORMAL_PRIORITY if not specified.
+     */
+    private TranscriptionPriority transcriptionPriority = TranscriptionPriority.NORMAL_PRIORITY;
 }

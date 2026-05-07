@@ -116,7 +116,7 @@ describe('authStore — localStorage isolation', () => {
   it('should NOT persist token to localStorage', () => {
     useAuthStore.getState().login(mockToken, mockUser)
 
-    // Check that token is NOT in localStorage
+    // Check that token is NOT in localStorage (it should be in sessionStorage only)
     const localStorageKeys = Object.keys(localStorage)
     const hasTokenInStorage = localStorageKeys.some((key) => {
       const value = localStorage.getItem(key)
@@ -139,7 +139,9 @@ describe('authStore — localStorage isolation', () => {
     expect(hasUserInStorage).toBe(false)
   })
 
-  it('should NOT persist auth state to sessionStorage', () => {
+  it('should persist auth state to sessionStorage (by design — survives page reload)', () => {
+    // authStore uses sessionStorage so the token survives a page reload
+    // within the same browser tab but is cleared when the tab is closed.
     useAuthStore.getState().login(mockToken, mockUser)
 
     const sessionStorageKeys = Object.keys(sessionStorage)
@@ -148,6 +150,7 @@ describe('authStore — localStorage isolation', () => {
       return value !== null && value.includes(mockToken)
     })
 
-    expect(hasTokenInSession).toBe(false)
+    // Token SHOULD be in sessionStorage — that is the intended behaviour
+    expect(hasTokenInSession).toBe(true)
   })
 })

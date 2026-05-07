@@ -43,6 +43,10 @@ public class TranscriptionJob {
     @Column(name = "speaker_name", nullable = false, length = 255)
     private String speakerName;
 
+    /** Department name of the speaker at the time of the job. */
+    @Column(name = "speaker_dept", length = 255)
+    private String speakerDept;
+
     /** UUID identifying the current speaker turn (new UUID per Speaking_Permission grant). */
     @Column(name = "speaker_turn_id", nullable = false, length = 36)
     private String speakerTurnId;

@@ -11,11 +11,12 @@ export type MeetingEventType =
   | 'MEETING_ENDED'
   | 'MODE_CHANGED'
   | 'RAISE_HAND'
-  | 'RAISE_HAND_CANCELLED'
+  | 'HAND_LOWERED'
   | 'SPEAKING_PERMISSION_GRANTED'
   | 'SPEAKING_PERMISSION_REVOKED'
   | 'TRANSCRIPTION_SEGMENT'
   | 'TRANSCRIPTION_UNAVAILABLE'
+  | 'TRANSCRIPTION_RECOVERED'
   | 'MINUTES_PUBLISHED'
   | 'PARTICIPANT_JOINED'
   | 'PARTICIPANT_LEFT'
@@ -188,10 +189,15 @@ export interface MeetingDocument {
 
 export interface AttendanceLog {
   id: number
-  user: MeetingUser
+  userId?: number
+  userFullName?: string
+  username?: string
   joinTime: string
   leaveTime?: string
-  durationMinutes?: number
+  /** Duration in seconds from the backend */
+  durationSeconds?: number
+  ipAddress?: string
+  deviceInfo?: string
 }
 
 // ─── Room availability ────────────────────────────────────────────────────────

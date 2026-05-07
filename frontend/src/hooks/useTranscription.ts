@@ -68,6 +68,7 @@ export function useTranscription(): UseTranscriptionReturn {
           jobId: payload.jobId,
           speakerId: payload.speakerId,
           speakerName: payload.speakerName,
+          speakerDept: (payload as { speakerDept?: string }).speakerDept ?? '',
           speakerTurnId: payload.speakerTurnId,
           sequenceNumber: payload.sequenceNumber,
           text: payload.text,

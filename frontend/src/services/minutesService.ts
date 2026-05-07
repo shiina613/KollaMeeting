@@ -67,7 +67,8 @@ export function getMinutesDownloadUrl(
   const baseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api/v1'
   const token = useAuthStore.getState().token
   const tokenParam = token ? `&token=${encodeURIComponent(token)}` : ''
-  return `${baseUrl}/meetings/${meetingId}/minutes/download?version=${version}${tokenParam}`
+  // inline=true → backend serves Content-Disposition: inline so the iframe renders the PDF
+  return `${baseUrl}/meetings/${meetingId}/minutes/download?version=${version}&inline=true${tokenParam}`
 }
 
 /**

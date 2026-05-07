@@ -205,7 +205,7 @@ const useMeetingStore = create<MeetingState>((set, get) => ({
         break
       }
 
-      case 'RAISE_HAND_CANCELLED': {
+      case 'HAND_LOWERED': {
         const { userId } = payload as RaiseHandPayload
         get().removeRaiseHandRequest(userId)
         break
@@ -250,6 +250,11 @@ const useMeetingStore = create<MeetingState>((set, get) => ({
 
       case 'TRANSCRIPTION_UNAVAILABLE': {
         get().setTranscriptionAvailable(false)
+        break
+      }
+
+      case 'TRANSCRIPTION_RECOVERED': {
+        get().setTranscriptionAvailable(true)
         break
       }
 

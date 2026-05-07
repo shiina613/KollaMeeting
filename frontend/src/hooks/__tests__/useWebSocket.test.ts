@@ -28,6 +28,7 @@ const mockClientInstance = {
   activate: vi.fn(),
   deactivate: vi.fn(),
   subscribe: vi.fn(() => mockSubscription),
+  connected: false,
 }
 
 vi.mock('@stomp/stompjs', () => ({
@@ -53,6 +54,7 @@ const mockUser: User = { id: 1, username: 'testuser', email: 'test@example.com',
 /** Simulate the STOMP client successfully connecting */
 function simulateConnect() {
   act(() => {
+    mockClientInstance.connected = true
     const onConnect = capturedClientOptions.onConnect as () => void
     onConnect?.()
   })
@@ -61,6 +63,7 @@ function simulateConnect() {
 /** Simulate the STOMP client disconnecting */
 function simulateDisconnect() {
   act(() => {
+    mockClientInstance.connected = false
     const onDisconnect = capturedClientOptions.onDisconnect as () => void
     onDisconnect?.()
   })
@@ -101,6 +104,7 @@ beforeEach(() => {
   mockClientInstance.deactivate.mockClear()
   mockClientInstance.subscribe.mockClear()
   mockClientInstance.subscribe.mockReturnValue(mockSubscription)
+  mockClientInstance.connected = false
 
   // Ensure the auth store has a token so the hook will connect
   useAuthStore.getState().login(mockToken, mockUser)
@@ -151,7 +155,10 @@ describe('useWebSocket — subscriptions', () => {
   })
 
   it('should subscribe to /topic/meeting/{id} when meetingId is provided', () => {
-    renderHook(() => useWebSocket({ meetingId: 42 }))
+    let hookResult!: ReturnType<typeof renderHook>
+    act(() => {
+      hookResult = renderHook(() => useWebSocket({ meetingId: 42 }))
+    })
     simulateConnect()
 
     const subscribedTopics = (mockClientInstance.subscribe as Mock).mock.calls.map(
@@ -192,7 +199,9 @@ describe('useWebSocket — onConnected / onDisconnected callbacks', () => {
 describe('useWebSocket — meeting event callback', () => {
   it('should call onMeetingEvent when a message arrives on the meeting topic', () => {
     const onMeetingEvent = vi.fn()
-    renderHook(() => useWebSocket({ meetingId: 10, onMeetingEvent }))
+    act(() => {
+      renderHook(() => useWebSocket({ meetingId: 10, onMeetingEvent }))
+    })
     simulateConnect()
 
     const eventPayload = {
@@ -210,7 +219,9 @@ describe('useWebSocket — meeting event callback', () => {
   it('should not crash when meeting event JSON is malformed', () => {
     const onMeetingEvent = vi.fn()
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    renderHook(() => useWebSocket({ meetingId: 10, onMeetingEvent }))
+    act(() => {
+      renderHook(() => useWebSocket({ meetingId: 10, onMeetingEvent }))
+    })
     simulateConnect()
 
     simulateMessage(1, 'not-valid-json{{{')

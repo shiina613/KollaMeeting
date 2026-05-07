@@ -84,9 +84,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private String extractToken(HttpServletRequest request) {
+        // 1. Standard Authorization header (all API calls)
         String header = request.getHeader("Authorization");
         if (StringUtils.hasText(header) && header.startsWith(BEARER_PREFIX)) {
             return header.substring(BEARER_PREFIX.length());
+        }
+        // 2. Query param fallback — used by PDF iframe src (browser cannot set headers on iframe)
+        //    Only accepted for the minutes/download endpoint to limit the attack surface.
+        String requestUri = request.getRequestURI();
+        if (requestUri != null && requestUri.contains("/minutes/download")) {
+            String tokenParam = request.getParameter("token");
+            if (StringUtils.hasText(tokenParam)) {
+                return tokenParam;
+            }
         }
         return null;
     }

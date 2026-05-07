@@ -79,20 +79,15 @@ export default function AppRouter() {
             <Route element={<AppLayout />}>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/meetings" element={<MeetingListPage />} />
+              {/* /meetings/new MUST come before /meetings/:id to avoid matching :id="new" */}
+              <Route path="/meetings/new" element={<MeetingFormPage />} />
+              <Route path="/meetings/:id/edit" element={<MeetingFormPage />} />
               <Route path="/meetings/:id" element={<MeetingDetailPage />} />
               <Route path="/search" element={<SearchPage />} />
               <Route path="/recordings" element={<RecordingListPage />} />
             </Route>
             {/* Meeting room — fullscreen, no sidebar/header */}
             <Route path="/meetings/:id/room" element={<MeetingRoomPage />} />
-          </Route>
-
-          {/* Protected routes — SECRETARY only */}
-          <Route element={<ProtectedRoute allowedRoles={['SECRETARY']} />}>
-            <Route element={<AppLayout />}>
-              <Route path="/meetings/new" element={<MeetingFormPage />} />
-              <Route path="/meetings/:id/edit" element={<MeetingFormPage />} />
-            </Route>
           </Route>
 
           {/* Protected routes — ADMIN only */}

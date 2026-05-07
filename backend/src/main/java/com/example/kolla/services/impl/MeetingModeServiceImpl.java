@@ -31,7 +31,7 @@ import java.util.Optional;
  *
  * <p>Handles FREE_MODE ↔ MEETING_MODE transitions with the following guarantees:
  * <ul>
- *   <li>Only Host or ADMIN may switch modes (Requirement 21.7).</li>
+ *   <li>Only the Host may switch modes (Requirement 21.7 — ADMIN/Secretary removed per TASK-001).</li>
  *   <li>Switching to FREE_MODE while a speaker holds permission:
  *       finalize audio chunk → push to Redis → revoke permission → expire raise-hand
  *       requests → broadcast MODE_CHANGED. The broadcast is the last step, so
@@ -81,10 +81,10 @@ public class MeetingModeServiceImpl implements MeetingModeService {
     public MeetingResponse switchMode(Long meetingId, MeetingMode targetMode, User requester) {
         Meeting meeting = findMeetingOrThrow(meetingId);
 
-        // Permission check: only Host or ADMIN (Requirement 21.7, 21.8)
+        // Permission check: Host only (TASK-001 — ADMIN and Secretary removed)
         if (!meetingLifecycleService.isHostOrAdmin(meeting, requester)) {
             throw new ForbiddenException(
-                    "Only the Host or an ADMIN may switch meeting modes");
+                    "Only the Host may switch meeting modes");
         }
 
         // Meeting must be ACTIVE
@@ -104,6 +104,27 @@ public class MeetingModeServiceImpl implements MeetingModeService {
             return switchToMeetingMode(meeting, requester);
         } else {
             return switchToFreeMode(meeting, requester);
+        }
+    }
+
+    // ── System-initiated mode switch (no permission check) ──────────────────────
+
+    /**
+     * Switch mode without permission check — for system-initiated transitions
+     * (e.g., when both Host and Secretary disconnect).
+     * NOT exposed via REST. (TASK-002)
+     */
+    @Override
+    @Transactional
+    public void switchModeInternal(Long meetingId, MeetingMode mode) {
+        Meeting meeting = findMeetingOrThrow(meetingId);
+        if (meeting.getStatus() != MeetingStatus.ACTIVE) return;
+        if (meeting.getMode() == mode) return;
+
+        if (mode == MeetingMode.FREE_MODE) {
+            switchToFreeMode(meeting, null); // null requester = system
+        } else {
+            switchToMeetingMode(meeting, null);
         }
     }
 
@@ -137,8 +158,9 @@ public class MeetingModeServiceImpl implements MeetingModeService {
         meeting.setMode(MeetingMode.MEETING_MODE);
         Meeting saved = meetingRepository.save(meeting);
 
-        log.info("Meeting id={} switched to MEETING_MODE by user '{}'",
-                meeting.getId(), requester.getUsername());
+        String requesterName = requester != null ? requester.getUsername() : "system";
+        log.info("Meeting id={} switched to MEETING_MODE by '{}'",
+                meeting.getId(), requesterName);
 
         // Broadcast — frontend will mute all participants (Requirement 21.4)
         eventPublisher.publishModeChanged(meeting.getId(), MeetingMode.MEETING_MODE);
@@ -177,12 +199,9 @@ public class MeetingModeServiceImpl implements MeetingModeService {
             String speakerTurnId = sp.getSpeakerTurnId();
 
             // Step 2: Signal audio chunk finalization via Redis
-            // The AudioStreamHandler listens for this key and flushes the current chunk.
-            // This is a best-effort signal; the handler will also finalize on disconnect.
             signalChunkFinalization(meetingId, speakerTurnId);
 
             // Step 3: Revoke speaking permission (broadcasts SPEAKING_PERMISSION_REVOKED)
-            // Requirements: 21.9
             speakingPermissionService.revokeAllPermissions(meetingId, "MODE_SWITCHED");
 
             log.info("Revoked speaking permission (turn={}) for mode switch in meeting id={}",
@@ -201,11 +220,11 @@ public class MeetingModeServiceImpl implements MeetingModeService {
         meeting.setMode(MeetingMode.FREE_MODE);
         Meeting saved = meetingRepository.save(meeting);
 
-        log.info("Meeting id={} switched to FREE_MODE by user '{}'",
-                meetingId, requester.getUsername());
+        String requesterName = requester != null ? requester.getUsername() : "system";
+        log.info("Meeting id={} switched to FREE_MODE by '{}'",
+                meetingId, requesterName);
 
         // Step 6: Broadcast MODE_CHANGED — LAST step (Requirement 21.10)
-        // Participants only see the transition after all cleanup is complete.
         eventPublisher.publishModeChanged(meetingId, MeetingMode.FREE_MODE);
 
         return MeetingResponse.from(saved);
@@ -233,6 +252,14 @@ public class MeetingModeServiceImpl implements MeetingModeService {
             log.warn("Failed to signal chunk finalization for meeting id={}, turn={}: {}",
                     meetingId, speakerTurnId, e.getMessage());
         }
+    }
+
+    /**
+     * Check whether the given user is the designated Secretary of this meeting.
+     */
+    private boolean isSecretaryOfMeeting(Meeting meeting, User user) {
+        return meeting.getSecretary() != null
+                && meeting.getSecretary().getId().equals(user.getId());
     }
 
     private Meeting findMeetingOrThrow(Long id) {

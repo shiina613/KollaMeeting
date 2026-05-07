@@ -335,3 +335,41 @@ export async function getTranscriptionPriority(
   )
   return response.data
 }
+
+// ─── Audio Jobs (STT chunks) ──────────────────────────────────────────────────
+
+export interface AudioJob {
+  jobId: string
+  speakerName: string
+  speakerDept: string | null
+  speakerTurnId: string
+  sequenceNumber: number
+  status: 'PENDING' | 'QUEUED' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
+  createdAt: string | null
+  text: string | null
+  confidence: number | null
+}
+
+/**
+ * List all audio chunks used for speech-to-text in a meeting,
+ * ordered chronologically (same order as meeting minutes).
+ */
+export async function listAudioJobs(meetingId: number): Promise<ApiResponse<AudioJob[]>> {
+  const response = await api.get<ApiResponse<AudioJob[]>>(
+    `/meetings/${meetingId}/audio-jobs`,
+  )
+  return response.data
+}
+
+/**
+ * Build the URL to stream an audio job's WAV file inline in the browser.
+ * Returns a full URL string suitable for <audio src="...">.
+ * Auth token is attached via the Axios interceptor cannot be used for <audio> tags,
+ * so we use a signed blob approach: fetch via Axios then create an object URL.
+ */
+export async function fetchAudioJobBlob(meetingId: number, jobId: string): Promise<string> {
+  const response = await api.get(`/meetings/${meetingId}/audio-jobs/${jobId}/audio`, {
+    responseType: 'blob',
+  })
+  return URL.createObjectURL(response.data as Blob)
+}

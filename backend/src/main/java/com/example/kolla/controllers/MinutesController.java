@@ -141,16 +141,21 @@ public class MinutesController {
             @Parameter(description = "Meeting ID") @PathVariable Long meetingId,
             @Parameter(description = "PDF version: draft, confirmed, or secretary")
             @RequestParam(defaultValue = "draft") String version,
+            @RequestParam(defaultValue = "false") boolean inline,
             @AuthenticationPrincipal User currentUser) throws IOException {
 
         Resource resource = minutesService.downloadMinutes(meetingId, version, currentUser);
 
         String filename = "minutes_" + meetingId + "_" + version + ".pdf";
+        // inline=true  → display in browser (used by iframe viewer)
+        // inline=false → force browser download (used by download buttons)
+        String disposition = inline
+                ? "inline; filename=\"" + filename + "\""
+                : "attachment; filename=\"" + filename + "\"";
 
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + filename + "\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition)
                 .body(resource);
     }
 
