@@ -100,6 +100,15 @@ function Start-Services {
     }
     Write-Host "[OK] Backend image da duoc build."
 
+    Write-Host "[*] Build gipformer (cap nhat code Python ASR)..."
+    # Chi rebuild Layer 6 (COPY code) neu layers truoc (PyTorch, sherpa-onnx) da cache
+    cmd /c "docker compose build gipformer 2>&1"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Khong the build gipformer. Chay thu: docker compose build gipformer"
+        exit 1
+    }
+    Write-Host "[OK] Gipformer image da duoc build."
+
     Write-Host "[*] Khoi dong services (tru frontend)..."
     # Restart cloudflared truoc de dam bao lay duoc URL moi (xoa log cu)
     cmd /c "docker compose rm -sf cloudflared > nul 2>&1"
@@ -111,6 +120,7 @@ function Start-Services {
     }
     Write-Host "[OK] Services da khoi dong."
 }
+
 
 # =============================================================================
 # Get-TunnelUrl - Poll log cloudflared, extract URL (timeout 30s)

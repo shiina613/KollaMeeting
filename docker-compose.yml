@@ -13,6 +13,8 @@ volumes:
     driver: local
   app-storage:
     driver: local
+  hf-cache:
+    driver: local   # cache HuggingFace models (Whisper ~600MB) giua cac lan restart
 
 services:
   # ─────────────────────────────────────────────
@@ -147,6 +149,7 @@ services:
       TZ: Asia/Ho_Chi_Minh
     volumes:
       - app-storage:/app/storage
+      - hf-cache:/root/.cache/huggingface   # persist model download giua cac lan rebuild
     depends_on:
       redis:
         condition: service_healthy
