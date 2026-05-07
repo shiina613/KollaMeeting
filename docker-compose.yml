@@ -135,8 +135,9 @@ services:
       # "gipformer" → Gipformer-65M-RNNT (VI thuần, CPU nhanh)
       ASR_BACKEND: ${ASR_BACKEND:-whisper}
       # Whisper model: tiny | base | small | medium | large-v2 | large-v3
-      #   distil-large-v2 | distil-large-v3 | distil-large-v3.5
-      WHISPER_MODEL: ${WHISPER_MODEL:-distil-large-v3}
+      #   LƯU Ý: distil-* là English-only, không dùng cho tiếng Việt.
+      #   Khuyến nghị: large-v3 (multilingual VI+EN, ~2.2GB VRAM với int8_float16)
+      WHISPER_MODEL: ${WHISPER_MODEL:-large-v3}
       WHISPER_LANGUAGE: ${WHISPER_LANGUAGE:-vi}
       # ── Inference ────────────────────────────────────────────────────────────
       # DEVICE=cuda enables GPU inference; set to "cpu" for CPU-only fallback

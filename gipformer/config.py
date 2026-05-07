@@ -28,8 +28,9 @@ class Settings(BaseSettings):
     # ── Whisper settings (khi ASR_BACKEND=whisper) ───────────────────────────
     # Các model được hỗ trợ: tiny, base, small, medium, large-v2, large-v3,
     #   distil-large-v2, distil-large-v3, distil-large-v3.5
-    # Khuyến nghị: distil-large-v3 (chất lượng ~large-v3, nhanh hơn 6x, ~2GB VRAM)
-    WHISPER_MODEL: str = "distil-large-v3"
+    # LƯU Ý: distil-* là English-only. Để hỗ trợ tiếng Việt dùng large-v3.
+    # Khuyến nghị: large-v3 + int8_float16 (~2.2GB VRAM, multilingual VI+EN)
+    WHISPER_MODEL: str = "large-v3"
     WHISPER_LANGUAGE: str = "vi"  # ngôn ngữ chính; Whisper tự nhận EN chêm vào
 
     # ── Inference chung ──────────────────────────────────────────────────────
