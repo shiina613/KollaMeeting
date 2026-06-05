@@ -43,11 +43,17 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Override
     @Transactional
     public DepartmentResponse createDepartment(CreateDepartmentRequest request) {
+        if (request.getDepartmentCode() != null && !request.getDepartmentCode().isBlank()
+                && departmentRepository.existsByDepartmentCode(request.getDepartmentCode().trim())) {
+            throw new BadRequestException(
+                    "Department with code '" + request.getDepartmentCode() + "' already exists");
+        }
         if (departmentRepository.existsByName(request.getName())) {
             throw new BadRequestException("Department with name '" + request.getName() + "' already exists");
         }
 
         Department department = Department.builder()
+                .departmentCode(blankToNull(request.getDepartmentCode()))
                 .name(request.getName())
                 .description(request.getDescription())
                 .build();
@@ -62,6 +68,16 @@ public class DepartmentServiceImpl implements DepartmentService {
     public DepartmentResponse updateDepartment(Long id, UpdateDepartmentRequest request) {
         Department department = findOrThrow(id);
 
+        if (request.getDepartmentCode() != null) {
+            String departmentCode = blankToNull(request.getDepartmentCode());
+            if (departmentCode != null
+                    && !departmentCode.equals(department.getDepartmentCode())
+                    && departmentRepository.existsByDepartmentCode(departmentCode)) {
+                throw new BadRequestException(
+                        "Department with code '" + departmentCode + "' already exists");
+            }
+            department.setDepartmentCode(departmentCode);
+        }
         if (request.getName() != null && !request.getName().isBlank()) {
             if (!request.getName().equals(department.getName())
                     && departmentRepository.existsByName(request.getName())) {
@@ -89,5 +105,9 @@ public class DepartmentServiceImpl implements DepartmentService {
     private Department findOrThrow(Long id) {
         return departmentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Department not found with id: " + id));
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }

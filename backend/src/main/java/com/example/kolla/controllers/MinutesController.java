@@ -1,6 +1,7 @@
 package com.example.kolla.controllers;
 
 import com.example.kolla.dto.EditMinutesRequest;
+import com.example.kolla.exceptions.BadRequestException;
 import com.example.kolla.models.User;
 import com.example.kolla.responses.ApiResponse;
 import com.example.kolla.responses.MinutesResponse;
@@ -13,6 +14,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -20,6 +22,8 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 
 /**
  * Minutes workflow endpoints.
@@ -28,7 +32,7 @@ import java.io.IOException;
  *   GET    /api/v1/meetings/{id}/minutes                          – get minutes info
  *   POST   /api/v1/meetings/{id}/minutes/confirm                  – Host confirms
  *   PUT    /api/v1/meetings/{id}/minutes/edit                     – Secretary edits
- *   GET    /api/v1/meetings/{id}/minutes/download?version=...     – download PDF
+ *   GET    /api/v1/meetings/{id}/minutes/download?version=...&format=pdf|docx – download file
  * </pre>
  *
  * Requirements: 25.1–25.6
@@ -69,7 +73,7 @@ public class MinutesController {
 
     /**
      * POST /api/v1/meetings/{meetingId}/minutes/confirm
-     * Host confirms the draft minutes with a digital stamp.
+     * Host confirms the draft minutes with a PAdES/CAdES digital signature on the PDF.
      * Requirements: 25.4
      */
     @PostMapping("/confirm")
@@ -124,15 +128,15 @@ public class MinutesController {
     // ── GET /meetings/{meetingId}/minutes/download ────────────────────────────
 
     /**
-     * GET /api/v1/meetings/{meetingId}/minutes/download?version=draft|confirmed|secretary
-     * Download a specific version of the minutes PDF.
+     * GET /api/v1/meetings/{meetingId}/minutes/download?version=draft|confirmed|secretary&format=pdf|docx
+     * Download a specific version of the minutes file.
      * Requirements: 25.6
      */
     @GetMapping("/download")
-    @Operation(summary = "Download a minutes PDF version (members only)")
+    @Operation(summary = "Download a minutes PDF or DOCX version (members only)")
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Minutes PDF file"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid version parameter"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Minutes PDF or DOCX file"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid version or format parameter"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Meeting or minutes not found")
@@ -141,21 +145,28 @@ public class MinutesController {
             @Parameter(description = "Meeting ID") @PathVariable Long meetingId,
             @Parameter(description = "PDF version: draft, confirmed, or secretary")
             @RequestParam(defaultValue = "draft") String version,
+            @Parameter(description = "File format: pdf or docx")
+            @RequestParam(defaultValue = "pdf") String format,
             @RequestParam(defaultValue = "false") boolean inline,
             @AuthenticationPrincipal User currentUser) throws IOException {
 
-        Resource resource = minutesService.downloadMinutes(meetingId, version, currentUser);
+        String normalizedFormat = normalizeFormat(format);
+        Resource resource = minutesService.downloadMinutes(
+                meetingId, version, normalizedFormat, currentUser);
 
-        String filename = "minutes_" + meetingId + "_" + version + ".pdf";
+        String filename = "bien-ban-" + versionLabel(version) + "-" + meetingId
+                + "." + normalizedFormat;
         // inline=true  → display in browser (used by iframe viewer)
         // inline=false → force browser download (used by download buttons)
-        String disposition = inline
-                ? "inline; filename=\"" + filename + "\""
-                : "attachment; filename=\"" + filename + "\"";
+        ContentDisposition disposition = (inline
+                ? ContentDisposition.inline()
+                : ContentDisposition.attachment())
+                .filename(filename, StandardCharsets.UTF_8)
+                .build();
 
         return ResponseEntity.ok()
-                .contentType(MediaType.APPLICATION_PDF)
-                .header(HttpHeaders.CONTENT_DISPOSITION, disposition)
+                .contentType(contentType(normalizedFormat))
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
                 .body(resource);
     }
 
@@ -171,5 +182,29 @@ public class MinutesController {
             return authHeader.substring(7);
         }
         return "";
+    }
+
+    private String normalizeFormat(String format) {
+        String normalized = format == null ? "pdf" : format.toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case "pdf", "docx" -> normalized;
+            default -> throw new BadRequestException("Invalid minutes format: " + format);
+        };
+    }
+
+    private MediaType contentType(String format) {
+        if ("docx".equals(format)) {
+            return MediaType.parseMediaType(
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        }
+        return MediaType.APPLICATION_PDF;
+    }
+
+    private String versionLabel(String version) {
+        return switch (version.toLowerCase(Locale.ROOT)) {
+            case "confirmed" -> "xac-nhan";
+            case "secretary" -> "thu-ky";
+            default -> "nhap";
+        };
     }
 }

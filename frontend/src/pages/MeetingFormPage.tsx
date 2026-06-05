@@ -18,7 +18,7 @@ import {
 import { listHostCandidates, listSecretaryCandidates, searchUsers } from '../services/userService'
 import { listMeetingMembers, addMeetingMember, removeMeetingMember } from '../services/meetingService'
 import { formatUserLabel } from '../utils/userUtils'
-import type { Room, MeetingUser, MeetingMember, TranscriptionPriority } from '../types/meeting'
+import type { Room, MeetingUser, MeetingMember, TranscriptionPriority, MeetingRole } from '../types/meeting'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -130,6 +130,15 @@ const DEFAULT_VALUES: FormValues = {
   hostUserId: '',
   secretaryUserId: '',
   transcriptionPriority: 'NORMAL_PRIORITY',
+}
+
+const MEETING_ROLE_LABELS: Record<MeetingRole, string> = {
+  HOST: 'Chu tri',
+  SECRETARY: 'Thu ky',
+  REVIEWER: 'Phan bien',
+  COMMITTEE_MEMBER: 'Uy vien',
+  GUEST: 'Khach moi',
+  MEMBER: 'Thanh vien',
 }
 
 // ─── Room availability indicator ─────────────────────────────────────────────
@@ -246,6 +255,7 @@ export default function MeetingFormPage() {
   const [memberSearchResults, setMemberSearchResults] = useState<MeetingUser[]>([])
   const [memberSearchLoading, setMemberSearchLoading] = useState(false)
   const [memberActionLoading, setMemberActionLoading] = useState<number | null>(null)
+  const [memberRole, setMemberRole] = useState<MeetingRole>('MEMBER')
 
   // Load rooms and user candidates
   useEffect(() => {
@@ -322,7 +332,7 @@ export default function MeetingFormPage() {
     if (members.some((m) => m.userId === user.id)) return
     setMemberActionLoading(user.id)
     try {
-      await addMeetingMember(meetingId, user.id)
+      await addMeetingMember(meetingId, user.id, memberRole)
       const res = await listMeetingMembers(meetingId)
       setMembers(res.data ?? [])
       setMemberSearch('')
@@ -339,7 +349,7 @@ export default function MeetingFormPage() {
     setMemberActionLoading(userId)
     try {
       await removeMeetingMember(meetingId, userId)
-      setMembers((prev) => prev.filter((m) => m.id !== userId))
+      setMembers((prev) => prev.filter((m) => m.userId !== userId))
     } catch {
       // non-critical
     } finally {
@@ -594,7 +604,7 @@ export default function MeetingFormPage() {
             className="block text-label-md text-on-surface-variant mb-1"
           >
             Chủ trì <span className="text-error">*</span>
-            <span className="ml-1 text-on-surface-variant font-normal">(ADMIN hoặc SECRETARY)</span>
+            <span className="ml-1 text-on-surface-variant font-normal">(nguoi dung dang hoat dong)</span>
           </label>
           <select
             id="hostUserId"
@@ -702,19 +712,21 @@ export default function MeetingFormPage() {
                       </div>
                       <div className="min-w-0">
                         <div className="text-body-sm font-medium text-on-surface truncate">
-                          {formatUserLabel({ id: m.id, fullName: m.fullName, departmentName: m.department?.name })}
+                          {formatUserLabel({ id: m.userId, fullName: m.fullName, departmentName: m.departmentName ?? m.department?.name })}
                         </div>
-                        <div className="text-label-sm text-on-surface-variant">{m.username}</div>
+                        <div className="text-label-sm text-on-surface-variant">
+                          {m.username} · {MEETING_ROLE_LABELS[m.meetingRole ?? 'MEMBER']}
+                        </div>
                       </div>
                     </div>
                     <button
                       type="button"
-                      onClick={() => handleRemoveMember(m.id)}
-                      disabled={memberActionLoading === m.id}
+                      onClick={() => handleRemoveMember(m.userId)}
+                      disabled={memberActionLoading === m.userId}
                       className="p-1 rounded-lg hover:bg-error-container text-on-surface-variant hover:text-error transition-colors shrink-0 disabled:opacity-50"
                       aria-label={`Xóa ${m.fullName} khỏi cuộc họp`}
                     >
-                      {memberActionLoading === m.id
+                      {memberActionLoading === m.userId
                         ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                         : <span className="material-symbols-outlined text-[18px]">person_remove</span>
                       }
@@ -725,6 +737,20 @@ export default function MeetingFormPage() {
             ) : (
               <p className="text-body-sm text-on-surface-variant">Chưa có thành viên nào.</p>
             )}
+
+            <div>
+              <label className="block text-label-md text-on-surface-variant mb-1">Vai tro khi them</label>
+              <select
+                value={memberRole}
+                onChange={(e) => setMemberRole(e.target.value as MeetingRole)}
+                className="w-full border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="MEMBER">{MEETING_ROLE_LABELS.MEMBER}</option>
+                <option value="COMMITTEE_MEMBER">{MEETING_ROLE_LABELS.COMMITTEE_MEMBER}</option>
+                <option value="REVIEWER">{MEETING_ROLE_LABELS.REVIEWER}</option>
+                <option value="GUEST">{MEETING_ROLE_LABELS.GUEST}</option>
+              </select>
+            </div>
 
             {/* Search to add member */}
             <div className="relative">

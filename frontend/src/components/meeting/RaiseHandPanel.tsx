@@ -71,7 +71,7 @@ function RaiseHandItem({
   return (
     <li
       className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-colors
-        ${isCurrentSpeaker ? 'bg-green-50 border border-green-200' : 'hover:bg-surface-container'}
+        ${isCurrentSpeaker ? 'bg-green-900/30 border border-green-700' : 'hover:bg-slate-700'}
       `}
       data-testid={`raise-hand-item-${request.userId}`}
       aria-label={`${request.userName}${isCurrentSpeaker ? ', đang phát biểu' : ''}, xin phát biểu lúc ${formatTime(request.requestedAt)}`}
@@ -82,7 +82,7 @@ function RaiseHandItem({
           text-label-md font-semibold
           ${isCurrentSpeaker
             ? 'bg-green-500 text-white ring-2 ring-green-400 ring-offset-1'
-            : 'bg-amber-100 text-amber-700'
+            : 'bg-amber-900/40 text-amber-300'
           }`}
         aria-hidden="true"
       >
@@ -91,10 +91,10 @@ function RaiseHandItem({
 
       {/* Name + time */}
       <div className="flex-1 min-w-0">
-        <p className="text-body-sm font-medium text-on-surface truncate">
+        <p className="text-body-sm font-medium text-slate-200 truncate">
           {request.userName}
         </p>
-        <p className="text-label-md text-on-surface-variant">
+        <p className="text-label-md text-slate-400">
           {formatTime(request.requestedAt)}
         </p>
       </div>
@@ -102,7 +102,7 @@ function RaiseHandItem({
       {/* Speaking indicator */}
       {isCurrentSpeaker && (
         <span
-          className="material-symbols-outlined text-[18px] text-green-600 shrink-0"
+          className="material-symbols-outlined text-[18px] text-green-400 shrink-0"
           aria-hidden="true"
           title="Đang phát biểu"
           style={{ fontVariationSettings: "'FILL' 1" }}
@@ -119,13 +119,13 @@ function RaiseHandItem({
             onClick={onRevoke}
             disabled={isRevoking}
             className="inline-flex items-center gap-1 px-2 py-1 rounded text-label-md font-medium
-              bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50 disabled:cursor-not-allowed
+              bg-red-900/40 text-red-300 hover:bg-red-900/60 disabled:opacity-50 disabled:cursor-not-allowed
               transition-colors"
             aria-label={`Thu hồi quyền phát biểu của ${request.userName}`}
             data-testid={`revoke-btn-${request.userId}`}
           >
             {isRevoking ? (
-              <div className="w-3 h-3 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+              <div className="w-3 h-3 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
             ) : (
               <span className="material-symbols-outlined text-[14px]" aria-hidden="true">
                 mic_off
@@ -139,13 +139,13 @@ function RaiseHandItem({
             onClick={() => onGrant(request.userId)}
             disabled={isGranting}
             className="inline-flex items-center gap-1 px-2 py-1 rounded text-label-md font-medium
-              bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-50 disabled:cursor-not-allowed
+              bg-green-900/40 text-green-300 hover:bg-green-900/60 disabled:opacity-50 disabled:cursor-not-allowed
               transition-colors"
             aria-label={`Cấp quyền phát biểu cho ${request.userName}`}
             data-testid={`grant-btn-${request.userId}`}
           >
             {isGranting ? (
-              <div className="w-3 h-3 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
+              <div className="w-3 h-3 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
             ) : (
               <span className="material-symbols-outlined text-[14px]" aria-hidden="true">
                 mic
@@ -286,15 +286,15 @@ export default function RaiseHandPanel({ meetingId, isHost }: RaiseHandPanelProp
       aria-label="Danh sách xin phát biểu"
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-outline-variant shrink-0">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 shrink-0">
         <div className="flex items-center gap-2">
           <span
-            className="material-symbols-outlined text-[18px] text-amber-600"
+            className="material-symbols-outlined text-[18px] text-amber-400"
             aria-hidden="true"
           >
             pan_tool
           </span>
-          <h3 className="text-body-sm font-semibold text-on-surface">Xin phát biểu</h3>
+          <h3 className="text-body-sm font-semibold text-slate-200">Xin phát biểu</h3>
         </div>
 
         {/* Count badge */}
@@ -312,7 +312,7 @@ export default function RaiseHandPanel({ meetingId, isHost }: RaiseHandPanelProp
       {/* Error banner */}
       {error && (
         <div
-          className="mx-3 mt-2 px-3 py-2 rounded-lg bg-error-container text-on-error-container
+          className="mx-3 mt-2 px-3 py-2 rounded-lg bg-red-900/30 text-red-300
             text-body-sm"
           role="alert"
           data-testid="raise-hand-error"
@@ -325,16 +325,21 @@ export default function RaiseHandPanel({ meetingId, isHost }: RaiseHandPanelProp
       <div className="flex-1 overflow-y-auto py-2">
         {displayList.length === 0 ? (
           <div
-            className="flex flex-col items-center justify-center py-8 text-on-surface-variant"
+            className="flex flex-col items-center justify-center py-8 text-slate-400 px-4"
             data-testid="raise-hand-empty"
           >
             <span
-              className="material-symbols-outlined text-3xl mb-2"
+              className="material-symbols-outlined text-[48px] opacity-60 mb-3"
               aria-hidden="true"
             >
               pan_tool
             </span>
-            <p className="text-body-sm">Chưa có yêu cầu phát biểu</p>
+            <p className="text-body-sm text-center mb-1">
+              Chưa có yêu cầu phát biểu
+            </p>
+            <p className="text-body-sm text-center text-slate-500">
+              Yêu cầu sẽ xuất hiện khi thành viên giơ tay xin phát biểu trong chế độ MEETING_MODE.
+            </p>
           </div>
         ) : (
           <ul
@@ -358,8 +363,8 @@ export default function RaiseHandPanel({ meetingId, isHost }: RaiseHandPanelProp
       </div>
 
       {/* Footer hint */}
-      <div className="px-4 py-2 border-t border-outline-variant shrink-0">
-        <p className="text-label-md text-on-surface-variant">
+      <div className="px-4 py-2 border-t border-slate-700 shrink-0">
+        <p className="text-label-md text-slate-400">
           Yêu cầu được sắp xếp theo thứ tự thời gian
         </p>
       </div>

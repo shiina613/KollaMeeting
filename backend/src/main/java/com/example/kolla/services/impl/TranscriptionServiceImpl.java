@@ -3,11 +3,15 @@ package com.example.kolla.services.impl;
 import com.example.kolla.dto.TranscriptionCallbackRequest;
 import com.example.kolla.enums.TranscriptionJobStatus;
 import com.example.kolla.enums.TranscriptionPriority;
+import com.example.kolla.enums.Role;
+import com.example.kolla.exceptions.ForbiddenException;
 import com.example.kolla.exceptions.ResourceNotFoundException;
 import com.example.kolla.models.Meeting;
 import com.example.kolla.models.TranscriptionJob;
 import com.example.kolla.models.TranscriptionSegment;
+import com.example.kolla.models.User;
 import com.example.kolla.repositories.MeetingRepository;
+import com.example.kolla.repositories.MemberRepository;
 import com.example.kolla.repositories.TranscriptionJobRepository;
 import com.example.kolla.repositories.TranscriptionSegmentRepository;
 import com.example.kolla.responses.AudioJobResponse;
@@ -59,6 +63,7 @@ public class TranscriptionServiceImpl implements TranscriptionService {
     private final TranscriptionJobRepository transcriptionJobRepository;
     private final TranscriptionSegmentRepository transcriptionSegmentRepository;
     private final MeetingRepository meetingRepository;
+    private final MemberRepository memberRepository;
     private final MeetingEventPublisher meetingEventPublisher;
     private final Clock clock;
 
@@ -113,12 +118,18 @@ public class TranscriptionServiceImpl implements TranscriptionService {
         // ── Broadcast for HIGH_PRIORITY meetings ──────────────────────────────
         if (meeting.getTranscriptionPriority() == TranscriptionPriority.HIGH_PRIORITY) {
             ZonedDateTime segmentStartZoned = segmentStartTime.atZone(ZONE);
+            String speakerRole = memberRepository.findByMeetingIdAndUserId(meeting.getId(), job.getSpeakerId())
+                    .map(member -> member.getMeetingRole() != null
+                            ? member.getMeetingRole().name()
+                            : "MEMBER")
+                    .orElse("MEMBER");
             meetingEventPublisher.publishTranscriptionSegment(
                     meeting.getId(),
                     jobId,
                     job.getSpeakerId(),
                     job.getSpeakerName(),
                     job.getSpeakerDept() != null ? job.getSpeakerDept() : "",
+                    speakerRole,
                     job.getSpeakerTurnId(),
                     job.getSequenceNumber(),
                     request.getText(),
@@ -205,6 +216,20 @@ public class TranscriptionServiceImpl implements TranscriptionService {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    @Override
+    public void checkMeetingMembership(Long meetingId, User user) {
+        if (user.getRole() == Role.ADMIN) {
+            return; // ADMIN can access all meetings
+        }
+        if (!meetingRepository.existsById(meetingId)) {
+            throw new ResourceNotFoundException("Meeting not found: " + meetingId);
+        }
+        if (!memberRepository.existsByMeetingIdAndUserId(meetingId, user.getId())) {
+            throw new ForbiddenException(
+                    "You are not a member of meeting id: " + meetingId);
+        }
+    }
 
     private LocalDateTime parseSegmentStartTime(String isoString) {
         try {

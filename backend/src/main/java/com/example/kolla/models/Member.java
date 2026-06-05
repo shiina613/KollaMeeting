@@ -1,5 +1,6 @@
 package com.example.kolla.models;
 
+import com.example.kolla.enums.MeetingRole;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -14,7 +15,7 @@ import java.time.LocalDateTime;
  */
 @Entity
 @Table(name = "member",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"meeting_id", "user_id"}))
+        uniqueConstraints = @UniqueConstraint(columnNames = {"Meeting_id", "User_id"}))
 @Data
 @Builder
 @NoArgsConstructor
@@ -26,12 +27,17 @@ public class Member {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "meeting_id", nullable = false)
+    @JoinColumn(name = "Meeting_id", nullable = false)
     private Meeting meeting;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "User_id", nullable = false)
     private User user;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "MeetingRole", nullable = false)
+    @Builder.Default
+    private MeetingRole meetingRole = MeetingRole.MEMBER;
 
     @Column(name = "added_at", nullable = false)
     @Builder.Default

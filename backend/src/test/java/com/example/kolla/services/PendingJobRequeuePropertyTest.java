@@ -15,13 +15,13 @@ import java.util.stream.Collectors;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Property-based tests for pending job requeue on Gipformer recovery.
+ * Property-based tests for pending job requeue on ASR service recovery.
  *
  * <p>Property 14: Pending Job Requeue on Recovery
  *
  * <p>Verifies the recovery invariant:
  * <blockquote>
- *   When Gipformer recovers, ALL jobs with status=PENDING must be pushed to
+ *   When ASR service recovers, ALL jobs with status=PENDING must be pushed to
  *   the Redis queue with their original priority. No PENDING job must be skipped.
  *   Jobs with other statuses (QUEUED, PROCESSING, COMPLETED, FAILED) must NOT
  *   be re-queued.
@@ -34,7 +34,7 @@ class PendingJobRequeuePropertyTest {
     // ── Domain model helpers ──────────────────────────────────────────────────
 
     /**
-     * Simulates the recovery logic in {@code GipformerClient.recoverPendingJobs()}.
+     * Simulates the recovery logic in {@code AsrServiceClient.recoverPendingJobs()}.
      *
      * <p>Filters PENDING jobs and pushes them to the queue (simulated as a list).
      *

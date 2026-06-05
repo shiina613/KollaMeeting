@@ -19,7 +19,7 @@ import java.time.LocalDateTime;
  *
  * <p>One Minutes record per meeting (UNIQUE on meeting_id).
  * The draft PDF is auto-generated from TranscriptionSegments when the meeting ends.
- * The Host confirms with a digital stamp; the Secretary may then edit and publish.
+ * The Host confirms with a PAdES/CAdES digital signature; the Secretary may then edit and publish.
  *
  * Requirements: 25.1–25.7
  */
@@ -50,13 +50,21 @@ public class Minutes {
     @Column(name = "draft_pdf_path", length = 500)
     private String draftPdfPath;
 
-    /** Relative path to the Host-confirmed PDF (with digital stamp). */
+    /** Relative path to the auto-generated draft DOCX under /app/storage/minutes/{meetingId}/. */
+    @Column(name = "draft_docx_path", length = 500)
+    private String draftDocxPath;
+
+    /** Relative path to the Host-confirmed PDF (with embedded digital signature). */
     @Column(name = "confirmed_pdf_path", length = 500)
     private String confirmedPdfPath;
 
     /** Relative path to the Secretary-edited final PDF. */
     @Column(name = "secretary_pdf_path", length = 500)
     private String secretaryPdfPath;
+
+    /** Relative path to the Secretary-edited final DOCX. */
+    @Column(name = "secretary_docx_path", length = 500)
+    private String secretaryDocxPath;
 
     /** Rich-text HTML content provided by the Secretary editor. */
     @Column(name = "content_html", columnDefinition = "TEXT")
@@ -67,7 +75,7 @@ public class Minutes {
     private LocalDateTime hostConfirmedAt;
 
     /**
-     * SHA-256 hash of (JWT token + PDF content bytes) embedded as a digital stamp.
+     * SHA-256 hex digest of the signed PDF bytes (post-signature file fingerprint).
      * Requirements: 25.4
      */
     @Column(name = "host_confirmation_hash", length = 255)

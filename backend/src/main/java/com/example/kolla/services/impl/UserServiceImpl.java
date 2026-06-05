@@ -1,5 +1,6 @@
 package com.example.kolla.services.impl;
 
+import com.example.kolla.dto.ChangePasswordRequest;
 import com.example.kolla.dto.CreateUserRequest;
 import com.example.kolla.dto.ResetPasswordRequest;
 import com.example.kolla.dto.UpdateUserRequest;
@@ -137,19 +138,41 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public UserResponse createUser(CreateUserRequest request) {
-        if (userRepository.existsByUsername(request.getUsername())) {
-            throw new BadRequestException("Username '" + request.getUsername() + "' is already taken");
+        String employeeCode = resolveEmployeeCode(request.getEmployeeCode(), request.getUsername());
+        if (userRepository.existsByUsername(employeeCode)
+                || userRepository.existsByEmployeeCode(employeeCode)) {
+            throw new BadRequestException("Employee code '" + employeeCode + "' is already taken");
         }
         if (request.getEmail() != null && !request.getEmail().isBlank()
                 && userRepository.existsByEmail(request.getEmail())) {
             throw new BadRequestException("Email '" + request.getEmail() + "' is already in use");
         }
+        if (request.getPhoneNumber() != null && !request.getPhoneNumber().isBlank()
+                && userRepository.existsByPhoneNumber(request.getPhoneNumber())) {
+            throw new BadRequestException("Phone number '" + request.getPhoneNumber() + "' is already in use");
+        }
+        if (request.getIdentification() != null && !request.getIdentification().isBlank()
+                && userRepository.existsByIdentification(request.getIdentification())) {
+            throw new BadRequestException("Identification '" + request.getIdentification() + "' is already in use");
+        }
+        if (request.getDepartmentId() != null && !departmentRepository.existsById(request.getDepartmentId())) {
+            throw new BadRequestException("Department not found with id: " + request.getDepartmentId());
+        }
 
         User user = User.builder()
-                .username(request.getUsername())
+                .username(employeeCode)
+                .employeeCode(employeeCode)
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .fullName(request.getFullName())
                 .email(request.getEmail())
+                .dob(request.getDob())
+                .phoneNumber(blankToNull(request.getPhoneNumber()))
+                .degree(blankToNull(request.getDegree()))
+                .identification(blankToNull(request.getIdentification()))
+                .address(blankToNull(request.getAddress()))
+                .bankName(blankToNull(request.getBankName()))
+                .bankNumber(blankToNull(request.getBankNumber()))
+                .img(blankToNull(request.getImg()))
                 .role(request.getRole())
                 .departmentId(request.getDepartmentId())
                 .isActive(true)
@@ -179,9 +202,26 @@ public class UserServiceImpl implements UserService {
         if (request.getRole() != null && !isAdmin) {
             throw new ForbiddenException("Only ADMIN may change user roles");
         }
+        if (request.getEmployeeCode() != null && !isAdmin) {
+            throw new ForbiddenException("Only ADMIN may change employee codes");
+        }
 
         if (request.getFullName() != null && !request.getFullName().isBlank()) {
             target.setFullName(request.getFullName());
+        }
+        if (request.getEmployeeCode() != null && isAdmin) {
+            String employeeCode = resolveEmployeeCode(request.getEmployeeCode(), null);
+            if (!employeeCode.equals(target.getEmployeeCode())
+                    && (userRepository.existsByEmployeeCode(employeeCode)
+                    || userRepository.existsByUsername(employeeCode))) {
+                throw new BadRequestException("Employee code '" + employeeCode + "' is already taken");
+            }
+            String oldUsername = target.getUsername();
+            target.setUsername(employeeCode);
+            target.setEmployeeCode(employeeCode);
+            if (!employeeCode.equals(oldUsername)) {
+                invalidateUserTokens(id);
+            }
         }
         if (request.getEmail() != null) {
             if (!request.getEmail().isBlank()
@@ -190,6 +230,42 @@ public class UserServiceImpl implements UserService {
                 throw new BadRequestException("Email '" + request.getEmail() + "' is already in use");
             }
             target.setEmail(request.getEmail().isBlank() ? null : request.getEmail());
+        }
+        if (request.getDob() != null) {
+            target.setDob(request.getDob());
+        }
+        if (request.getPhoneNumber() != null) {
+            String phone = blankToNull(request.getPhoneNumber());
+            if (phone != null
+                    && !phone.equals(target.getPhoneNumber())
+                    && userRepository.existsByPhoneNumber(phone)) {
+                throw new BadRequestException("Phone number '" + phone + "' is already in use");
+            }
+            target.setPhoneNumber(phone);
+        }
+        if (request.getDegree() != null) {
+            target.setDegree(blankToNull(request.getDegree()));
+        }
+        if (request.getIdentification() != null) {
+            String identification = blankToNull(request.getIdentification());
+            if (identification != null
+                    && !identification.equals(target.getIdentification())
+                    && userRepository.existsByIdentification(identification)) {
+                throw new BadRequestException("Identification '" + identification + "' is already in use");
+            }
+            target.setIdentification(identification);
+        }
+        if (request.getAddress() != null) {
+            target.setAddress(blankToNull(request.getAddress()));
+        }
+        if (request.getBankName() != null) {
+            target.setBankName(blankToNull(request.getBankName()));
+        }
+        if (request.getBankNumber() != null) {
+            target.setBankNumber(blankToNull(request.getBankNumber()));
+        }
+        if (request.getImg() != null) {
+            target.setImg(blankToNull(request.getImg()));
         }
         if (request.getRole() != null) {
             Role oldRole = target.getRole();
@@ -202,6 +278,10 @@ public class UserServiceImpl implements UserService {
             }
         }
         if (request.getDepartmentId() != null) {
+            if (!departmentRepository.existsById(request.getDepartmentId())) {
+                throw new BadRequestException(
+                        "Department not found with id: " + request.getDepartmentId());
+            }
             target.setDepartmentId(request.getDepartmentId());
         }
         if (request.getIsActive() != null && isAdmin) {
@@ -217,6 +297,19 @@ public class UserServiceImpl implements UserService {
                     .map(Department::getName).orElse(null);
         }
         return UserResponse.from(saved, deptName);
+    }
+
+    @Override
+    @Transactional
+    public void changeOwnPassword(ChangePasswordRequest request, User requester) {
+        User target = findUserOrThrow(requester.getId());
+        if (!passwordEncoder.matches(request.currentPassword(), target.getPasswordHash())) {
+            throw new BadRequestException("Current password is incorrect");
+        }
+        target.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        userRepository.save(target);
+        invalidateUserTokens(target.getId());
+        log.info("Password changed for user '{}'", target.getUsername());
     }
 
     // ── Toggle active ─────────────────────────────────────────────────────────
@@ -318,6 +411,10 @@ public class UserServiceImpl implements UserService {
      * Marks all tokens for a user as invalidated by storing a Redis key.
      * The JWT filter checks this key and rejects tokens issued before the
      * invalidation timestamp.
+     *
+     * <p>This method throws a RuntimeException if Redis is unavailable, causing
+     * the enclosing transaction to roll back. This is intentional: if we cannot
+     * invalidate tokens, the role/status change must not be committed (fail-closed).
      * Requirements: 11.4, 11.9
      */
     private void invalidateUserTokens(Long userId) {
@@ -328,7 +425,11 @@ public class UserServiceImpl implements UserService {
                     String.valueOf(System.currentTimeMillis()));
             log.debug("Invalidated all tokens for userId={}", userId);
         } catch (Exception e) {
-            log.warn("Failed to invalidate tokens for userId={}: {}", userId, e.getMessage());
+            log.error("Failed to invalidate tokens for userId={}: {}. "
+                    + "Rolling back to prevent stale tokens from remaining valid.",
+                    userId, e.getMessage(), e);
+            throw new RuntimeException(
+                    "Cannot invalidate user tokens — Redis unavailable. Operation aborted.", e);
         }
     }
 
@@ -339,5 +440,19 @@ public class UserServiceImpl implements UserService {
             sb.append(TEMP_PASSWORD_CHARS.charAt(random.nextInt(TEMP_PASSWORD_CHARS.length())));
         }
         return sb.toString();
+    }
+
+    private String resolveEmployeeCode(String employeeCode, String username) {
+        String value = employeeCode != null && !employeeCode.isBlank()
+                ? employeeCode.trim()
+                : username != null ? username.trim() : null;
+        if (value == null || value.isBlank()) {
+            throw new BadRequestException("Employee code is required");
+        }
+        return value;
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }

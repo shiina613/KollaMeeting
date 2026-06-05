@@ -33,6 +33,7 @@ function DepartmentFormModal({
   onSuccess: () => void
 }) {
   const isEdit = !!dept
+  const [departmentCode, setDepartmentCode] = useState(dept?.departmentCode ?? '')
   const [name, setName] = useState(dept?.name ?? '')
   const [description, setDescription] = useState(dept?.description ?? '')
   const [loading, setLoading] = useState(false)
@@ -44,9 +45,9 @@ function DepartmentFormModal({
     setError(null)
     try {
       if (isEdit) {
-        await updateDepartment(dept!.id, { name, description: description || undefined })
+        await updateDepartment(dept!.id, { departmentCode, name, description: description || undefined })
       } else {
-        await createDepartment({ name, description: description || undefined })
+        await createDepartment({ departmentCode, name, description: description || undefined })
       }
       onSuccess()
     } catch (err: unknown) {
@@ -69,6 +70,18 @@ function DepartmentFormModal({
           </div>
         )}
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-label-md text-on-surface-variant mb-1">
+              Ma phong ban <span className="text-error">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              value={departmentCode}
+              onChange={(e) => setDepartmentCode(e.target.value)}
+              className="w-full border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
           <div>
             <label className="block text-label-md text-on-surface-variant mb-1">
               Tên phòng ban <span className="text-error">*</span>
@@ -119,6 +132,7 @@ function RoomFormModal({
   onSuccess: () => void
 }) {
   const isEdit = !!room
+  const [roomCode, setRoomCode] = useState(room?.roomCode ?? '')
   const [name, setName] = useState(room?.name ?? '')
   const [capacity, setCapacity] = useState(room?.capacity?.toString() ?? '')
   const [departmentId, setDepartmentId] = useState<number | ''>(room?.departmentId ?? (departments[0]?.id ?? ''))
@@ -133,14 +147,18 @@ function RoomFormModal({
     try {
       if (isEdit) {
         const data: UpdateRoomRequest = {
+          roomCode,
           name,
+          roomName: name,
           capacity: capacity ? Number(capacity) : undefined,
           departmentId: departmentId as number,
         }
         await updateRoom(room!.id, data)
       } else {
         const data: CreateRoomRequest = {
+          roomCode,
           name,
+          roomName: name,
           capacity: capacity ? Number(capacity) : undefined,
           departmentId: departmentId as number,
         }
@@ -167,6 +185,18 @@ function RoomFormModal({
           </div>
         )}
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-label-md text-on-surface-variant mb-1">
+              Ma phong hop <span className="text-error">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              value={roomCode}
+              onChange={(e) => setRoomCode(e.target.value)}
+              className="w-full border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
           <div>
             <label className="block text-label-md text-on-surface-variant mb-1">
               Tên phòng họp <span className="text-error">*</span>
@@ -397,6 +427,7 @@ export default function DepartmentRoomManagement() {
               <table className="w-full text-body-sm">
                 <thead>
                   <tr className="border-b border-outline-variant bg-surface-container-low">
+                    <th className="text-left px-4 py-3 text-label-md text-on-surface-variant font-semibold">Ma phong ban</th>
                     <th className="text-left px-4 py-3 text-label-md text-on-surface-variant font-semibold">Tên phòng ban</th>
                     <th className="text-left px-4 py-3 text-label-md text-on-surface-variant font-semibold hidden md:table-cell">Mô tả</th>
                     <th className="px-4 py-3" aria-label="Hành động" />
@@ -405,6 +436,7 @@ export default function DepartmentRoomManagement() {
                 <tbody>
                   {departments.map((d, idx) => (
                     <tr key={d.id} className={`border-b border-outline-variant last:border-0 hover:bg-surface-container-low transition-colors ${idx % 2 === 0 ? '' : 'bg-surface-container/30'}`}>
+                      <td className="px-4 py-3 font-mono text-on-surface">{d.departmentCode ?? '—'}</td>
                       <td className="px-4 py-3 font-medium text-on-surface">{d.name}</td>
                       <td className="px-4 py-3 text-on-surface-variant hidden md:table-cell">{d.description ?? '—'}</td>
                       <td className="px-4 py-3">
@@ -468,6 +500,7 @@ export default function DepartmentRoomManagement() {
               <table className="w-full text-body-sm">
                 <thead>
                   <tr className="border-b border-outline-variant bg-surface-container-low">
+                    <th className="text-left px-4 py-3 text-label-md text-on-surface-variant font-semibold">Ma phong</th>
                     <th className="text-left px-4 py-3 text-label-md text-on-surface-variant font-semibold">Tên phòng</th>
                     <th className="text-left px-4 py-3 text-label-md text-on-surface-variant font-semibold hidden md:table-cell">Phòng ban</th>
                     <th className="text-left px-4 py-3 text-label-md text-on-surface-variant font-semibold hidden lg:table-cell">Sức chứa</th>
@@ -477,6 +510,7 @@ export default function DepartmentRoomManagement() {
                 <tbody>
                   {rooms.map((r, idx) => (
                     <tr key={r.id} className={`border-b border-outline-variant last:border-0 hover:bg-surface-container-low transition-colors ${idx % 2 === 0 ? '' : 'bg-surface-container/30'}`}>
+                      <td className="px-4 py-3 font-mono text-on-surface">{r.roomCode ?? '—'}</td>
                       <td className="px-4 py-3 font-medium text-on-surface">{r.name}</td>
                       <td className="px-4 py-3 text-on-surface-variant hidden md:table-cell">{r.departmentName ?? '—'}</td>
                       <td className="px-4 py-3 text-on-surface-variant hidden lg:table-cell">

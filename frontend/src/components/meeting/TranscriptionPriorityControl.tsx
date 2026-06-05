@@ -3,7 +3,7 @@
  * transcription priority of an active meeting between HIGH_PRIORITY and
  * NORMAL_PRIORITY.
  *
- * Also displays a TRANSCRIPTION_UNAVAILABLE indicator when Gipformer is down.
+ * Also displays a TRANSCRIPTION_UNAVAILABLE indicator when ASR service is down.
  *
  * Requirements: 8.12
  */

@@ -17,8 +17,14 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class UpdateRoomRequest {
 
+    @Size(max = 100, message = "Room code must not exceed 100 characters")
+    private String roomCode;
+
     @Size(max = 255, message = "Room name must not exceed 255 characters")
     private String name;
+
+    @Size(max = 255, message = "Room name must not exceed 255 characters")
+    private String roomName;
 
     @Min(value = 1, message = "Capacity must be at least 1")
     private Integer capacity;

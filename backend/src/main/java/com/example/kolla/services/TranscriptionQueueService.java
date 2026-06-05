@@ -29,7 +29,7 @@ public interface TranscriptionQueueService {
      * Push a job to the Redis Sorted Set with the appropriate priority score.
      * Also updates the job's DB status to QUEUED and sets {@code queuedAt}.
      *
-     * <p>If Gipformer is currently unavailable, the job is left in PENDING status
+     * <p>If ASR service is currently unavailable, the job is left in PENDING status
      * and NOT pushed to Redis (recovery will re-queue it later).
      *
      * @param job the TranscriptionJob to enqueue
@@ -64,8 +64,8 @@ public interface TranscriptionQueueService {
     void removeJob(String jobId);
 
     /**
-     * Push all PENDING jobs back to the Redis queue (recovery after Gipformer restart).
-     * Called by {@link GipformerClient} when the service comes back online.
+     * Push all PENDING jobs back to the Redis queue (recovery after ASR service restart).
+     * Called by {@link AsrServiceClient} when the service comes back online.
      *
      * @param pendingJobs list of PENDING jobs to re-queue
      * Requirements: 8.7

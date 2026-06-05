@@ -6,30 +6,38 @@
 import api from './api'
 import type { ApiResponse, PageResponse } from '../types/api'
 import type { MeetingUser } from '../types/meeting'
+import type { UserProfileFields, UserRole } from '../types/user'
 
 export interface UserFilters {
   page?: number
   size?: number
-  role?: 'ADMIN' | 'SECRETARY' | 'USER'
+  role?: UserRole
   departmentId?: number
   search?: string
 }
 
-export interface CreateUserRequest {
-  username: string
+export interface CreateUserRequest extends UserProfileFields {
+  employeeCode: string
+  username?: string
   email: string
   fullName: string
   password: string
-  role: 'ADMIN' | 'SECRETARY' | 'USER'
+  role: UserRole
   departmentId?: number
 }
 
-export interface UpdateUserRequest {
+export interface UpdateUserRequest extends UserProfileFields {
+  employeeCode?: string
   email?: string
   fullName?: string
-  role?: 'ADMIN' | 'SECRETARY' | 'USER'
+  role?: UserRole
   departmentId?: number
   isActive?: boolean
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string
+  newPassword: string
 }
 
 /**
@@ -57,6 +65,26 @@ export async function listUsers(
  */
 export async function getCurrentUser(): Promise<ApiResponse<MeetingUser>> {
   const response = await api.get<ApiResponse<MeetingUser>>('/users/me')
+  return response.data
+}
+
+/**
+ * Update the current authenticated user's editable profile fields.
+ */
+export async function updateCurrentUser(
+  data: UpdateUserRequest,
+): Promise<ApiResponse<MeetingUser>> {
+  const response = await api.put<ApiResponse<MeetingUser>>('/users/me', data)
+  return response.data
+}
+
+/**
+ * Change the current authenticated user's password.
+ */
+export async function changeOwnPassword(
+  data: ChangePasswordRequest,
+): Promise<ApiResponse<void>> {
+  const response = await api.post<ApiResponse<void>>('/users/me/change-password', data)
   return response.data
 }
 
@@ -118,8 +146,7 @@ export async function resetPassword(
 }
 
 /**
- * List users eligible to be a host or secretary (SECRETARY role, active).
- * Uses the /users/candidates endpoint accessible by any authenticated user.
+ * List active SECRETARY users for secretary selection.
  */
 async function listCandidates(): Promise<MeetingUser[]> {
   const res = await api.get<ApiResponse<MeetingUser[]>>('/users/candidates')
@@ -146,10 +173,10 @@ export async function listAllActiveUsers(): Promise<MeetingUser[]> {
 }
 
 /**
- * List users eligible to be a host (SECRETARY role only).
+ * List users eligible to be a host. Thesis version 3.8 allows any active user.
  */
 export async function listHostCandidates(): Promise<MeetingUser[]> {
-  return listCandidates()
+  return listAllActiveUsers()
 }
 
 /**

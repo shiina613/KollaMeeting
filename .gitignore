@@ -1,13 +1,25 @@
-# =============================================================================
-# .gitignore — Kolla Meeting Rebuild
-# =============================================================================
-
-# ── Secrets & environment ─────────────────────────────────────────────────────
+# Environment and secrets
 .env
 *.env.local
 *.env.*.local
+.admin_token.tmp
+secrets/*
+!secrets/.gitignore
 
-# ── OS & editor ───────────────────────────────────────────────────────────────
+# Submitted/reference documents kept local
+*.docx
+style.md
+
+# Local extraction, demo and scratch outputs
+.docx_output.txt
+extracted_docx.txt
+.mtg_*.txt
+.test_mtg*.txt
+benchmark/
+storage/
+/app/storage/
+
+# OS and editors
 .DS_Store
 Thumbs.db
 .idea/
@@ -16,44 +28,42 @@ Thumbs.db
 *.swp
 *.swo
 
-# ── Backend (Java / Maven) ────────────────────────────────────────────────────
+# Backend
 backend/target/
-backend/.mvn/wrapper/maven-wrapper.jar
 backend/.jqwik-database
 *.class
 *.jar
 *.war
 *.ear
 
-# ── Frontend (Node / Vite) ────────────────────────────────────────────────────
+# Frontend
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
 frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/
 
-# ── Gipformer (Python) ────────────────────────────────────────────────────────
-gipformer/__pycache__/
-gipformer/**/__pycache__/
-gipformer/*.pyc
-gipformer/.venv/
-gipformer/venv/
-gipformer/*.egg-info/
-gipformer/dist/
-gipformer/.pytest_cache/
-gipformer/.hypothesis/
+# ASR service
+asr-service/__pycache__/
+asr-service/**/__pycache__/
+asr-service/*.pyc
+asr-service/.venv/
+asr-service/venv/
+asr-service/*.egg-info/
+asr-service/dist/
+asr-service/.pytest_cache/
+asr-service/.hypothesis/
+asr-service/models/*
+!asr-service/models/.gitkeep
+asr-service/data/*.wav
+vinai_PhoWhisper-medium-ct2-int8_float16/
 
-# ── File storage (runtime data) ───────────────────────────────────────────────
-storage/
-/app/storage/
-
-# ── Docker ────────────────────────────────────────────────────────────────────
-# Keep docker-compose.yml but ignore override files with local secrets
+# Docker/local deployment
 docker-compose.override.yml
-
-# ── Logs ─────────────────────────────────────────────────────────────────────
-*.log
-logs/
-
-# ── SSL certs (generated at runtime by certbot) ───────────────────────────────
 nginx/certs/
 certbot/
+
+# Logs
+*.log
+logs/

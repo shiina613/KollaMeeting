@@ -26,7 +26,7 @@ import java.time.Duration;
  * <ul>
  *   <li>{@code TranscriptionQueueServiceImpl} — Sorted Set operations on {@code transcription:queue}</li>
  *   <li>{@code MeetingLifecycleServiceImpl} — TTL keys for waiting timeout</li>
- *   <li>{@code GipformerClient} — active high-priority meeting key</li>
+ *   <li>{@code AsrServiceClient} — active high-priority meeting key</li>
  * </ul>
  *
  * Requirements: 16.6
@@ -110,7 +110,7 @@ public class RedisConfig {
      *
      * <p>Used for Sorted Set operations (transcription queue) and Hash operations
      * (job details). String serialization ensures keys and values are human-readable
-     * in Redis CLI and compatible with the Gipformer Python worker.
+     * in Redis CLI and compatible with the ASR Python worker.
      *
      * Requirements: 16.6
      */

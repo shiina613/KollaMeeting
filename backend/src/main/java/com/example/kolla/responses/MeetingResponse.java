@@ -27,7 +27,10 @@ public class MeetingResponse {
     private String code;
     private String meetingCode; // alias for code — used by frontend
     private String title;
+    private String name;
     private String description;
+    private Long departmentId;
+    private String departmentName;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
     private MeetingStatus status;
@@ -69,7 +72,9 @@ public class MeetingResponse {
                 .code(meeting.getCode())
                 .meetingCode(meeting.getCode())   // alias so frontend meetingCode field works
                 .title(meeting.getTitle())
+                .name(meeting.getTitle())
                 .description(meeting.getDescription())
+                .departmentId(meeting.getDepartmentId())
                 .startTime(meeting.getStartTime())
                 .endTime(meeting.getEndTime())
                 .status(meeting.getStatus())
@@ -83,6 +88,13 @@ public class MeetingResponse {
         if (meeting.getRoom() != null) {
             builder.roomId(meeting.getRoom().getId())
                    .roomName(meeting.getRoom().getName());
+            if (meeting.getDepartmentId() == null && meeting.getRoom().getDepartment() != null) {
+                builder.departmentId(meeting.getRoom().getDepartment().getId())
+                       .departmentName(meeting.getRoom().getDepartment().getName());
+            } else if (meeting.getRoom().getDepartment() != null
+                    && meeting.getRoom().getDepartment().getId().equals(meeting.getDepartmentId())) {
+                builder.departmentName(meeting.getRoom().getDepartment().getName());
+            }
         }
         if (meeting.getCreator() != null) {
             builder.creatorId(meeting.getCreator().getId())

@@ -54,6 +54,7 @@ export default function SearchPage() {
   const [error, setError] = useState<string | null>(null)
   const [page, setPage] = useState(0)
   const [pageSize] = useState(10)
+  const [searched, setSearched] = useState(false)
 
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -68,14 +69,20 @@ export default function SearchPage() {
     inputRef.current?.focus()
   }, [])
 
+  const hasMeetingFilters =
+    Boolean(startDate || endDate || selectedRoomId !== '' || selectedDepartmentId !== '')
+
+  const meetingFilterKey = `${startDate}|${endDate}|${selectedRoomId}|${selectedDepartmentId}`
+
   const doSearch = useCallback(async (q: string, p: number) => {
-    if (!q.trim()) return
+    const trimmed = q.trim()
+    if (!trimmed && (activeTab !== 'meetings' || !hasMeetingFilters)) return
     setLoading(true)
     setError(null)
     try {
       if (activeTab === 'meetings') {
         const res = await searchMeetings({
-          query: q,
+          query: trimmed || undefined,
           startDate: startDate || undefined,
           endDate: endDate || undefined,
           roomId: selectedRoomId !== '' ? selectedRoomId as number : undefined,
@@ -85,7 +92,7 @@ export default function SearchPage() {
         })
         setMeetingResults(res.data ?? null)
       } else {
-        const res = await searchTranscriptions({ query: q, page: p, size: pageSize })
+        const res = await searchTranscriptions({ query: trimmed, page: p, size: pageSize })
         setTranscriptionResults(res.data ?? null)
       }
     } catch {
@@ -93,24 +100,23 @@ export default function SearchPage() {
     } finally {
       setLoading(false)
     }
-  }, [activeTab, startDate, endDate, selectedRoomId, selectedDepartmentId, pageSize])
+  }, [activeTab, startDate, endDate, selectedRoomId, selectedDepartmentId, pageSize, hasMeetingFilters])
 
-  // Re-search when page changes
+  // Re-search when page or meeting filters change after submit
   useEffect(() => {
-    if (submittedQuery) {
-      doSearch(submittedQuery, page)
-    }
+    if (!searched) return
+    doSearch(submittedQuery, page)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page])
+  }, [page, meetingFilterKey, activeTab, searched, submittedQuery])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!query.trim()) return
+    if (!query.trim() && (activeTab !== 'meetings' || !hasMeetingFilters)) return
     setSubmittedQuery(query)
+    setSearched(true)
     setPage(0)
     setMeetingResults(null)
     setTranscriptionResults(null)
-    doSearch(query, 0)
   }
 
   const handleTabChange = (tab: SearchTab) => {
@@ -118,9 +124,6 @@ export default function SearchPage() {
     setPage(0)
     setMeetingResults(null)
     setTranscriptionResults(null)
-    if (submittedQuery) {
-      doSearch(submittedQuery, 0)
-    }
   }
 
   const currentResults = activeTab === 'meetings' ? meetingResults : transcriptionResults
@@ -160,7 +163,10 @@ export default function SearchPage() {
           </div>
           <button
             type="submit"
-            disabled={!query.trim() || loading}
+            disabled={
+              loading
+              || (!query.trim() && (activeTab !== 'meetings' || !hasMeetingFilters))
+            }
             data-testid="search-submit"
             className="bg-primary text-white px-5 py-2.5 rounded-xl text-button font-medium
                        hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed
@@ -261,7 +267,7 @@ export default function SearchPage() {
       )}
 
       {/* Results */}
-      {!submittedQuery && !hasResults && (
+      {!searched && !hasResults && (
         <div className="flex flex-col items-center justify-center py-16 text-on-surface-variant">
           <span className="material-symbols-outlined text-5xl mb-3" aria-hidden="true">search</span>
           <p className="text-body-md">Nhập từ khóa để bắt đầu tìm kiếm</p>
@@ -325,7 +331,7 @@ function MeetingResults({ results }: { results: PageResponse<Meeting> }) {
                 <div className="flex-1 min-w-0">
                   <div className="text-body-sm font-medium text-on-surface truncate">{m.title}</div>
                   <div className="text-label-md text-on-surface-variant mt-0.5">
-                    {m.room?.name && `${m.room.name} · `}
+                    {(m.roomName ?? m.room?.name) && `${m.roomName ?? m.room?.name} · `}
                     {new Intl.DateTimeFormat('vi-VN', {
                       timeZone: 'Asia/Ho_Chi_Minh',
                       year: 'numeric', month: '2-digit', day: '2-digit',
@@ -380,7 +386,7 @@ function TranscriptionResults({
       <div className="space-y-3">
         {results.content.map((seg) => (
           <div
-            key={seg.jobId}
+            key={seg.jobId ?? String(seg.segmentId)}
             className="bg-surface-container-lowest rounded-xl border border-outline-variant p-4"
           >
             <div className="flex items-start justify-between gap-3 mb-2">

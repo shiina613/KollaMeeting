@@ -105,13 +105,6 @@ FROM information_schema.TABLES
 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'speaking_permission';
 
 SELECT
-    'raise_hand_request'    AS table_name,
-    IF(COUNT(*) > 0, 'EXISTS', 'MISSING') AS status,
-    (SELECT COUNT(*) FROM raise_hand_request) AS row_count
-FROM information_schema.TABLES
-WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'raise_hand_request';
-
-SELECT
     'transcription_job'     AS table_name,
     IF(COUNT(*) > 0, 'EXISTS', 'MISSING') AS status,
     (SELECT COUNT(*) FROM transcription_job) AS row_count
@@ -145,6 +138,13 @@ SELECT
     (SELECT COUNT(*) FROM storage_log) AS row_count
 FROM information_schema.TABLES
 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'storage_log';
+
+SELECT
+    'meeting_message'       AS table_name,
+    IF(COUNT(*) > 0, 'EXISTS', 'MISSING') AS status,
+    (SELECT COUNT(*) FROM meeting_message) AS row_count
+FROM information_schema.TABLES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'meeting_message';
 
 -- ============================================================
 -- SECTION 2 — FOREIGN KEY CONSTRAINT EXISTENCE
@@ -207,6 +207,13 @@ SELECT
 FROM information_schema.KEY_COLUMN_USAGE
 WHERE TABLE_SCHEMA = DATABASE()
   AND CONSTRAINT_NAME = 'fk_meeting_secretary';
+
+SELECT
+    'fk_meeting_department' AS constraint_name,
+    IF(COUNT(*) > 0, 'PASS', 'FAIL') AS status
+FROM information_schema.KEY_COLUMN_USAGE
+WHERE TABLE_SCHEMA = DATABASE()
+  AND CONSTRAINT_NAME = 'fk_meeting_department';
 
 SELECT
     'fk_member_meeting'     AS constraint_name,
@@ -300,20 +307,6 @@ WHERE TABLE_SCHEMA = DATABASE()
   AND CONSTRAINT_NAME = 'fk_sp_user';
 
 SELECT
-    'fk_rhr_meeting'        AS constraint_name,
-    IF(COUNT(*) > 0, 'PASS', 'FAIL') AS status
-FROM information_schema.KEY_COLUMN_USAGE
-WHERE TABLE_SCHEMA = DATABASE()
-  AND CONSTRAINT_NAME = 'fk_rhr_meeting';
-
-SELECT
-    'fk_rhr_user'           AS constraint_name,
-    IF(COUNT(*) > 0, 'PASS', 'FAIL') AS status
-FROM information_schema.KEY_COLUMN_USAGE
-WHERE TABLE_SCHEMA = DATABASE()
-  AND CONSTRAINT_NAME = 'fk_rhr_user';
-
-SELECT
     'fk_tj_meeting'         AS constraint_name,
     IF(COUNT(*) > 0, 'PASS', 'FAIL') AS status
 FROM information_schema.KEY_COLUMN_USAGE
@@ -362,6 +355,13 @@ FROM information_schema.KEY_COLUMN_USAGE
 WHERE TABLE_SCHEMA = DATABASE()
   AND CONSTRAINT_NAME = 'fk_sl_user';
 
+SELECT
+    'fk_msg_member'         AS constraint_name,
+    IF(COUNT(*) > 0, 'PASS', 'FAIL') AS status
+FROM information_schema.KEY_COLUMN_USAGE
+WHERE TABLE_SCHEMA = DATABASE()
+  AND CONSTRAINT_NAME = 'fk_msg_member';
+
 -- ============================================================
 -- SECTION 3 — UNIQUE KEY / INDEX EXISTENCE
 -- ============================================================
@@ -383,21 +383,21 @@ ORDER BY table_name, index_name;
 SELECT '--- Critical unique key verification ---' AS '';
 
 SELECT
-    'meeting.code UNIQUE'           AS check_name,
+    'meeting.MeetingCode UNIQUE'    AS check_name,
     IF(COUNT(*) > 0, 'PASS', 'FAIL') AS status
 FROM information_schema.STATISTICS
 WHERE TABLE_SCHEMA = DATABASE()
   AND TABLE_NAME = 'meeting'
-  AND COLUMN_NAME = 'code'
+  AND COLUMN_NAME = 'MeetingCode'
   AND NON_UNIQUE = 0;
 
 SELECT
-    'user.username UNIQUE'          AS check_name,
+    'user.EmployeeCode UNIQUE'      AS check_name,
     IF(COUNT(*) > 0, 'PASS', 'FAIL') AS status
 FROM information_schema.STATISTICS
 WHERE TABLE_SCHEMA = DATABASE()
   AND TABLE_NAME = 'user'
-  AND COLUMN_NAME = 'username'
+  AND COLUMN_NAME = 'EmployeeCode'
   AND NON_UNIQUE = 0;
 
 SELECT
@@ -448,7 +448,7 @@ SELECT
 FROM information_schema.COLUMNS
 WHERE TABLE_SCHEMA = DATABASE()
   AND TABLE_NAME = 'meeting'
-  AND COLUMN_NAME IN ('status','mode','transcription_priority',
+  AND COLUMN_NAME IN ('Status','mode','transcription_priority',
                       'host_user_id','secretary_user_id',
                       'activated_at','ended_at','waiting_timeout_at')
 GROUP BY COLUMN_NAME
@@ -488,36 +488,97 @@ WHERE TABLE_SCHEMA = DATABASE()
   AND TABLE_NAME = 'transcription_job'
   AND COLUMN_NAME = 'speaker_turn_id';
 
+-- thesis-aligned user/profile and meeting role columns
+SELECT
+    CONCAT('user.', COLUMN_NAME) AS column_check,
+    IF(COUNT(*) > 0, 'PASS', 'FAIL') AS status
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE()
+  AND TABLE_NAME = 'user'
+  AND COLUMN_NAME IN ('EmployeeCode','Dob','PhoneNumber','Degree',
+                      'Identification','Address','Email','BankName','BankNumber','Img','Role','Department_id')
+GROUP BY COLUMN_NAME
+ORDER BY COLUMN_NAME;
+
+SELECT
+    'department.DepartmentCode EXISTS' AS column_check,
+    IF(COUNT(*) > 0, 'PASS', 'FAIL') AS status
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE()
+  AND TABLE_NAME = 'department'
+  AND COLUMN_NAME = 'DepartmentCode';
+
+SELECT
+    'room.RoomCode EXISTS' AS column_check,
+    IF(COUNT(*) > 0, 'PASS', 'FAIL') AS status
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE()
+  AND TABLE_NAME = 'room'
+  AND COLUMN_NAME = 'RoomCode';
+
+SELECT
+    'meeting.DepartmentId EXISTS' AS column_check,
+    IF(COUNT(*) > 0, 'PASS', 'FAIL') AS status
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE()
+  AND TABLE_NAME = 'meeting'
+  AND COLUMN_NAME = 'DepartmentId';
+
+SELECT
+    'member.MeetingRole EXISTS' AS column_check,
+    IF(COUNT(*) > 0, 'PASS', 'FAIL') AS status
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE()
+  AND TABLE_NAME = 'member'
+  AND COLUMN_NAME = 'MeetingRole';
+
+-- minutes: generated DOCX paths
+SELECT
+    'minutes.draft_docx_path EXISTS' AS column_check,
+    IF(COUNT(*) > 0, 'PASS', 'FAIL') AS status
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE()
+  AND TABLE_NAME = 'minutes'
+  AND COLUMN_NAME = 'draft_docx_path';
+
+SELECT
+    'minutes.secretary_docx_path EXISTS' AS column_check,
+    IF(COUNT(*) > 0, 'PASS', 'FAIL') AS status
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE()
+  AND TABLE_NAME = 'minutes'
+  AND COLUMN_NAME = 'secretary_docx_path';
+
 -- ============================================================
 -- SECTION 5 — REFERENTIAL INTEGRITY SPOT CHECKS
 -- ============================================================
 SELECT '=== SECTION 5: Referential integrity spot checks ===' AS '';
 
--- Orphaned rooms (department_id points to non-existent department)
+-- Orphaned rooms (Department_id points to non-existent department)
 SELECT
     'room → department (no orphans)'    AS check_name,
     IF(COUNT(*) = 0, 'PASS', 'FAIL')   AS status,
     COUNT(*) AS orphan_count
 FROM room r
-LEFT JOIN department d ON r.department_id = d.id
+LEFT JOIN department d ON r.Department_id = d.id
 WHERE d.id IS NULL;
 
--- Orphaned meetings (room_id points to non-existent room, excluding NULL)
+-- Orphaned meetings (Room_id points to non-existent room, excluding NULL)
 SELECT
     'meeting → room (no orphans)'       AS check_name,
     IF(COUNT(*) = 0, 'PASS', 'FAIL')   AS status,
     COUNT(*) AS orphan_count
 FROM meeting m
-LEFT JOIN room r ON m.room_id = r.id
-WHERE m.room_id IS NOT NULL AND r.id IS NULL;
+LEFT JOIN room r ON m.Room_id = r.id
+WHERE m.Room_id IS NOT NULL AND r.id IS NULL;
 
--- Orphaned members (meeting_id or user_id missing)
+-- Orphaned members (Meeting_id or User_id missing)
 SELECT
     'member → meeting (no orphans)'     AS check_name,
     IF(COUNT(*) = 0, 'PASS', 'FAIL')   AS status,
     COUNT(*) AS orphan_count
 FROM member mb
-LEFT JOIN meeting mt ON mb.meeting_id = mt.id
+LEFT JOIN meeting mt ON mb.Meeting_id = mt.id
 WHERE mt.id IS NULL;
 
 SELECT
@@ -525,8 +586,24 @@ SELECT
     IF(COUNT(*) = 0, 'PASS', 'FAIL')   AS status,
     COUNT(*) AS orphan_count
 FROM member mb
-LEFT JOIN `user` u ON mb.user_id = u.id
+LEFT JOIN `user` u ON mb.User_id = u.id
 WHERE u.id IS NULL;
+
+SELECT
+    'meeting → department (no orphans)'  AS check_name,
+    IF(COUNT(*) = 0, 'PASS', 'FAIL')   AS status,
+    COUNT(*) AS orphan_count
+FROM meeting m
+LEFT JOIN department d ON m.DepartmentId = d.id
+WHERE m.DepartmentId IS NOT NULL AND d.id IS NULL;
+
+SELECT
+    'meeting_message → member (no orphans)' AS check_name,
+    IF(COUNT(*) = 0, 'PASS', 'FAIL')       AS status,
+    COUNT(*) AS orphan_count
+FROM meeting_message msg
+LEFT JOIN member mb ON msg.Member_id = mb.id
+WHERE mb.id IS NULL;
 
 -- Orphaned transcription_segments (job_id missing)
 SELECT
@@ -589,9 +666,9 @@ SELECT
            AND TABLE_NAME IN (
                'department','room','user','meeting','member',
                'attendance_log','recording','document','notification',
-               'speaking_permission','raise_hand_request',
+               'speaking_permission',
                'transcription_job','transcription_segment',
-               'minutes','participant_session','storage_log'
+               'minutes','participant_session','storage_log','meeting_message'
            )
         )
     ) AS tables_found,
@@ -602,9 +679,9 @@ SELECT
            AND TABLE_NAME IN (
                'department','room','user','meeting','member',
                'attendance_log','recording','document','notification',
-               'speaking_permission','raise_hand_request',
+               'speaking_permission',
                'transcription_job','transcription_segment',
-               'minutes','participant_session','storage_log'
+                'minutes','participant_session','storage_log','meeting_message'
            )
         ) = 16,
         'ALL TABLES PRESENT — PASS',

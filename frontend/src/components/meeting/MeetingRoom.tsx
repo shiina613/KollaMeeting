@@ -3,42 +3,44 @@
  *
  * Combines:
  * - JitsiFrame (video conference)
- * - TranscriptionPanel (real-time transcription, HIGH_PRIORITY only)
- * - RaiseHandPanel (Host view of pending requests)
- * - MeetingModeToggle (FREE_MODE ↔ MEETING_MODE)
- * - ParticipantList (real-time participant list)
+ * - TopBar (meeting info and controls)
+ * - BottomBar (raise hand, meeting timer)
+ * - Sidebar (participants, raise hand panel, transcription)
+ * - ToastContainer (event notifications)
+ * - ShortcutsHelpOverlay (keyboard shortcuts reference)
  *
  * Responsibilities:
  * - Calls POST /meetings/{id}/join on mount (attendance tracking)
  * - Calls POST /meetings/{id}/leave on unmount
  * - Subscribes to WebSocket meeting events and dispatches to meetingStore
- * - Reacts to mode changes: muteAll on MEETING_MODE, restore on FREE_MODE
+ * - Reacts to mode changes: host/secretary muteAll on MEETING_MODE; others muteLocal only
  * - Starts/stops audio capture based on speaking permission and meeting mode
  *
- * Requirements: 4.6, 5.1, 5.3, 8.14
+ * Requirements: 4.6, 5.1, 5.3, 8.14, 13.1, 13.2, 13.3, 13.4, 13.5
  */
 
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import JitsiFrame, { type JitsiFrameHandle } from './JitsiFrame'
-import { fetchJaasToken } from '../../services/jaasService'
-import TranscriptionPanel from './TranscriptionPanel'
-import RaiseHandPanel from './RaiseHandPanel'
-import RaiseHandButton from './RaiseHandButton'
-import MeetingModeToggle from './MeetingModeToggle'
-import ParticipantList from './ParticipantList'
-import SpeakingPermissionBadge from './SpeakingPermissionBadge'
+import TopBar from './TopBar'
+import BottomBar from './BottomBar'
+import Sidebar, { type SidebarTab } from './Sidebar'
+import ToastContainer from './ToastContainer'
+import ShortcutsHelpOverlay from './ShortcutsHelpOverlay'
 import useWebSocket from '../../hooks/useWebSocket'
 import useTranscription from '../../hooks/useTranscription'
-import useAudioCapture from '../../hooks/useAudioCapture'
 import useAuthStore from '../../store/authStore'
 import useMeetingStore from '../../store/meetingStore'
-import { joinMeeting, leaveMeeting, revokeSpeakingPermission } from '../../services/meetingService'
+import useToastStore, { createToastMessage } from '../../store/toastStore'
+import { useJaasToken } from '../../hooks/useJaasToken'
+import { useMeetingLifecycle } from '../../hooks/useMeetingLifecycle'
+import { useMeetingAudioCapture } from '../../hooks/useMeetingAudioCapture'
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
+import { useConnectionQuality } from '../../hooks/useConnectionQuality'
+import { useFocusManagement } from '../../hooks/useFocusManagement'
+import { leaveMeeting } from '../../services/meetingService'
 import type { Meeting, MeetingMode, MeetingEvent } from '../../types/meeting'
-
-// ─── JaaS config ──────────────────────────────────────────────────────────────
-
-const IS_JAAS = (import.meta.env.VITE_JAAS_APP_ID ?? '').length > 0
+import type { Shortcut } from '../../hooks/useKeyboardShortcuts'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,188 +53,202 @@ export interface MeetingRoomProps {
 /**
  * MeetingRoom
  *
- * Requirements: 4.6, 5.1, 5.3, 8.14
+ * Requirements: 4.6, 5.1, 5.3, 8.14, 13.1, 13.2, 13.3, 13.4, 13.5
  */
 export default function MeetingRoom({ meeting }: MeetingRoomProps) {
   const navigate = useNavigate()
   const { user } = useAuthStore()
-  const { setActiveMeeting, clearActiveMeeting, handleMeetingEvent, mode } = useMeetingStore()
-  const { handleTranscriptionEvent, clearSegments, segments, isTranscriptionAvailable } = useTranscription()
+  const { handleMeetingEvent, mode } = useMeetingStore()
+  const {
+    segments,
+    isTranscriptionAvailable,
+    handleTranscriptionEvent,
+    clearSegments,
+  } = useTranscription()
 
   const jitsiRef = useRef<JitsiFrameHandle>(null)
-  const hasJoinedRef = useRef(false)
-  const tokenRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [sidebarTab, setSidebarTab] = useState<'participants' | 'transcription' | 'raise-hand'>('participants')
+  const sidebarRef = useRef<HTMLDivElement>(null)
+  const sidebarToggleRef = useRef<HTMLButtonElement>(null)
+
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>('participants')
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
-  const [joinError, setJoinError] = useState<string | null>(null)
+  /** True after Jitsi `videoConferenceJoined` — host/secretary mode switch is shown only then. */
+  const [conferenceReady, setConferenceReady] = useState(false)
+  const [showShortcutsHelp, setShowShortcutsHelp] = useState(false)
 
-  // ── Sidebar resize ─────────────────────────────────────────────────────────
-  const SIDEBAR_MIN = 200
-  const SIDEBAR_MAX = 600
-  const SIDEBAR_DEFAULT = 288 // w-72 = 18rem = 288px
-  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT)
-  const isDraggingRef = useRef(false)
-  const dragStartXRef = useRef(0)
-  const dragStartWidthRef = useRef(SIDEBAR_DEFAULT)
+  // ── Dismissible error banner state (Req 12.1–12.4) ────────────────────────
 
-  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    isDraggingRef.current = true
-    dragStartXRef.current = e.clientX
-    dragStartWidthRef.current = sidebarWidth
-
-    const onMouseMove = (ev: MouseEvent) => {
-      if (!isDraggingRef.current) return
-      // Dragging left = increasing width (sidebar is on the right)
-      const delta = dragStartXRef.current - ev.clientX
-      const newWidth = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, dragStartWidthRef.current + delta))
-      setSidebarWidth(newWidth)
-    }
-
-    const onMouseUp = () => {
-      isDraggingRef.current = false
-      window.removeEventListener('mousemove', onMouseMove)
-      window.removeEventListener('mouseup', onMouseUp)
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-    }
-
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
-    window.addEventListener('mousemove', onMouseMove)
-    window.addEventListener('mouseup', onMouseUp)
-  }, [sidebarWidth])
-
-  // ── JaaS token state ───────────────────────────────────────────────────────
-
-  const [jaasToken, setJaasToken] = useState<string | null>(null)
-  const [jaasRoomName, setJaasRoomName] = useState<string | null>(null)
-  const [jaasLoading, setJaasLoading] = useState<boolean>(IS_JAAS)
-  const [jaasError, setJaasError] = useState<string | null>(null)
-
-  // ── Audio capture state ────────────────────────────────────────────────────
-
-  // In MEETING_MODE, audio capture is driven by the local mic state (audioMuteStatusChanged).
-  // speakerTurnId is auto-generated each time the mic turns ON.
-  // Host/Secretary can unmute directly; members must have permission granted first.
-  const [speakerTurnId, setSpeakerTurnId] = useState<string | null>(null)
-
-  // Refs to avoid stale closures in the Jitsi event callback
-  const modeRef = useRef(mode)
-  const isHostRef = useRef(false)
-  const isSecretaryRef = useRef(false)
+  /** The currently visible error message (only one at a time). */
+  const [activeError, setActiveError] = useState<{ message: string; type: 'join' | 'permission' } | null>(null)
+  /** Whether the banner is fading out (opacity transition). */
+  const [isErrorFading, setIsErrorFading] = useState(false)
+  const errorDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const errorFadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // ── Derived state ──────────────────────────────────────────────────────────
 
   const isHost = user?.id === (meeting.hostUser?.id ?? meeting.hostId)
   const isSecretary = user?.id === (meeting.secretaryUser?.id ?? meeting.secretaryId)
-  // Priority is fixed at meeting creation — cannot change during an active meeting.
   const isHighPriority = meeting.transcriptionPriority === 'HIGH_PRIORITY'
   const isMeetingMode = mode === 'MEETING_MODE'
 
-  // Keep refs up-to-date so the Jitsi callback always reads latest values
-  modeRef.current = mode
-  isHostRef.current = isHost
-  isSecretaryRef.current = isSecretary
+  // ── Error banner management (Req 12.1–12.4) ─────────────────────────────────
 
-  // ── Audio capture hook ─────────────────────────────────────────────────────
+  /** Clear all error timers. */
+  const clearErrorTimers = useCallback(() => {
+    if (errorDismissTimerRef.current) {
+      clearTimeout(errorDismissTimerRef.current)
+      errorDismissTimerRef.current = null
+    }
+    if (errorFadeTimerRef.current) {
+      clearTimeout(errorFadeTimerRef.current)
+      errorFadeTimerRef.current = null
+    }
+  }, [])
 
-  const { startCapture, stopCapture, isCapturing, isPermissionDenied } = useAudioCapture({
-    meetingId: meeting.id,
-    speakerTurnId,
-    onError: (err) => {
-      console.error('[MeetingRoom] Audio capture error:', err.message)
+  /** Show an error banner, replacing any existing one (Req 12.4). */
+  const showError = useCallback(
+    (message: string, type: 'join' | 'permission') => {
+      clearErrorTimers()
+      setIsErrorFading(false)
+      setActiveError({ message, type })
+
+      // Auto-dismiss after 10 seconds (Req 12.2)
+      errorDismissTimerRef.current = setTimeout(() => {
+        setIsErrorFading(true)
+        // After fade-out animation completes, remove the banner
+        errorFadeTimerRef.current = setTimeout(() => {
+          setActiveError(null)
+          setIsErrorFading(false)
+        }, 300)
+      }, 10000)
     },
+    [clearErrorTimers],
+  )
+
+  /** Dismiss the error banner immediately (Req 12.3). */
+  const dismissError = useCallback(() => {
+    clearErrorTimers()
+    setIsErrorFading(true)
+    errorFadeTimerRef.current = setTimeout(() => {
+      setActiveError(null)
+      setIsErrorFading(false)
+    }, 300)
+  }, [clearErrorTimers])
+
+  // Clean up error timers on unmount
+  useEffect(() => {
+    return () => {
+      clearErrorTimers()
+    }
+  }, [clearErrorTimers])
+
+  // ── useJaasToken — replaces inline JaaS token logic (Req 13.3) ─────────────
+
+  const { token: jaasToken, roomName: jaasRoomName, isLoading: jaasLoading, error: jaasError, retry: retryJaasToken } = useJaasToken(meeting.id)
+
+  // ── useMeetingLifecycle — replaces inline join/leave logic (Req 13.4) ──────
+
+  useMeetingLifecycle({
+    meeting,
+    onJoinError: (message) => showError(message, 'join'),
   })
 
-  // ── Mic state → audio capture ──────────────────────────────────────────────
+  // ── useMeetingAudioCapture — replaces inline audio capture (Req 13.5) ──────
 
-  /**
-   * Called by JitsiFrame whenever the LOCAL user's mic mute state changes.
-   * Rules:
-   *  - Only MEETING_MODE triggers STT recording. FREE_MODE = no recording.
-   *  - mic ON  (isMuted=false) → generate a new turn ID → start audio capture
-   *  - mic OFF (isMuted=true)  → stop audio capture (sends FINALIZE to backend)
-   *  - Host/Secretary turning ON: auto-revoke any current speaking permission
-   *    so the previous member speaker is silenced in the permission system too.
-   */
-  const handleAudioMuteStatusChanged = useCallback((isMuted: boolean) => {
-    if (modeRef.current !== 'MEETING_MODE') {
-      // FREE_MODE: no STT, just stop any stray capture
-      if (!isMuted) stopCapture()
-      return
+  const { isCapturing, isPermissionDenied, handleAudioMuteStatusChanged } = useMeetingAudioCapture({
+    meeting,
+    jitsiRef,
+    isHost,
+    isSecretary,
+  })
+
+  // Show permission denied error via the unified error banner (Req 12.4)
+  useEffect(() => {
+    if (isPermissionDenied) {
+      showError(
+        'Trình duyệt đã chặn quyền truy cập microphone. Vui lòng cấp quyền trong cài đặt trình duyệt để phiên âm hoạt động.',
+        'permission',
+      )
     }
+  }, [isPermissionDenied, showError])
 
-    if (isMuted) {
-      // Mic turned OFF → finalize and stop recording
-      stopCapture()
-      setSpeakerTurnId(null)
-    } else {
-      // Mic turned ON in MEETING_MODE → start recording
-      // If Host/Secretary, revoke any current member speaking permission first
-      // so the previous speaker knows they've been superseded.
-      if (isHostRef.current || isSecretaryRef.current) {
-        // Only revoke if someone actually has permission (avoids 400 from backend)
-        const activePerm = useMeetingStore.getState().speakingPermission
-        if (activePerm) {
-          revokeSpeakingPermission(meeting.id).catch(() => { /* non-critical */ })
+  // ── useConnectionQuality — connection stats for indicator (Req 16) ─────────
+
+  const { stats: connectionStats } = useConnectionQuality({
+    jitsiRef,
+    interval: 5000,
+  })
+
+  // ── useFocusManagement — sidebar focus management (Req 8) ──────────────────
+
+  const isMobileOverlay = typeof window !== 'undefined' && window.innerWidth < 768
+
+  useFocusManagement({
+    isOpen: isSidebarOpen,
+    isMobileOverlay,
+    containerRef: sidebarRef,
+    returnFocusRef: sidebarToggleRef,
+    onClose: () => setIsSidebarOpen(false),
+  })
+
+  // ── useKeyboardShortcuts — keyboard shortcuts (Req 7) ──────────────────────
+
+  const shortcuts: Shortcut[] = [
+    {
+      key: 's',
+      altKey: true,
+      action: () => setIsSidebarOpen((prev) => !prev),
+      description: 'Toggle sidebar',
+      enabled: true,
+    },
+    {
+      key: 'h',
+      altKey: true,
+      action: () => {
+        // Trigger raise/lower hand — only relevant for non-host in MEETING_MODE
+        if (!isHost && !isSecretary && user?.id) {
+          const raiseHandBtn = document.querySelector('[data-testid="raise-hand-button"]') as HTMLButtonElement | null
+          raiseHandBtn?.click()
         }
-      }
-      const newTurnId = `${meeting.id}-${Date.now()}`
-      setSpeakerTurnId(newTurnId)
-      startCapture(newTurnId)
-    }
-  }, [meeting.id, startCapture, stopCapture])
+      },
+      description: 'Raise/lower hand',
+      enabled: !isHost && !isSecretary && isMeetingMode,
+    },
+    {
+      key: 't',
+      altKey: true,
+      action: () => {
+        if (isHighPriority) {
+          setSidebarTab('transcription')
+          if (!isSidebarOpen) setIsSidebarOpen(true)
+        }
+      },
+      description: 'Switch to transcription tab',
+      enabled: isHighPriority,
+    },
+    {
+      key: '?',
+      altKey: true,
+      shiftKey: true,
+      action: () => setShowShortcutsHelp((prev) => !prev),
+      description: 'Show shortcuts help',
+      enabled: true,
+    },
+  ]
 
-  // ── Join / leave ───────────────────────────────────────────────────────────
+  useKeyboardShortcuts({
+    shortcuts,
+    enabled: !showShortcutsHelp,
+  })
+
+  // ── Clear segments on unmount ──────────────────────────────────────────────
 
   useEffect(() => {
-    setActiveMeeting(meeting)
-
-    // Notify backend that the user has joined (creates attendance log)
-    if (!hasJoinedRef.current) {
-      hasJoinedRef.current = true
-      joinMeeting(meeting.id).catch((err) => {
-        console.error('[MeetingRoom] Failed to notify join:', err)
-        setJoinError('Không thể ghi nhận tham gia cuộc họp.')
-      })
-    }
-
     return () => {
-      // Notify backend that the user has left
-      leaveMeeting(meeting.id).catch((err) => {
-        console.error('[MeetingRoom] Failed to notify leave:', err)
-      })
-      clearActiveMeeting()
       clearSegments()
     }
-  }, [meeting.id]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── JaaS token fetch ───────────────────────────────────────────────────────
-
-  async function fetchToken() {
-    setJaasLoading(true)
-    setJaasError(null)
-    try {
-      const { token, roomName } = await fetchJaasToken(meeting.id)
-      setJaasToken(token)
-      setJaasRoomName(roomName)
-      // Schedule refresh at 55-minute mark (token expires in 60 min)
-      tokenRefreshTimerRef.current = setTimeout(fetchToken, 55 * 60 * 1000)
-    } catch (err) {
-      setJaasError('Không thể lấy token JaaS. Vui lòng thử lại.')
-    } finally {
-      setJaasLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (!IS_JAAS) return
-    fetchToken()
-    return () => {
-      if (tokenRefreshTimerRef.current) clearTimeout(tokenRefreshTimerRef.current)
-    }
-  }, [meeting.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── WebSocket event handler ────────────────────────────────────────────────
 
@@ -246,25 +262,25 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
       // Dispatch transcription-related events to the transcription hook
       handleTranscriptionEvent(event)
 
+      // Dispatch toast notifications for relevant events (Req 5.1, 5.2, 5.3)
+      const toastPayload = createToastMessage(event)
+      if (toastPayload) {
+        useToastStore.getState().addToast(toastPayload)
+      }
+
       // React to mode changes for Jitsi audio control
       if (event.type === 'MODE_CHANGED') {
         const newMode = (event.payload as { mode: MeetingMode }).mode
         if (newMode === 'MEETING_MODE') {
-          // Entering MEETING_MODE: mute everyone — mic permission required to speak.
-          jitsiRef.current?.muteAll()
-          stopCapture()
-          setSpeakerTurnId(null)
-        } else {
-          // Returning to FREE_MODE: unmute everyone. No STT in free mode.
-          stopCapture()
-          setSpeakerTurnId(null)
+          if (isHost || isSecretary) {
+            jitsiRef.current?.muteAll()
+          } else {
+            jitsiRef.current?.muteLocal()
+          }
         }
       }
 
-      // SPEAKING_PERMISSION_GRANTED:
-      // Backend granted mic permission to a specific user.
-      // For the granted user: unmute their Jitsi mic → audioMuteStatusChanged fires → startCapture.
-      // For others: ensure they are muted.
+      // SPEAKING_PERMISSION_GRANTED
       if (event.type === 'SPEAKING_PERMISSION_GRANTED') {
         const { userId } = event.payload as {
           userId: number
@@ -272,31 +288,25 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
           speakerTurnId: string
         }
         if (user?.id === userId) {
-          // I was granted permission — unmute my Jitsi mic.
-          // audioMuteStatusChanged(isMuted=false) will fire and startCapture.
-          jitsiRef.current?.muteAll()
-          setTimeout(() => {
-            jitsiRef.current?.unmuteLocal()
-          }, 300)
+          if (isHost || isSecretary) {
+            jitsiRef.current?.muteAll()
+            setTimeout(() => {
+              jitsiRef.current?.unmuteLocal()
+            }, 300)
+          } else {
+            setTimeout(() => {
+              jitsiRef.current?.unmuteLocal()
+            }, 300)
+          }
         } else {
-          // Another user got permission — ensure I am muted.
           jitsiRef.current?.muteLocal()
-          stopCapture()
-          setSpeakerTurnId(null)
         }
       }
 
-      // SPEAKING_PERMISSION_REVOKED:
-      // The speaker's mic turns OFF — audioMuteStatusChanged(isMuted=true) will fire
-      // and stopCapture() will be called from handleAudioMuteStatusChanged.
-      // We also explicitly mute via Jitsi to ensure the mic is off.
+      // SPEAKING_PERMISSION_REVOKED
       if (event.type === 'SPEAKING_PERMISSION_REVOKED') {
         if (user?.id !== undefined && prevSpeakingPermission?.userId === user.id) {
           jitsiRef.current?.muteLocal()
-          // stopCapture is handled by audioMuteStatusChanged, but call explicitly
-          // as fallback in case the Jitsi event is delayed.
-          stopCapture()
-          setSpeakerTurnId(null)
         }
       }
 
@@ -305,7 +315,7 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
         navigate(`/meetings/${meeting.id}`, { replace: true })
       }
     },
-    [handleMeetingEvent, handleTranscriptionEvent, meeting.id, navigate, user?.id, startCapture, stopCapture],
+    [handleMeetingEvent, handleTranscriptionEvent, meeting.id, navigate, user?.id, isHost, isSecretary],
   )
 
   useWebSocket({
@@ -317,31 +327,73 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
 
   const handleModeChanged = useCallback((_newMode: MeetingMode) => {
     // No-op: Jitsi mute and audio capture are handled by the onMeetingEvent
-    // WS handler when it receives the MODE_CHANGED broadcast. This avoids
-    // duplicate muteAll calls (the toggle API response arrives before the WS
-    // event, causing muteEveryone to fire twice).
+    // WS handler when it receives the MODE_CHANGED broadcast.
   }, [])
 
   // ── Jitsi event handlers ───────────────────────────────────────────────────
 
   const handleVideoConferenceLeft = useCallback(() => {
-    // User left via Jitsi UI — notify backend and navigate away
+    setConferenceReady(false)
     leaveMeeting(meeting.id).catch(() => {})
-    clearActiveMeeting()
     navigate(`/meetings/${meeting.id}`, { replace: true })
-  }, [meeting.id, clearActiveMeeting, navigate])
+  }, [meeting.id, navigate])
 
-  // ── Sidebar tab visibility ─────────────────────────────────────────────────
+  const handleVideoConferenceJoined = useCallback(() => {
+    setConferenceReady(true)
+  }, [])
 
-  const sidebarTabs = [
-    { key: 'participants' as const, label: 'Thành viên', icon: 'group' },
-    ...(isMeetingMode && isHost
-      ? [{ key: 'raise-hand' as const, label: 'Xin phát biểu', icon: 'pan_tool' }]
-      : []),
-    ...(isHighPriority
-      ? [{ key: 'transcription' as const, label: 'Phiên âm', icon: 'subtitles' }]
-      : []),
-  ]
+  // ── JaaS enabled check ────────────────────────────────────────────────────
+
+  const IS_JAAS = (import.meta.env.VITE_JAAS_APP_ID ?? '').length > 0
+
+  // ── Video area content (JaaS loading / error / Jitsi frame) ────────────────
+
+  const renderVideoContent = () => {
+    if (IS_JAAS && jaasLoading) {
+      return (
+        <div
+          className="w-full h-full flex flex-col items-center justify-center bg-slate-900 text-white"
+          aria-live="polite"
+          data-testid="jaas-loading"
+        >
+          <div className="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin mb-4" />
+          <p className="text-body-sm text-slate-300">Đang kết nối JaaS...</p>
+        </div>
+      )
+    }
+    if (IS_JAAS && jaasError) {
+      return (
+        <div
+          className="w-full h-full flex flex-col items-center justify-center bg-slate-900 text-white gap-4"
+          data-testid="jaas-error"
+        >
+          <span className="material-symbols-outlined text-5xl text-red-400" aria-hidden="true">
+            error
+          </span>
+          <p className="text-body-sm text-slate-300">{jaasError}</p>
+          <button
+            onClick={retryJaasToken}
+            className="px-4 py-2 bg-primary text-white rounded-lg text-body-sm font-medium hover:bg-primary/90 transition-colors"
+            data-testid="jaas-retry-button"
+          >
+            Thử lại
+          </button>
+        </div>
+      )
+    }
+    return (
+      <JitsiFrame
+        ref={jitsiRef}
+        meetingCode={IS_JAAS && jaasRoomName ? jaasRoomName : meeting.meetingCode}
+        displayName={user?.fullName ?? user?.username ?? 'Khách'}
+        jwt={IS_JAAS ? jaasToken ?? undefined : undefined}
+        onVideoConferenceJoined={handleVideoConferenceJoined}
+        onVideoConferenceLeft={handleVideoConferenceLeft}
+        onAudioMuteStatusChanged={handleAudioMuteStatusChanged}
+        className="w-full h-full"
+      />
+    )
+  }
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -351,207 +403,73 @@ export default function MeetingRoom({ meeting }: MeetingRoomProps) {
       data-testid="meeting-room"
       aria-label={`Phòng họp: ${meeting.title}`}
     >
-      {/* ── Main area: Jitsi video ── */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top bar */}
-        <div className="flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700 shrink-0">
-          <div className="flex items-center gap-3">
-            <h1 className="text-body-sm font-semibold text-white truncate max-w-xs">
-              {meeting.title}
-            </h1>
-            <span className="text-label-md text-slate-400 font-mono">
-              {meeting.meetingCode}
-            </span>
-          </div>
+        <TopBar
+          meeting={meeting}
+          isHost={isHost}
+          isSecretary={isSecretary}
+          conferenceReady={conferenceReady}
+          isCapturing={isCapturing}
+          isSidebarOpen={isSidebarOpen}
+          onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
+          onModeChanged={handleModeChanged}
+          connectionStats={connectionStats}
+          sidebarToggleRef={sidebarToggleRef}
+        />
 
-          <div className="flex items-center gap-3">
-            {/* Mode toggle — visible to all, interactive for Host only */}
-            <MeetingModeToggle
-              meetingId={meeting.id}
-              isHost={isHost || isSecretary}
-              onModeChanged={handleModeChanged}
-            />
-
-            {/* Speaking permission badge — visible to all in MEETING_MODE */}
-            <SpeakingPermissionBadge currentUserId={user?.id} />
-
-            {/* Audio capture indicator — shown when actively streaming */}
-            {isCapturing && (
-              <div
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full
-                  bg-red-100 border border-red-300 text-label-md font-medium text-red-700"
-                aria-label="Đang ghi âm và phiên âm"
-                data-testid="audio-capture-indicator"
-              >
-                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" aria-hidden="true" />
-                REC
-              </div>
+        {activeError && (
+          <div
+            className={`flex items-center gap-2 px-4 py-2 text-body-sm border-b transition-opacity duration-300 ${
+              isErrorFading ? 'opacity-0' : 'opacity-100'
+            } ${
+              activeError.type === 'permission'
+                ? 'bg-red-50 border-red-200 text-red-800'
+                : 'bg-amber-50 border-amber-200 text-amber-800'
+            }`}
+            role="alert"
+            data-testid="error-banner"
+          >
+            {activeError.type === 'permission' && (
+              <span className="material-symbols-outlined text-[16px] shrink-0" aria-hidden="true">mic_off</span>
             )}
-
-            {/* Sidebar toggle */}
+            <span className="flex-1">{activeError.message}</span>
             <button
-              onClick={() => setIsSidebarOpen((prev) => !prev)}
-              className="p-1.5 rounded-md text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
-              aria-label={isSidebarOpen ? 'Ẩn thanh bên' : 'Hiện thanh bên'}
-              data-testid="sidebar-toggle"
+              onClick={dismissError}
+              className={`shrink-0 p-1 rounded hover:bg-black/10 transition-colors ${
+                activeError.type === 'permission' ? 'text-red-600' : 'text-amber-600'
+              }`}
+              aria-label="Dismiss error"
+              data-testid="error-banner-dismiss"
             >
-              <span className="material-symbols-outlined text-[20px]" aria-hidden="true">
-                {isSidebarOpen ? 'right_panel_close' : 'right_panel_open'}
-              </span>
+              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">close</span>
             </button>
           </div>
+        )}
+
+        <div className="relative flex-1 min-h-0">
+          {renderVideoContent()}
+          <ToastContainer />
         </div>
 
-        {/* Join error banner */}
-        {joinError && (
-          <div
-            className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-body-sm text-amber-800"
-            role="alert"
-          >
-            {joinError}
-          </div>
-        )}
-
-        {/* Microphone permission denied banner */}
-        {isPermissionDenied && (
-          <div
-            className="flex items-center gap-2 bg-red-50 border-b border-red-200 px-4 py-2 text-body-sm text-red-800"
-            role="alert"
-            data-testid="mic-permission-denied-banner"
-          >
-            <span className="material-symbols-outlined text-[16px] shrink-0" aria-hidden="true">
-              mic_off
-            </span>
-            Trình duyệt đã chặn quyền truy cập microphone. Vui lòng cấp quyền trong cài đặt trình duyệt để phiên âm hoạt động.
-          </div>
-        )}
-
-        {/* Jitsi iframe */}
-        <div className="flex-1 min-h-0">
-          {IS_JAAS && jaasLoading ? (
-            <div
-              className="w-full h-full flex flex-col items-center justify-center bg-slate-900 text-white"
-              aria-live="polite"
-              data-testid="jaas-loading"
-            >
-              <div className="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin mb-4" />
-              <p className="text-body-sm text-slate-300">Đang kết nối JaaS...</p>
-            </div>
-          ) : IS_JAAS && jaasError ? (
-            <div
-              className="w-full h-full flex flex-col items-center justify-center bg-slate-900 text-white gap-4"
-              data-testid="jaas-error"
-            >
-              <span className="material-symbols-outlined text-5xl text-red-400" aria-hidden="true">
-                error
-              </span>
-              <p className="text-body-sm text-slate-300">{jaasError}</p>
-              <button
-                onClick={fetchToken}
-                className="px-4 py-2 bg-primary text-white rounded-lg text-body-sm font-medium hover:bg-primary/90 transition-colors"
-                data-testid="jaas-retry-button"
-              >
-                Thử lại
-              </button>
-            </div>
-          ) : (
-            <JitsiFrame
-              ref={jitsiRef}
-              meetingCode={IS_JAAS && jaasRoomName ? jaasRoomName : meeting.meetingCode}
-              displayName={user?.fullName ?? user?.username ?? 'Khách'}
-              jwt={IS_JAAS ? jaasToken ?? undefined : undefined}
-              onVideoConferenceLeft={handleVideoConferenceLeft}
-              onAudioMuteStatusChanged={handleAudioMuteStatusChanged}
-              className="w-full h-full"
-            />
-          )}
-        </div>
-
-        {/* Raise hand button — shown to non-host participants in MEETING_MODE */}
-        {!isHost && !isSecretary && user?.id && (
-          <div className="flex justify-center py-2 bg-slate-800 border-t border-slate-700 shrink-0">
-            <RaiseHandButton
-              meetingId={meeting.id}
-              currentUserId={user.id}
-            />
-          </div>
-        )}
+        <BottomBar meeting={meeting} isHost={isHost} isSecretary={isSecretary} currentUserId={user?.id} />
       </div>
 
-      {/* ── Sidebar (resizable) ── */}
-      {isSidebarOpen && (
-        <div
-          className="relative bg-white border-l border-slate-200 flex flex-col shrink-0"
-          style={{ width: sidebarWidth }}
-          aria-label="Thanh bên cuộc họp"
-          data-testid="meeting-sidebar"
-        >
-          {/* Drag handle — left edge */}
-          <div
-            onMouseDown={handleResizeMouseDown}
-            className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize z-10
-                       hover:bg-primary/40 active:bg-primary/60 transition-colors group"
-            aria-hidden="true"
-            title="Kéo để thay đổi kích thước"
-          >
-            {/* Visual indicator dots */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
-                            flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <span className="w-1 h-1 rounded-full bg-slate-400" />
-              <span className="w-1 h-1 rounded-full bg-slate-400" />
-              <span className="w-1 h-1 rounded-full bg-slate-400" />
-            </div>
-          </div>
+      <Sidebar
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        activeTab={sidebarTab}
+        onTabChange={setSidebarTab}
+        meeting={meeting}
+        isHost={isHost}
+        isSecretary={isSecretary}
+        currentUserId={user?.id}
+        segments={segments}
+        isTranscriptionAvailable={isTranscriptionAvailable}
+        sidebarRef={sidebarRef}
+        toggleButtonRef={sidebarToggleRef}
+      />
 
-          {/* Sidebar tabs */}
-          <div className="flex border-b border-outline-variant overflow-x-auto shrink-0">
-            {sidebarTabs.map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setSidebarTab(tab.key)}
-                className={`flex items-center gap-1 px-3 py-2.5 text-label-md font-medium whitespace-nowrap
-                            border-b-2 transition-colors flex-1 justify-center
-                            ${sidebarTab === tab.key
-                              ? 'border-primary text-primary'
-                              : 'border-transparent text-on-surface-variant hover:text-on-surface'
-                            }`}
-                aria-selected={sidebarTab === tab.key}
-                role="tab"
-              >
-                <span className="material-symbols-outlined text-[16px]" aria-hidden="true">
-                  {tab.icon}
-                </span>
-                <span className="hidden sm:inline">{tab.label}</span>
-              </button>
-            ))}
-          </div>
-
-          {/* Sidebar content */}
-          <div className="flex-1 overflow-y-auto" role="tabpanel">
-            {sidebarTab === 'participants' && (
-              <div className="py-2">
-                <ParticipantList currentUserId={user?.id} />
-              </div>
-            )}
-
-            {sidebarTab === 'raise-hand' && (
-              <RaiseHandPanel
-                meetingId={meeting.id}
-                isHost={isHost || isSecretary}
-              />
-            )}
-
-            {sidebarTab === 'transcription' && (
-              <TranscriptionPanel
-                meetingId={meeting.id}
-                isHighPriority={isHighPriority}
-                segments={segments}
-                isTranscriptionAvailable={isTranscriptionAvailable}
-              />
-            )}
-          </div>
-        </div>
-      )}
+      <ShortcutsHelpOverlay isOpen={showShortcutsHelp} onClose={() => setShowShortcutsHelp(false)} />
     </div>
   )
 }

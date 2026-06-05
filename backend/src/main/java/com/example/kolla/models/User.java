@@ -13,6 +13,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
@@ -35,23 +36,50 @@ public class User implements UserDetails {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "username", nullable = false, unique = true, length = 100)
+    @Column(name = "EmployeeCode", nullable = false, unique = true, length = 100)
     private String username;
 
-    @Column(name = "password_hash", nullable = false)
+    @Column(name = "EmployeeCode", insertable = false, updatable = false, length = 100)
+    private String employeeCode;
+
+    @Column(name = "Password", nullable = false)
     private String passwordHash;
 
-    @Column(name = "full_name", nullable = false)
+    @Column(name = "Name", nullable = false)
     private String fullName;
 
-    @Column(name = "email", unique = true)
+    @Column(name = "Email", unique = true)
     private String email;
 
+    @Column(name = "Dob")
+    private LocalDate dob;
+
+    @Column(name = "PhoneNumber", unique = true, length = 30)
+    private String phoneNumber;
+
+    @Column(name = "Degree", length = 255)
+    private String degree;
+
+    @Column(name = "Identification", unique = true, length = 100)
+    private String identification;
+
+    @Column(name = "Address", length = 1000)
+    private String address;
+
+    @Column(name = "BankName", length = 255)
+    private String bankName;
+
+    @Column(name = "BankNumber", length = 100)
+    private String bankNumber;
+
+    @Column(name = "Img", length = 1000)
+    private String img;
+
     @Enumerated(EnumType.STRING)
-    @Column(name = "role", nullable = false)
+    @Column(name = "Role", nullable = false)
     private Role role;
 
-    @Column(name = "department_id")
+    @Column(name = "Department_id")
     private Long departmentId;
 
     @Column(name = "is_active", nullable = false)

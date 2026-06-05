@@ -1,6 +1,7 @@
 package com.example.kolla.repositories;
 
 import com.example.kolla.models.Member;
+import com.example.kolla.enums.MeetingRole;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -21,6 +22,8 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
     Optional<Member> findByMeetingIdAndUserId(Long meetingId, Long userId);
 
     boolean existsByMeetingIdAndUserId(Long meetingId, Long userId);
+
+    boolean existsByMeetingIdAndMeetingRole(Long meetingId, MeetingRole meetingRole);
 
     void deleteByMeetingIdAndUserId(Long meetingId, Long userId);
 

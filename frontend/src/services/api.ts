@@ -45,9 +45,9 @@ api.interceptors.response.use(
     const status = error.response?.status
 
     if (status === 401) {
-      // Token expired or invalid — clear auth and redirect to login
+      // Token expired or invalid — always clear auth. The path check avoids
+      // redirect loops when several requests fail after the login page loads.
       useAuthStore.getState().logout()
-      // Use window.location to avoid circular dependency with React Router
       if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
         window.location.href = '/login'
       }

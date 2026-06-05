@@ -14,7 +14,7 @@ import java.util.List;
 public interface TranscriptionService {
 
     /**
-     * Process a transcription callback from Gipformer.
+     * Process a transcription callback from ASR service.
      *
      * <p>Idempotency: if a segment already exists for the given {@code jobId},
      * returns the existing segment without creating a duplicate.
@@ -24,7 +24,7 @@ public interface TranscriptionService {
      *
      * <p>For NORMAL_PRIORITY meetings: persists the segment only (no broadcast).
      *
-     * @param request the callback payload from Gipformer
+     * @param request the callback payload from ASR service
      * @return the persisted (or existing) TranscriptionSegmentResponse
      * Requirements: 8.12, 8.13
      */
@@ -56,4 +56,13 @@ public interface TranscriptionService {
      * @return a file Resource for streaming
      */
     Resource getAudioResource(Long meetingId, String jobId);
+
+    /**
+     * Verify that the given user is a member of the meeting (or ADMIN).
+     * Throws ForbiddenException if not authorized.
+     *
+     * @param meetingId the meeting ID
+     * @param user      the current user
+     */
+    void checkMeetingMembership(Long meetingId, com.example.kolla.models.User user);
 }

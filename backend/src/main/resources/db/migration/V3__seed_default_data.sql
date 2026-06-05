@@ -1,22 +1,20 @@
 -- ============================================================
 -- V3__seed_default_data.sql
--- Seed dữ liệu mặc định: department, room, admin user
+-- Default demo data for department, room and admin user.
+-- Fresh schema uses the physical column names from DOCX 3.8.
 -- ============================================================
 
--- Department mặc định
-INSERT INTO department (id, name, description)
-VALUES (1, 'Ban Giám đốc', 'Phòng ban quản trị hệ thống')
-ON DUPLICATE KEY UPDATE name = VALUES(name);
+INSERT INTO department (id, DepartmentCode, Name, description)
+VALUES (1, 'BGD', 'Ban Giam doc', 'Phong ban quan tri he thong')
+ON DUPLICATE KEY UPDATE Name = VALUES(Name);
 
--- Room mặc định
-INSERT INTO room (id, name, capacity, department_id)
-VALUES (1, 'Phòng họp chính', 50, 1)
-ON DUPLICATE KEY UPDATE name = VALUES(name);
+INSERT INTO room (id, RoomCode, RoomName, capacity, Department_id)
+VALUES (1, 'ROOM-MAIN', 'Phong hop chinh', 50, 1)
+ON DUPLICATE KEY UPDATE RoomName = VALUES(RoomName);
 
--- Admin user mặc định
--- Username: admin | Password: admin
+-- EmployeeCode/login: admin | Password: admin
 -- BCrypt hash cost 12
-INSERT INTO user (id, username, password_hash, full_name, email, role, department_id, is_active)
+INSERT INTO user (id, EmployeeCode, Password, Name, Email, Role, Department_id, is_active)
 VALUES (1, 'admin', '$2a$12$TZHod6ae3z2kAE1uWAsbDumT/u.a5pf9uAqTks3Dv1LvepI0I8Dm.',
         'System Administrator', 'admin@kolla.local', 'ADMIN', 1, 1)
-ON DUPLICATE KEY UPDATE username = VALUES(username);
+ON DUPLICATE KEY UPDATE EmployeeCode = VALUES(EmployeeCode);

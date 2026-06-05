@@ -18,6 +18,21 @@ const mockUser: User = {
 
 const mockToken = 'test-jwt-token-abc123'
 
+const mockWindowLocation = (pathname: string, href = pathname): (() => void) => {
+  const originalLocation = window.location
+  const mockLocation = { ...originalLocation, href, pathname }
+  Object.defineProperty(window, 'location', {
+    value: mockLocation,
+    writable: true,
+  })
+  return () => {
+    Object.defineProperty(window, 'location', {
+      value: originalLocation,
+      writable: true,
+    })
+  }
+}
+
 beforeEach(() => {
   // Reset auth store
   useAuthStore.getState().logout()
@@ -82,6 +97,7 @@ describe('api — JWT request interceptor', () => {
 
 describe('api — 401 response interceptor', () => {
   it('should call logout when 401 response is received', async () => {
+    const restoreLocation = mockWindowLocation('/login')
     useAuthStore.getState().login(mockToken, mockUser)
     expect(useAuthStore.getState().isAuthenticated).toBe(true)
 
@@ -95,9 +111,11 @@ describe('api — 401 response interceptor', () => {
 
     expect(useAuthStore.getState().isAuthenticated).toBe(false)
     expect(useAuthStore.getState().token).toBeNull()
+    restoreLocation()
   })
 
   it('should clear user on 401 response', async () => {
+    const restoreLocation = mockWindowLocation('/login')
     useAuthStore.getState().login(mockToken, mockUser)
     expect(useAuthStore.getState().user).not.toBeNull()
 
@@ -110,18 +128,13 @@ describe('api — 401 response interceptor', () => {
     }
 
     expect(useAuthStore.getState().user).toBeNull()
+    restoreLocation()
   })
 
   it('should redirect to /login on 401 when not already on login page', async () => {
     useAuthStore.getState().login(mockToken, mockUser)
 
-    // Mock window.location
-    const originalLocation = window.location
-    const mockLocation = { ...originalLocation, href: '', pathname: '/dashboard' }
-    Object.defineProperty(window, 'location', {
-      value: mockLocation,
-      writable: true,
-    })
+    const restoreLocation = mockWindowLocation('/dashboard', '')
 
     mockAxios.onGet('/protected').reply(401)
 
@@ -133,22 +146,13 @@ describe('api — 401 response interceptor', () => {
 
     expect(window.location.href).toBe('/login')
 
-    // Restore
-    Object.defineProperty(window, 'location', {
-      value: originalLocation,
-      writable: true,
-    })
+    restoreLocation()
   })
 
   it('should NOT redirect to /login when already on login page', async () => {
     useAuthStore.getState().login(mockToken, mockUser)
 
-    const originalLocation = window.location
-    const mockLocation = { ...originalLocation, href: '/login', pathname: '/login' }
-    Object.defineProperty(window, 'location', {
-      value: mockLocation,
-      writable: true,
-    })
+    const restoreLocation = mockWindowLocation('/login')
 
     mockAxios.onGet('/protected').reply(401)
 
@@ -161,10 +165,7 @@ describe('api — 401 response interceptor', () => {
     // href should remain /login (not changed to /login again)
     expect(window.location.href).toBe('/login')
 
-    Object.defineProperty(window, 'location', {
-      value: originalLocation,
-      writable: true,
-    })
+    restoreLocation()
   })
 })
 

@@ -230,6 +230,7 @@ public class MeetingEventPublisher {
      */
     public void publishTranscriptionSegment(Long meetingId, String jobId, Long speakerId,
                                              String speakerName, String speakerDept,
+                                             String speakerRole,
                                              String speakerTurnId,
                                              int sequenceNumber, String text,
                                              ZonedDateTime segmentStartTime) {
@@ -241,6 +242,7 @@ public class MeetingEventPublisher {
                         "speakerId", speakerId,
                         "speakerName", speakerName,
                         "speakerDept", speakerDept != null ? speakerDept : "",
+                        "speakerRole", speakerRole != null ? speakerRole : "",
                         "speakerTurnId", speakerTurnId,
                         "sequenceNumber", sequenceNumber,
                         "text", text,
@@ -261,7 +263,7 @@ public class MeetingEventPublisher {
     }
 
     /**
-     * Broadcast TRANSCRIPTION_UNAVAILABLE when Gipformer service is down.
+     * Broadcast TRANSCRIPTION_UNAVAILABLE when ASR service is down.
      * Requirements: 8.7
      */
     public void publishTranscriptionUnavailable(Long meetingId, String message) {
@@ -273,7 +275,7 @@ public class MeetingEventPublisher {
     }
 
     /**
-     * Broadcast TRANSCRIPTION_RECOVERED when Gipformer service comes back online.
+     * Broadcast TRANSCRIPTION_RECOVERED when ASR service comes back online.
      * Requirements: 8.7
      */
     public void publishTranscriptionRecovered(Long meetingId, int pendingJobCount) {
@@ -299,6 +301,29 @@ public class MeetingEventPublisher {
                         "documentId", documentId,
                         "fileName", fileName,
                         "uploadedBy", uploadedBy))
+                .build());
+    }
+
+    /**
+     * Broadcast MEETING_MESSAGE_CREATED when a persistent meeting message is stored.
+     */
+    public void publishMeetingMessageCreated(Long meetingId,
+                                             Long messageId,
+                                             Long memberId,
+                                             String senderName,
+                                             String meetingRole,
+                                             String content,
+                                             ZonedDateTime createdAt) {
+        broadcast(meetingId, MeetingEvent.builder()
+                .type(MeetingEventType.MEETING_MESSAGE_CREATED)
+                .meetingId(meetingId)
+                .payload(Map.of(
+                        "messageId", messageId,
+                        "memberId", memberId,
+                        "senderName", senderName,
+                        "meetingRole", meetingRole,
+                        "content", content,
+                        "createdAt", createdAt.toString()))
                 .build());
     }
 

@@ -12,7 +12,7 @@ import com.example.kolla.repositories.DepartmentRepository;
 import com.example.kolla.repositories.MeetingRepository;
 import com.example.kolla.repositories.TranscriptionJobRepository;
 import com.example.kolla.repositories.UserRepository;
-import com.example.kolla.services.GipformerClient;
+import com.example.kolla.services.AsrServiceClient;
 import com.example.kolla.utils.JwtUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -116,7 +116,7 @@ public class AudioStreamHandler extends AbstractWebSocketHandler {
     private final TranscriptionJobRepository transcriptionJobRepository;
     private final UserRepository userRepository;
     private final DepartmentRepository departmentRepository;
-    private final GipformerClient gipformerClient;
+    private final AsrServiceClient asrServiceClient;
     private final JwtUtils jwtUtils;
     private final Clock clock;
 
@@ -379,8 +379,8 @@ public class AudioStreamHandler extends AbstractWebSocketHandler {
             log.info("AudioStream [{}]: saved job {} (seq={}, priority={}, path={})",
                     sessionId, jobId, seqNum, priority, audioPath);
 
-            // 4. Submit to Gipformer (handles availability check, retry, and queue push)
-            gipformerClient.submitJob(job);
+            // 4. Submit to ASR service (handles availability check, retry, and queue push)
+            asrServiceClient.submitJob(job);
 
             // 5. Notify frontend about successful flush
             int voicedBytes = voicedBytesCounters.getOrDefault(sessionId, new AtomicInteger(0)).get();

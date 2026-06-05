@@ -14,7 +14,7 @@ import java.io.IOException;
  * <pre>
  *   Meeting ends
  *     → compileDraftMinutes()  → DRAFT PDF generated, Host notified
- *     → confirmMinutes()       → HOST_CONFIRMED PDF with digital stamp, Secretary notified
+ *     → confirmMinutes()       → HOST_CONFIRMED PDF with PAdES/CAdES digital signature, Secretary notified
  *     → editMinutes()          → SECRETARY_CONFIRMED PDF published, all members notified
  * </pre>
  *
@@ -23,7 +23,7 @@ import java.io.IOException;
 public interface MinutesService {
 
     /**
-     * Compile TranscriptionSegments for the meeting into a draft PDF.
+     * Compile TranscriptionSegments for the meeting into draft PDF and DOCX files.
      * Segments are sorted by (speakerTurnId, sequenceNumber).
      * Saves the PDF to /storage/minutes/{meetingId}/draft_{minutesId}.pdf.
      * Inserts a Minutes record with status=DRAFT and notifies the Host.
@@ -45,14 +45,14 @@ public interface MinutesService {
 
     /**
      * Host confirms the draft minutes.
-     * Embeds a digital stamp: hostName + ISO8601 timestamp + SHA-256(JWT + PDF content).
+     * Embeds a PAdES/CAdES digital signature (keystore) in the PDF; stores SHA-256 of the signed file.
      * Saves the confirmed PDF; updates status to HOST_CONFIRMED; notifies Secretary.
      *
      * Requirements: 25.4
      *
      * @param meetingId   the meeting ID
      * @param requester   the Host user
-     * @param jwtToken    the raw JWT token (used in the confirmation hash)
+     * @param jwtToken    reserved (session binding); not used in the signature itself
      * @throws IOException if PDF generation or file storage fails
      */
     MinutesResponse confirmMinutes(Long meetingId, User requester, String jwtToken)
@@ -60,8 +60,8 @@ public interface MinutesService {
 
     /**
      * Secretary edits and publishes the minutes.
-     * Renders contentHtml → PDF via PDFBox + jsoup.
-     * Saves the secretary PDF; updates status to SECRETARY_CONFIRMED;
+     * Renders contentHtml to PDF and DOCX.
+     * Saves the secretary files; updates status to SECRETARY_CONFIRMED;
      * broadcasts MINUTES_PUBLISHED to all participants.
      *
      * Requirements: 25.5
@@ -75,13 +75,15 @@ public interface MinutesService {
             throws IOException;
 
     /**
-     * Download a specific version of the minutes PDF.
+     * Download a specific version of the minutes file.
      *
      * @param meetingId the meeting ID
      * @param version   "draft", "confirmed", or "secretary"
+     * @param format    "pdf" or "docx"
      * @param requester the requesting user (must be a meeting member)
-     * @return a Spring {@link Resource} pointing to the PDF file
+     * @return a Spring {@link Resource} pointing to the generated file
      * @throws IOException if the file cannot be read
      */
-    Resource downloadMinutes(Long meetingId, String version, User requester) throws IOException;
+    Resource downloadMinutes(Long meetingId, String version, String format, User requester)
+            throws IOException;
 }

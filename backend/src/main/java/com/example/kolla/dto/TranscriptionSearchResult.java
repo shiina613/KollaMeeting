@@ -20,6 +20,9 @@ public class TranscriptionSearchResult {
     /** ID of the transcription segment. */
     private Long segmentId;
 
+    /** ASR job id (same as audio-jobs listing). */
+    private String jobId;
+
     /** ID of the meeting this segment belongs to. */
     private Long meetingId;
 

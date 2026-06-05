@@ -1,5 +1,6 @@
 package com.example.kolla.services.impl;
 
+import com.example.kolla.enums.FileType;
 import com.example.kolla.enums.MeetingStatus;
 import com.example.kolla.enums.RecordingStatus;
 import com.example.kolla.enums.Role;
@@ -8,9 +9,11 @@ import com.example.kolla.exceptions.ForbiddenException;
 import com.example.kolla.exceptions.ResourceNotFoundException;
 import com.example.kolla.models.Meeting;
 import com.example.kolla.models.Recording;
+import com.example.kolla.models.TranscriptionJob;
 import com.example.kolla.models.User;
 import com.example.kolla.repositories.MeetingRepository;
 import com.example.kolla.repositories.RecordingRepository;
+import com.example.kolla.repositories.TranscriptionJobRepository;
 import com.example.kolla.responses.RecordingResponse;
 import com.example.kolla.services.FileStorageService;
 import com.example.kolla.services.MeetingService;
@@ -21,7 +24,11 @@ import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -39,6 +46,7 @@ public class RecordingServiceImpl implements RecordingService {
     private final MeetingRepository meetingRepository;
     private final MeetingService meetingService;
     private final FileStorageService fileStorageService;
+    private final TranscriptionJobRepository transcriptionJobRepository;
     private final Clock clock;
 
     // ── Start Recording ───────────────────────────────────────────────────────
@@ -168,6 +176,57 @@ public class RecordingServiceImpl implements RecordingService {
         return fileStorageService.loadFileAsResource(recording.getFilePath());
     }
 
+    @Override
+    @Transactional
+    public RecordingResponse createAggregateRecordingForMeeting(Meeting meeting) throws IOException {
+        List<TranscriptionJob> jobs = transcriptionJobRepository.findByMeetingIdOrdered(meeting.getId())
+                .stream()
+                .filter(job -> job.getAudioPath() != null && !job.getAudioPath().isBlank())
+                .toList();
+        if (jobs.isEmpty()) {
+            log.info("No audio chunks found for meeting id={}, skipping aggregate recording", meeting.getId());
+            return null;
+        }
+
+        ByteArrayOutputStream pcmOut = new ByteArrayOutputStream();
+        for (TranscriptionJob job : jobs) {
+            byte[] wavBytes = readAudioBytes(job.getAudioPath());
+            if (wavBytes.length == 0) {
+                continue;
+            }
+            pcmOut.write(stripWavHeaderIfPresent(wavBytes));
+        }
+
+        byte[] pcmBytes = pcmOut.toByteArray();
+        if (pcmBytes.length == 0) {
+            log.info("Audio chunks for meeting id={} did not contain readable bytes", meeting.getId());
+            return null;
+        }
+
+        byte[] wavBytes = buildWav16kMonoPcm(pcmBytes);
+        String fileName = "meeting-" + meeting.getId() + ".wav";
+        Path storedPath = fileStorageService.storeBytes(
+                wavBytes, FileType.RECORDING, meeting.getId(), fileName);
+
+        LocalDateTime now = LocalDateTime.now(clock);
+        User createdBy = firstNonNull(meeting.getHost(), meeting.getSecretary(), meeting.getCreator());
+        Recording recording = Recording.builder()
+                .meeting(meeting)
+                .fileName(fileName)
+                .fileSize((long) wavBytes.length)
+                .filePath(storedPath.toString())
+                .status(RecordingStatus.COMPLETED)
+                .startTime(meeting.getActivatedAt() != null ? meeting.getActivatedAt() : now)
+                .endTime(meeting.getEndedAt() != null ? meeting.getEndedAt() : now)
+                .createdBy(createdBy)
+                .build();
+
+        Recording saved = recordingRepository.save(recording);
+        log.info("Created aggregate recording id={} for meeting id={} from {} audio chunks",
+                saved.getId(), meeting.getId(), jobs.size());
+        return RecordingResponse.from(saved);
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private Meeting findMeetingOrThrow(Long meetingId) {
@@ -183,35 +242,102 @@ public class RecordingServiceImpl implements RecordingService {
     }
 
     /**
-     * Checks that the current user is the meeting host, meeting secretary, any SECRETARY, or ADMIN.
+     * Checks that the current user is the meeting host, the meeting's assigned secretary, or ADMIN.
      * Throws ForbiddenException if not.
      */
     private void checkHostOrSecretaryOrAdmin(Meeting meeting, User currentUser, String action) {
-        if (currentUser.getRole() == Role.ADMIN
-                || currentUser.getRole() == Role.SECRETARY) {
-            return; // Any SECRETARY or ADMIN may manage recordings
+        if (currentUser.getRole() == Role.ADMIN) {
+            return; // ADMIN may manage all recordings
         }
         boolean isHost = meeting.getHost() != null
                 && meeting.getHost().getId().equals(currentUser.getId());
-        if (!isHost) {
+        boolean isMeetingSecretary = meeting.getSecretary() != null
+                && meeting.getSecretary().getId().equals(currentUser.getId());
+        if (!isHost && !isMeetingSecretary) {
             throw new ForbiddenException(
-                    "Only the meeting Host, a SECRETARY, or an ADMIN may " + action);
+                    "Only the meeting Host, the meeting's Secretary, or an ADMIN may " + action);
         }
     }
 
     /**
      * Checks that the current user is a member of the meeting.
-     * ADMIN and SECRETARY users bypass the membership check.
+     * ADMIN users bypass the membership check.
      * Throws ForbiddenException if not a member.
      */
     private void checkMembership(Long meetingId, User currentUser) {
-        if (currentUser.getRole() == Role.ADMIN
-                || currentUser.getRole() == Role.SECRETARY) {
-            return; // ADMIN and SECRETARY can access all recordings
+        if (currentUser.getRole() == Role.ADMIN) {
+            return; // ADMIN can access all recordings
         }
         if (!meetingService.isMember(meetingId, currentUser.getId())) {
             throw new ForbiddenException(
                     "You are not a member of meeting id: " + meetingId);
         }
+    }
+
+    private byte[] readAudioBytes(String audioPath) throws IOException {
+        Path path = Path.of(audioPath);
+        if (Files.exists(path)) {
+            return Files.readAllBytes(path);
+        }
+        try {
+            Resource resource = fileStorageService.loadFileAsResource(audioPath);
+            try (InputStream input = resource.getInputStream()) {
+                return input.readAllBytes();
+            }
+        } catch (Exception e) {
+            log.warn("Skipping unreadable audio chunk '{}': {}", audioPath, e.getMessage());
+            return new byte[0];
+        }
+    }
+
+    private byte[] stripWavHeaderIfPresent(byte[] wavBytes) {
+        if (wavBytes.length > 44
+                && wavBytes[0] == 'R'
+                && wavBytes[1] == 'I'
+                && wavBytes[2] == 'F'
+                && wavBytes[3] == 'F'
+                && wavBytes[8] == 'W'
+                && wavBytes[9] == 'A'
+                && wavBytes[10] == 'V'
+                && wavBytes[11] == 'E') {
+            return java.util.Arrays.copyOfRange(wavBytes, 44, wavBytes.length);
+        }
+        return wavBytes;
+    }
+
+    private byte[] buildWav16kMonoPcm(byte[] pcmBytes) {
+        byte[] wav = new byte[44 + pcmBytes.length];
+        wav[0] = 'R'; wav[1] = 'I'; wav[2] = 'F'; wav[3] = 'F';
+        writeLe(wav, 4, 36 + pcmBytes.length);
+        wav[8] = 'W'; wav[9] = 'A'; wav[10] = 'V'; wav[11] = 'E';
+        wav[12] = 'f'; wav[13] = 'm'; wav[14] = 't'; wav[15] = ' ';
+        writeLe(wav, 16, 16);
+        wav[20] = 1;
+        wav[22] = 1;
+        writeLe(wav, 24, 16000);
+        writeLe(wav, 28, 32000);
+        wav[32] = 2;
+        wav[34] = 16;
+        wav[36] = 'd'; wav[37] = 'a'; wav[38] = 't'; wav[39] = 'a';
+        writeLe(wav, 40, pcmBytes.length);
+        System.arraycopy(pcmBytes, 0, wav, 44, pcmBytes.length);
+        return wav;
+    }
+
+    private void writeLe(byte[] target, int offset, int value) {
+        target[offset] = (byte) (value & 0xff);
+        target[offset + 1] = (byte) ((value >> 8) & 0xff);
+        target[offset + 2] = (byte) ((value >> 16) & 0xff);
+        target[offset + 3] = (byte) ((value >> 24) & 0xff);
+    }
+
+    @SafeVarargs
+    private final <T> T firstNonNull(T... values) {
+        for (T value : values) {
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
     }
 }

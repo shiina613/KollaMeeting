@@ -29,7 +29,7 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    private static final ZoneId ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+    private static final ZoneId ZONE = ZoneId.of("UTC");
     private static final DateTimeFormatter FORMATTER =
             DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssxxx");
 
@@ -39,7 +39,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleResourceNotFound(
             ResourceNotFoundException ex, HttpServletRequest request) {
         log.debug("Resource not found: {}", ex.getMessage());
-        return build(HttpStatus.NOT_FOUND, ex.getMessage(), request, null);
+        return build(HttpStatus.NOT_FOUND, "The requested resource was not found", request, null);
     }
 
     @ExceptionHandler(BadRequestException.class)
@@ -53,23 +53,23 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleForbidden(
             ForbiddenException ex, HttpServletRequest request) {
         log.debug("Forbidden: {}", ex.getMessage());
-        return build(HttpStatus.FORBIDDEN, ex.getMessage(), request, null);
+        return build(HttpStatus.FORBIDDEN, "You do not have permission to perform this action", request, null);
     }
 
     @ExceptionHandler(UnauthorizedException.class)
     public ResponseEntity<ErrorResponse> handleUnauthorized(
             UnauthorizedException ex, HttpServletRequest request) {
         log.debug("Unauthorized: {}", ex.getMessage());
-        return build(HttpStatus.UNAUTHORIZED, ex.getMessage(), request, null);
+        return build(HttpStatus.UNAUTHORIZED, "Authentication required", request, null);
     }
 
     @ExceptionHandler(SchedulingConflictException.class)
     public ResponseEntity<ErrorResponse> handleSchedulingConflict(
             SchedulingConflictException ex, HttpServletRequest request) {
         log.debug("Scheduling conflict: {}", ex.getMessage());
-        Map<String, Object> details = new HashMap<>();
-        details.put("conflictingMeetingId", ex.getConflictingMeetingId());
-        return build(HttpStatus.CONFLICT, ex.getMessage(), request, details);
+        // Return generic conflict message — do not expose conflicting meeting details
+        return build(HttpStatus.CONFLICT,
+                "The room is already booked for the requested time range", request, null);
     }
 
     @ExceptionHandler(ServiceUnavailableException.class)

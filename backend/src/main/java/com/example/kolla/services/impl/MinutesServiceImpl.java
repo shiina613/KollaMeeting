@@ -7,18 +7,30 @@ import com.example.kolla.exceptions.BadRequestException;
 import com.example.kolla.exceptions.ForbiddenException;
 import com.example.kolla.exceptions.ResourceNotFoundException;
 import com.example.kolla.models.Meeting;
+import com.example.kolla.models.Member;
 import com.example.kolla.models.Minutes;
 import com.example.kolla.models.TranscriptionSegment;
 import com.example.kolla.models.User;
+import com.example.kolla.repositories.DocumentRepository;
 import com.example.kolla.repositories.MeetingRepository;
 import com.example.kolla.repositories.MinutesRepository;
+import com.example.kolla.repositories.MemberRepository;
 import com.example.kolla.repositories.TranscriptionSegmentRepository;
 import com.example.kolla.responses.MinutesResponse;
 import com.example.kolla.services.FileStorageService;
 import com.example.kolla.services.MeetingService;
 import com.example.kolla.services.MinutesService;
 import com.example.kolla.services.NotificationService;
+import com.example.kolla.services.PdfDigitalSignatureService;
 import com.example.kolla.websocket.MeetingEventPublisher;
+import com.itextpdf.io.font.PdfEncodings;
+import com.itextpdf.io.font.constants.StandardFonts;
+import com.itextpdf.kernel.font.PdfFont;
+import com.itextpdf.kernel.font.PdfFontFactory;
+import com.itextpdf.kernel.geom.PageSize;
+import com.itextpdf.kernel.pdf.PdfDocument;
+import com.itextpdf.kernel.pdf.PdfWriter;
+import com.itextpdf.layout.element.Paragraph;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
@@ -43,7 +55,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
@@ -54,11 +65,13 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * MinutesService implementation.
  *
- * <p>PDF generation uses Apache PDFBox 3.x.
+ * <p>PDF/DOCX rendering uses PDFBox and Apache POI; PDF signing uses iText signatures.
  * HTML-to-text extraction for Secretary edits uses jsoup.
  *
  * Requirements: 25.1–25.7
@@ -69,8 +82,6 @@ import java.util.List;
 public class MinutesServiceImpl implements MinutesService {
 
     private static final ZoneId ZONE_VN = ZoneId.of("Asia/Ho_Chi_Minh");
-    private static final DateTimeFormatter ISO_FORMATTER =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
     private static final float MARGIN = 50f;
     private static final float FONT_SIZE_TITLE = 16f;
     private static final float FONT_SIZE_HEADING = 12f;
@@ -85,6 +96,9 @@ public class MinutesServiceImpl implements MinutesService {
     private final NotificationService notificationService;
     private final MeetingService meetingService;
     private final MeetingEventPublisher eventPublisher;
+    private final PdfDigitalSignatureService pdfDigitalSignatureService;
+    private final DocumentRepository documentRepository;
+    private final MemberRepository memberRepository;
     private final Clock clock;
 
     // ── compileDraftMinutes ───────────────────────────────────────────────────
@@ -112,15 +126,17 @@ public class MinutesServiceImpl implements MinutesService {
             return;
         }
 
-        // 1. Fetch and sort segments: (speakerTurnId, sequenceNumber)
+        // 1. Fetch and sort segments chronologically for minutes assembly
         List<TranscriptionSegment> segments =
                 transcriptionSegmentRepository.findByMeetingIdOrderedForMinutes(meetingId);
 
         log.info("Compiling draft minutes for meeting id={} with {} segments",
                 meetingId, segments.size());
 
-        // 2. Generate PDF bytes
-        byte[] pdfBytes = generateDraftPdf(meeting, segments);
+        // 2. Generate PDF and DOCX bytes
+        List<String> lines = buildTranscriptLines(meeting, segments);
+        byte[] pdfBytes = generateDraftPdf(lines);
+        byte[] docxBytes = DocxMinutesRenderer.renderLines(lines);
 
         // 3. Persist Minutes record first to get the ID for the filename
         Minutes minutes = Minutes.builder()
@@ -129,17 +145,33 @@ public class MinutesServiceImpl implements MinutesService {
                 .build();
         Minutes saved = minutesRepository.save(minutes);
 
-        // 4. Store PDF file: /storage/minutes/{meetingId}/draft_{minutesId}.pdf
-        String fileName = "draft_" + saved.getId() + ".pdf";
-        java.nio.file.Path storedPath =
-                fileStorageService.storeBytes(pdfBytes, FileType.MINUTES, meetingId, fileName);
+        // 4. Store generated files: /storage/minutes/{meetingId}/draft_{minutesId}.{pdf,docx}
+        String pdfFileName = "draft_" + saved.getId() + ".pdf";
+        java.nio.file.Path storedPdfPath =
+                fileStorageService.storeBytes(pdfBytes, FileType.MINUTES, meetingId, pdfFileName);
+        String docxFileName = "draft_" + saved.getId() + ".docx";
+        java.nio.file.Path storedDocxPath =
+                fileStorageService.storeBytes(docxBytes, FileType.MINUTES, meetingId, docxFileName);
 
         // 5. Update record with file path
-        saved.setDraftPdfPath(storedPath.toString());
+        saved.setDraftPdfPath(storedPdfPath.toString());
+        saved.setDraftDocxPath(storedDocxPath.toString());
         minutesRepository.save(saved);
+        createMinutesDocument(
+                meeting,
+                "bien-ban-nhap-" + meetingId + ".pdf",
+                "application/pdf",
+                storedPdfPath.toString(),
+                (long) pdfBytes.length);
+        createMinutesDocument(
+                meeting,
+                "bien-ban-nhap-" + meetingId + ".docx",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                storedDocxPath.toString(),
+                (long) docxBytes.length);
 
         log.info("Draft minutes id={} saved to '{}' for meeting id={}",
-                saved.getId(), storedPath, meetingId);
+                saved.getId(), storedPdfPath, meetingId);
 
         // 6. Notify Host (Requirement 25.3)
         if (meeting.getHost() != null) {
@@ -175,8 +207,7 @@ public class MinutesServiceImpl implements MinutesService {
     // ── confirmMinutes ────────────────────────────────────────────────────────
 
     /**
-     * Host confirms the draft minutes with a digital stamp.
-     * Stamp = hostName + ISO8601 timestamp + SHA-256(JWT + PDF content).
+     * Host confirms the draft minutes with a PAdES/CAdES digital signature embedded in the PDF.
      * Requirements: 25.4
      */
     @Override
@@ -204,15 +235,17 @@ public class MinutesServiceImpl implements MinutesService {
         Resource draftResource = fileStorageService.loadFileAsResource(minutes.getDraftPdfPath());
         byte[] draftBytes = draftResource.getInputStream().readAllBytes();
 
-        // Compute digital stamp
         LocalDateTime now = LocalDateTime.now(clock);
-        String isoTimestamp = now.atZone(ZONE_VN).format(ISO_FORMATTER);
-        String stampText = "Confirmed by: " + requester.getFullName()
-                + " | " + isoTimestamp;
-        String confirmationHash = computeSha256(jwtToken + new String(draftBytes, StandardCharsets.UTF_8));
 
-        // Generate confirmed PDF with stamp overlay
-        byte[] confirmedPdfBytes = stampPdf(draftBytes, stampText, confirmationHash);
+        // PAdES/CAdES embedded signature (keystore must be configured)
+        byte[] confirmedPdfBytes = pdfDigitalSignatureService.signPdf(
+                draftBytes, requester.getFullName());
+
+        // Integrity fingerprint of the signed PDF file (audit / API)
+        String confirmationHash = computeSha256(confirmedPdfBytes);
+
+        log.info("Minutes digitally signed for meeting {} by {} (cert={})",
+                meetingId, requester.getUsername(), pdfDigitalSignatureService.signerCertificateSubject());
 
         // Store confirmed PDF
         String fileName = "confirmed_" + minutes.getId() + ".pdf";
@@ -275,20 +308,38 @@ public class MinutesServiceImpl implements MinutesService {
                             + minutes.getStatus() + ")");
         }
 
-        // Render HTML → PDF
-        byte[] secretaryPdfBytes = renderHtmlToPdf(meeting, contentHtml);
+        // Render HTML to PDF and DOCX
+        List<String> secretaryLines = buildSecretaryLines(meeting, contentHtml);
+        byte[] secretaryPdfBytes = renderLinesToPdf(secretaryLines);
+        byte[] secretaryDocxBytes = DocxMinutesRenderer.renderLines(secretaryLines);
 
         // Store secretary PDF
         String fileName = "secretary_" + minutes.getId() + ".pdf";
         java.nio.file.Path storedPath =
                 fileStorageService.storeBytes(secretaryPdfBytes, FileType.MINUTES, meetingId, fileName);
+        String docxFileName = "secretary_" + minutes.getId() + ".docx";
+        java.nio.file.Path storedDocxPath =
+                fileStorageService.storeBytes(secretaryDocxBytes, FileType.MINUTES, meetingId, docxFileName);
 
         // Update record
         minutes.setStatus(MinutesStatus.SECRETARY_CONFIRMED);
         minutes.setSecretaryPdfPath(storedPath.toString());
+        minutes.setSecretaryDocxPath(storedDocxPath.toString());
         minutes.setContentHtml(contentHtml);
         minutes.setSecretaryConfirmedAt(LocalDateTime.now(clock));
         Minutes saved = minutesRepository.save(minutes);
+        createMinutesDocument(
+                meeting,
+                "bien-ban-thu-ky-" + meetingId + ".pdf",
+                "application/pdf",
+                storedPath.toString(),
+                (long) secretaryPdfBytes.length);
+        createMinutesDocument(
+                meeting,
+                "bien-ban-thu-ky-" + meetingId + ".docx",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                storedDocxPath.toString(),
+                (long) secretaryDocxBytes.length);
 
         log.info("Minutes id={} published by secretary '{}' for meeting id={}",
                 saved.getId(), requester.getUsername(), meetingId);
@@ -302,12 +353,12 @@ public class MinutesServiceImpl implements MinutesService {
     // ── downloadMinutes ───────────────────────────────────────────────────────
 
     /**
-     * Download a specific version of the minutes PDF.
+     * Download a specific version of the minutes file.
      * Requirements: 25.6
      */
     @Override
     @Transactional(readOnly = true)
-    public Resource downloadMinutes(Long meetingId, String version, User requester)
+    public Resource downloadMinutes(Long meetingId, String version, String format, User requester)
             throws IOException {
 
         findMeetingOrThrow(meetingId);
@@ -315,27 +366,32 @@ public class MinutesServiceImpl implements MinutesService {
 
         Minutes minutes = findMinutesOrThrow(meetingId);
 
+        String normalizedFormat = format == null ? "pdf" : format.toLowerCase();
         String filePath = switch (version.toLowerCase()) {
-            case "draft" -> {
-                if (minutes.getDraftPdfPath() == null || minutes.getDraftPdfPath().isBlank()) {
-                    throw new BadRequestException("Draft PDF is not yet available");
-                }
-                yield minutes.getDraftPdfPath();
-            }
+            case "draft" -> selectGeneratedPath(
+                    minutes.getDraftPdfPath(),
+                    minutes.getDraftDocxPath(),
+                    normalizedFormat,
+                    "Draft");
             case "confirmed" -> {
-                if (minutes.getConfirmedPdfPath() == null
-                        || minutes.getConfirmedPdfPath().isBlank()) {
-                    throw new BadRequestException("Confirmed PDF is not yet available");
+                if ("docx".equals(normalizedFormat)) {
+                    yield selectGeneratedPath(
+                            minutes.getConfirmedPdfPath(),
+                            minutes.getDraftDocxPath(),
+                            normalizedFormat,
+                            "Confirmed");
                 }
-                yield minutes.getConfirmedPdfPath();
+                yield selectGeneratedPath(
+                        minutes.getConfirmedPdfPath(),
+                        minutes.getDraftDocxPath(),
+                        normalizedFormat,
+                        "Confirmed");
             }
-            case "secretary" -> {
-                if (minutes.getSecretaryPdfPath() == null
-                        || minutes.getSecretaryPdfPath().isBlank()) {
-                    throw new BadRequestException("Secretary PDF is not yet available");
-                }
-                yield minutes.getSecretaryPdfPath();
-            }
+            case "secretary" -> selectGeneratedPath(
+                    minutes.getSecretaryPdfPath(),
+                    minutes.getSecretaryDocxPath(),
+                    normalizedFormat,
+                    "Secretary");
             default -> throw new BadRequestException(
                     "Invalid version '" + version + "'. Must be: draft, confirmed, or secretary");
         };
@@ -392,25 +448,59 @@ public class MinutesServiceImpl implements MinutesService {
      * Generate a draft PDF from sorted TranscriptionSegments.
      * Requirements: 25.1
      */
-    private byte[] generateDraftPdf(Meeting meeting,
-                                     List<TranscriptionSegment> segments) throws IOException {
+    private byte[] generateDraftPdf(List<String> lines) throws IOException {
+        return renderLinesToPdf(lines);
+    }
 
-        try (PDDocument doc = new PDDocument();
-             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+    private byte[] renderLinesToPdf(List<String> lines) throws IOException {
+        try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            PdfWriter writer = new PdfWriter(out);
+            PdfDocument pdf = new PdfDocument(writer);
+            com.itextpdf.layout.Document document =
+                    new com.itextpdf.layout.Document(pdf, PageSize.A4);
+            document.setMargins(MARGIN, MARGIN, MARGIN, MARGIN);
 
-            // Use Roboto (PDType0Font) for full Unicode / Vietnamese support.
-            // Helvetica is WinAnsiEncoding only and cannot render Vietnamese characters.
-            PDFont fontBold    = loadFont(doc, "/fonts/Roboto-Bold.ttf");
-            PDFont fontRegular = loadFont(doc, "/fonts/Roboto-Regular.ttf");
+            PdfFont fontBold = loadITextFont("/fonts/Roboto-Bold.ttf", true);
+            PdfFont fontRegular = loadITextFont("/fonts/Roboto-Regular.ttf", false);
 
-            // Build lines to render
-            List<String> lines = buildTranscriptLines(meeting, segments);
+            for (String line : lines) {
+                boolean isTitle = line.startsWith("MEETING MINUTES");
+                boolean isSpeaker = line.startsWith("[") && line.contains("]");
+                boolean isSeparator = line.startsWith("─") || line.startsWith("â”€");
+                if (isSeparator) {
+                    continue;
+                }
 
-            // Paginate and render
-            renderLinesToDocument(doc, lines, fontBold, fontRegular);
+                float fontSize = isTitle ? FONT_SIZE_TITLE
+                        : isSpeaker ? FONT_SIZE_HEADING
+                        : FONT_SIZE_BODY;
+                PdfFont font = (isTitle || isSpeaker) ? fontBold : fontRegular;
 
-            doc.save(out);
+                Paragraph paragraph = new Paragraph(line.isBlank() ? " " : line)
+                        .setFont(font)
+                        .setFontSize(fontSize)
+                        .setMultipliedLeading(1.15f)
+                        .setMarginTop(0)
+                        .setMarginBottom(2);
+                document.add(paragraph);
+            }
+
+            document.close();
             return out.toByteArray();
+        }
+    }
+
+    private PdfFont loadITextFont(String classpathPath, boolean bold) throws IOException {
+        try (InputStream fontStream = getClass().getResourceAsStream(classpathPath)) {
+            if (fontStream == null) {
+                log.warn("Font not found at classpath:{}, falling back to Helvetica", classpathPath);
+                return PdfFontFactory.createFont(
+                        bold ? StandardFonts.HELVETICA_BOLD : StandardFonts.HELVETICA);
+            }
+            return PdfFontFactory.createFont(
+                    fontStream.readAllBytes(),
+                    PdfEncodings.IDENTITY_H,
+                    PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
         }
     }
 
@@ -451,31 +541,33 @@ public class MinutesServiceImpl implements MinutesService {
             return lines;
         }
 
-        // Group by speakerTurnId to avoid repeating speaker name on every line
-        String currentTurnId = null;
-        StringBuilder turnBuffer = new StringBuilder();
+        Map<Long, Member> memberByUserId = memberRepository.findByMeetingId(meeting.getId())
+                .stream()
+                .collect(Collectors.toMap(
+                        member -> member.getUser().getId(),
+                        member -> member,
+                        (left, right) -> left));
 
         for (TranscriptionSegment seg : segments) {
-            if (!seg.getSpeakerTurnId().equals(currentTurnId)) {
-                // Flush previous turn
-                if (currentTurnId != null && turnBuffer.length() > 0) {
-                    wrapAndAdd(lines, turnBuffer.toString(), 80);
-                    lines.add("");
-                }
-                currentTurnId = seg.getSpeakerTurnId();
-                turnBuffer = new StringBuilder();
-                // Speaker header
-                lines.add("[" + seg.getSpeakerName() + "]");
+            Member member = memberByUserId.get(seg.getSpeakerId());
+            String meetingRole = member != null && member.getMeetingRole() != null
+                    ? member.getMeetingRole().name()
+                    : "MEMBER";
+            String time = seg.getSegmentStartTime() != null
+                    ? seg.getSegmentStartTime()
+                            .atZone(ZONE_VN)
+                            .format(DateTimeFormatter.ofPattern("HH:mm"))
+                    : "--:--";
+            String department = null;
+            if (member != null && member.getUser() != null) {
+                department = member.getUser().getDegree();
             }
-            if (turnBuffer.length() > 0) {
-                turnBuffer.append(" ");
+            String speakerHeader = "[" + time + "] " + seg.getSpeakerName() + " (" + meetingRole + ")";
+            if (department != null && !department.isBlank()) {
+                speakerHeader += " - " + department;
             }
-            turnBuffer.append(seg.getText().trim());
-        }
-
-        // Flush last turn
-        if (turnBuffer.length() > 0) {
-            wrapAndAdd(lines, turnBuffer.toString(), 80);
+            lines.add(speakerHeader);
+            wrapAndAdd(lines, seg.getText().trim(), 80);
             lines.add("");
         }
 
@@ -556,61 +648,14 @@ public class MinutesServiceImpl implements MinutesService {
     }
 
     /**
-     * Stamp an existing PDF with a confirmation footer on the last page.
-     * Requirements: 25.4
-     */
-    private byte[] stampPdf(byte[] originalPdfBytes,
-                              String stampText,
-                              String confirmationHash) throws IOException {
-
-        try (PDDocument doc = Loader.loadPDF(originalPdfBytes);
-             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-
-            PDFont fontBold = loadFont(doc, "/fonts/Roboto-Bold.ttf");
-            PDFont fontRegular = loadFont(doc, "/fonts/Roboto-Regular.ttf");
-
-            // Add a new page for the confirmation stamp
-            PDPage stampPage = new PDPage(PDRectangle.A4);
-            doc.addPage(stampPage);
-
-            float pageHeight = stampPage.getMediaBox().getHeight();
-            float yPos = pageHeight - MARGIN;
-
-            try (PDPageContentStream cs = new PDPageContentStream(doc, stampPage)) {
-                // Title
-                cs.beginText();
-                cs.setFont(fontBold, FONT_SIZE_HEADING);
-                cs.newLineAtOffset(MARGIN, yPos);
-                cs.showText("CONFIRMATION STAMP");
-                cs.endText();
-                yPos -= LINE_HEIGHT_HEADING * 2;
-
-                // Stamp text
-                cs.beginText();
-                cs.setFont(fontRegular, FONT_SIZE_BODY);
-                cs.newLineAtOffset(MARGIN, yPos);
-                cs.showText(stampText);
-                cs.endText();
-                yPos -= LINE_HEIGHT_BODY * 2;
-
-                // Hash
-                cs.beginText();
-                cs.setFont(fontRegular, 8f);
-                cs.newLineAtOffset(MARGIN, yPos);
-                cs.showText("SHA-256: " + confirmationHash);
-                cs.endText();
-            }
-
-            doc.save(out);
-            return out.toByteArray();
-        }
-    }
-
-    /**
      * Render HTML content to a PDF using jsoup for text extraction + PDFBox for rendering.
      * Requirements: 25.5
      */
     private byte[] renderHtmlToPdf(Meeting meeting, String contentHtml) throws IOException {
+        return renderLinesToPdf(buildSecretaryLines(meeting, contentHtml));
+    }
+
+    private List<String> buildSecretaryLines(Meeting meeting, String contentHtml) {
         // Parse HTML with jsoup and extract structured text
         Document htmlDoc = Jsoup.parse(contentHtml);
         List<String> lines = new ArrayList<>();
@@ -632,17 +677,7 @@ public class MinutesServiceImpl implements MinutesService {
         // Extract text from HTML elements
         extractHtmlLines(htmlDoc.body(), lines);
 
-        try (PDDocument doc = new PDDocument();
-             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-
-            PDFont fontBold = loadFont(doc, "/fonts/Roboto-Bold.ttf");
-            PDFont fontRegular = loadFont(doc, "/fonts/Roboto-Regular.ttf");
-
-            renderLinesToDocument(doc, lines, fontBold, fontRegular);
-
-            doc.save(out);
-            return out.toByteArray();
-        }
+        return lines;
     }
 
     /**
@@ -711,15 +746,72 @@ public class MinutesServiceImpl implements MinutesService {
      * Compute SHA-256 hash of the input string and return as hex string.
      * Requirements: 25.4
      */
-    private String computeSha256(String input) {
+    private String computeSha256(byte[] data) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hashBytes = digest.digest(input.getBytes(StandardCharsets.UTF_8));
+            byte[] hashBytes = digest.digest(data);
             return HexFormat.of().formatHex(hashBytes);
         } catch (NoSuchAlgorithmException e) {
-            // SHA-256 is always available in Java
             throw new IllegalStateException("SHA-256 algorithm not available", e);
         }
+    }
+
+    private String selectGeneratedPath(
+            String pdfPath,
+            String docxPath,
+            String format,
+            String label) {
+        return switch (format) {
+            case "pdf" -> {
+                if (pdfPath == null || pdfPath.isBlank()) {
+                    throw new BadRequestException(label + " PDF is not yet available");
+                }
+                yield pdfPath;
+            }
+            case "docx" -> {
+                if (docxPath == null || docxPath.isBlank()) {
+                    throw new BadRequestException(label + " DOCX is not yet available");
+                }
+                yield docxPath;
+            }
+            default -> throw new BadRequestException(
+                    "Invalid format '" + format + "'. Must be: pdf or docx");
+        };
+    }
+
+    private void createMinutesDocument(
+            Meeting meeting,
+            String fileName,
+            String fileType,
+            String filePath,
+            Long fileSize) {
+        User uploader = documentUploader(meeting);
+        if (uploader == null) {
+            log.warn("Cannot create document record for minutes file '{}' in meeting id={}: no uploader",
+                    fileName, meeting.getId());
+            return;
+        }
+
+        com.example.kolla.models.Document document = com.example.kolla.models.Document.builder()
+                .meeting(meeting)
+                .fileName(fileName)
+                .fileType(fileType)
+                .filePath(filePath)
+                .fileSize(fileSize)
+                .uploadedBy(uploader)
+                .uploadedAt(LocalDateTime.now(clock))
+                .build();
+        documentRepository.save(document);
+    }
+
+    private User documentUploader(Meeting meeting) {
+        if (meeting.getHost() != null) {
+            return meeting.getHost();
+        }
+        if (meeting.getSecretary() != null) {
+            return meeting.getSecretary();
+        }
+        return meeting.getCreator();
     }
 
     // ── Access control helpers ────────────────────────────────────────────────

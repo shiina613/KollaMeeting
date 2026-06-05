@@ -21,7 +21,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     boolean existsByUsername(String username);
 
+    boolean existsByEmployeeCode(String employeeCode);
+
     boolean existsByEmail(String email);
+
+    boolean existsByPhoneNumber(String phoneNumber);
+
+    boolean existsByIdentification(String identification);
 
     /**
      * Returns active users with the given role, ordered by full name.
@@ -43,7 +49,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
             SELECT u FROM User u
             WHERE u.isActive = true
               AND (LOWER(u.fullName) LIKE LOWER(CONCAT('%', :q, '%'))
-                OR LOWER(u.username) LIKE LOWER(CONCAT('%', :q, '%')))
+                OR LOWER(u.username) LIKE LOWER(CONCAT('%', :q, '%'))
+                OR LOWER(u.employeeCode) LIKE LOWER(CONCAT('%', :q, '%')))
             ORDER BY u.fullName ASC
             """)
     List<User> searchByNameOrUsername(@Param("q") String query, org.springframework.data.domain.Pageable pageable);

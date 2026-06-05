@@ -2,7 +2,7 @@
  * TranscriptionPanel — displays real-time transcription segments for HIGH_PRIORITY meetings.
  *
  * - Returns null when the meeting is not HIGH_PRIORITY (Req 8.13)
- * - Shows a TRANSCRIPTION_UNAVAILABLE banner when Gipformer is down (Req 8.12)
+ * - Shows a TRANSCRIPTION_UNAVAILABLE banner when ASR service is down (Req 8.12)
  * - Renders segments sorted by (speakerTurnId, sequenceNumber) via useTranscription
  * - Auto-scrolls to the latest segment
  * - Groups consecutive segments from the same speaker into a single block
@@ -12,6 +12,8 @@
 
 import { useEffect, useRef } from 'react'
 import type { TranscriptionSegment } from '../../utils/audioUtils'
+import { formatJavaZonedTime } from '../../utils/parseJavaZonedDateTime'
+import type { MeetingRole } from '../../types/meeting'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -22,8 +24,17 @@ export interface TranscriptionPanelProps {
    *  Must NOT be read from a separate useTranscription() call inside this component,
    *  which would create an isolated instance that never receives events. */
   segments: TranscriptionSegment[]
-  /** Whether the Gipformer service is currently available. */
+  /** Whether the ASR service is currently available. */
   isTranscriptionAvailable: boolean
+}
+
+const MEETING_ROLE_LABELS: Record<MeetingRole, string> = {
+  HOST: 'Chu tri',
+  SECRETARY: 'Thu ky',
+  REVIEWER: 'Phan bien',
+  COMMITTEE_MEMBER: 'Uy vien',
+  GUEST: 'Khach moi',
+  MEMBER: 'Thanh vien',
 }
 
 // ─── Speaker block (consecutive segments from the same speaker turn) ──────────
@@ -56,7 +67,7 @@ function groupIntoSpeakerBlocks(segments: TranscriptionSegment[]): SpeakerBlock[
 function UnavailableBanner() {
   return (
     <div
-      className="flex items-center gap-2 mx-3 my-2 px-3 py-2 rounded-lg bg-error-container text-on-error-container text-body-sm"
+      className="flex items-center gap-2 mx-3 my-2 px-3 py-2 rounded-lg bg-red-900/30 text-red-300 text-body-sm"
       role="alert"
       aria-live="polite"
       data-testid="transcription-unavailable-banner"
@@ -72,14 +83,17 @@ function UnavailableBanner() {
 function EmptyState() {
   return (
     <div
-      className="flex flex-col items-center justify-center h-full gap-3 text-on-surface-variant px-4"
+      className="flex flex-col items-center justify-center h-full gap-3 text-slate-400 px-4"
       data-testid="transcription-empty-state"
     >
-      <span className="material-symbols-outlined text-[40px] opacity-40" aria-hidden="true">
+      <span className="material-symbols-outlined text-[48px] opacity-60" aria-hidden="true">
         mic
       </span>
       <p className="text-body-sm text-center">
         Phiên âm sẽ xuất hiện khi người phát biểu bắt đầu nói.
+      </p>
+      <p className="text-body-sm text-center text-slate-500">
+        Cuộc họp cần ở chế độ MEETING_MODE để phiên âm hoạt động.
       </p>
     </div>
   )
@@ -94,40 +108,32 @@ function SpeakerBlockCard({ block, isLast }: SpeakerBlockCardProps) {
   const text = block.segments.map((s) => s.text).join(' ')
   const firstSegment = block.segments[0]
 
-  // Normalize segmentStartTime:
-  // Java ZonedDateTime.toString() produces e.g. "2026-05-07T17:10:41+07:00[Asia/Ho_Chi_Minh]"
-  // Strip the trailing [Zone/ID] part, then append +07:00 if still no offset.
-  const rawTime = (firstSegment.segmentStartTime ?? '').replace(/\[.*\]$/, '').trim()
-  const normalizedTime = /[Z]$|[+-]\d{2}:\d{2}$/.test(rawTime)
-    ? rawTime
-    : rawTime + '+07:00'
-  const time = normalizedTime
-    ? new Date(normalizedTime).toLocaleTimeString('vi-VN', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        timeZone: 'Asia/Ho_Chi_Minh',
-      })
-    : '--:--:--'
+  const time = formatJavaZonedTime(firstSegment.segmentStartTime ?? '', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+  const timeDisplay = time === '—' ? '--:--:--' : time
 
   // Format: "Tên - Phòng ban - UserId (2 digits)"
   const userId = String(firstSegment.speakerId).padStart(2, '0')
   const dept = firstSegment.speakerDept?.trim()
+  const role = firstSegment.speakerRole ? MEETING_ROLE_LABELS[firstSegment.speakerRole] : undefined
   const speakerInfo = dept
-    ? `${block.speakerName} - ${dept} - ${userId}`
-    : `${block.speakerName} - ${userId}`
+    ? `${block.speakerName} - ${role ? `${role} - ` : ''}${dept} - ${userId}`
+    : `${block.speakerName} - ${role ? `${role} - ` : ''}${userId}`
 
   return (
     <div
-      className={`px-3 py-2.5 ${isLast ? '' : 'border-b border-outline-variant'}`}
+      className={`px-3 py-2.5 ${isLast ? '' : 'border-b border-slate-700'}`}
       data-testid="transcription-segment-block"
       data-speaker-turn-id={block.speakerTurnId}
     >
       {/* Format: Tên - Phòng - UserId: Nội dung <HH:MM:SS> */}
-      <p className="text-body-sm text-on-surface leading-relaxed break-words">
-        <span className="font-semibold text-primary">{speakerInfo}:</span>
-        <span className="text-on-surface"> {text} </span>
-        <span className="text-on-surface-variant font-mono text-label-sm">&lt;{time}&gt;</span>
+      <p className="text-body-sm text-slate-200 leading-relaxed break-words">
+        <span className="font-semibold text-blue-300">{speakerInfo}:</span>
+        <span className="text-slate-200"> {text} </span>
+        <span className="text-slate-400 font-mono text-label-sm">&lt;{timeDisplay}&gt;</span>
       </p>
     </div>
   )
@@ -187,14 +193,14 @@ function TranscriptionPanelInner({
       aria-label="Phiên âm trực tiếp"
     >
       {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-outline-variant shrink-0">
-        <span className="material-symbols-outlined text-[18px] text-primary" aria-hidden="true">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-700 shrink-0">
+        <span className="material-symbols-outlined text-[18px] text-blue-300" aria-hidden="true">
           subtitles
         </span>
-        <h3 className="text-body-sm font-semibold text-on-surface">Phiên âm trực tiếp</h3>
+        <h3 className="text-body-sm font-semibold text-slate-200">Phiên âm trực tiếp</h3>
         {/* Live indicator */}
-        <span className="ml-auto flex items-center gap-1 text-label-sm text-error">
-          <span className="w-1.5 h-1.5 rounded-full bg-error animate-pulse" aria-hidden="true" />
+        <span className="ml-auto flex items-center gap-1 text-label-sm text-red-400">
+          <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" aria-hidden="true" />
           LIVE
         </span>
       </div>

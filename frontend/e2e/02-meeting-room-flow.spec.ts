@@ -85,16 +85,19 @@ test.describe('Meeting room flow: mode switch, raise hand, speaking permission',
     await page.goto(`/meetings/${meetingId}/room`)
     await page.waitForLoadState('networkidle')
 
-    // Switch to MEETING_MODE
-    const modeToggle = page.getByTestId('meeting-mode-toggle')
-    const count2 = await modeToggle.count()
-    if (count2 === 0) { test.skip(); return }
+    // Switch to MEETING_MODE (switch appears only after Jitsi has joined)
+    const modeSwitch = page.getByTestId('mode-toggle-button')
+    try {
+      await modeSwitch.waitFor({ state: 'visible', timeout: 120_000 })
+    } catch {
+      test.skip()
+      return
+    }
 
-    // Check current mode label
-    const currentMode = await modeToggle.textContent()
+    const modeBar = page.getByTestId('meeting-mode-toggle')
+    const currentMode = await modeBar.textContent()
     if (currentMode?.includes('Tự do') || currentMode?.includes('FREE')) {
-      await modeToggle.click()
-      // Wait for mode change confirmation
+      await modeSwitch.click()
       await page.waitForTimeout(1000)
     }
 

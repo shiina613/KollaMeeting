@@ -19,6 +19,7 @@ const MeetingRoomPage   = lazy(() => import('../pages/MeetingRoomPage'))
 const AdminPage         = lazy(() => import('../pages/AdminPage'))
 const SearchPage        = lazy(() => import('../pages/SearchPage'))
 const RecordingListPage = lazy(() => import('../pages/RecordingListPage'))
+const ProfilePage       = lazy(() => import('../pages/ProfilePage'))
 
 // ─── Layout wrapper (Sidebar + Header) ───────────────────────────────────────
 // Imported lazily to avoid circular deps; layout components implemented in 14.5
@@ -85,6 +86,7 @@ export default function AppRouter() {
               <Route path="/meetings/:id" element={<MeetingDetailPage />} />
               <Route path="/search" element={<SearchPage />} />
               <Route path="/recordings" element={<RecordingListPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
             </Route>
             {/* Meeting room — fullscreen, no sidebar/header */}
             <Route path="/meetings/:id/room" element={<MeetingRoomPage />} />

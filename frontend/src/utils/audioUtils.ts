@@ -5,6 +5,8 @@
  * Requirements: 8.14
  */
 
+import type { MeetingRole } from '../types/meeting'
+
 // ─── PCM conversion ───────────────────────────────────────────────────────────
 
 /**
@@ -12,7 +14,7 @@
  * (range [-32768, 32767]).
  *
  * This is the format expected by the backend WebSocket audio stream handler
- * and by Gipformer for WAV 16kHz mono conversion.
+ * and by ASR service for WAV 16kHz mono conversion.
  *
  * Clamps values outside [-1.0, 1.0] to prevent overflow.
  *
@@ -37,6 +39,7 @@ export interface TranscriptionSegment {
   speakerId: number
   speakerName: string
   speakerDept: string
+  speakerRole?: MeetingRole
   speakerTurnId: string
   sequenceNumber: number
   text: string
@@ -91,7 +94,7 @@ export function sortSegments(segments: TranscriptionSegment[]): TranscriptionSeg
  * Compute the adaptive VAD silence threshold (in seconds) based on the
  * accumulated audio duration of the current speaker turn.
  *
- * Rules (mirroring Gipformer backend logic, Req 8.9):
+ * Rules (mirroring ASR service backend logic, Req 8.9):
  * - If accumulated duration < 15s → silence threshold is in [2, 3] seconds
  * - If accumulated duration >= 15s → silence threshold is in [0.5, 1] second
  *

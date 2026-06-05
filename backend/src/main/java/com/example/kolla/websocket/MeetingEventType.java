@@ -62,15 +62,18 @@ public enum MeetingEventType {
     /** Meeting transcription priority changed. */
     PRIORITY_CHANGED,
 
-    /** Gipformer service is unavailable. */
+    /** ASR service is unavailable. */
     TRANSCRIPTION_UNAVAILABLE,
 
-    /** Gipformer service recovered. */
+    /** ASR service recovered. */
     TRANSCRIPTION_RECOVERED,
 
     // ── Documents ───────────────────────────────────────────────────────────
     /** A new document was uploaded to the meeting. */
     DOCUMENT_UPLOADED,
+
+    /** A persistent meeting discussion message was created. */
+    MEETING_MESSAGE_CREATED,
 
     // ── Minutes ─────────────────────────────────────────────────────────────
     /** Draft minutes have been generated and are ready for Host review. */

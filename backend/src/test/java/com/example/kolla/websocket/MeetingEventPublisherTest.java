@@ -329,7 +329,7 @@ class MeetingEventPublisherTest {
         void sendsSegment() {
             ZonedDateTime segmentTime = ZonedDateTime.now();
             publisher.publishTranscriptionSegment(
-                    MEETING_ID, "job-123", 3L, "Eve", "Phòng CNTT", "turn-abc", 2, "Xin chào", segmentTime);
+                    MEETING_ID, "job-123", 3L, "Eve", "Phòng CNTT", "REVIEWER", "turn-abc", 2, "Xin chào", segmentTime);
 
             MeetingEvent event = captureEvent();
             assertThat(event.getType()).isEqualTo(MeetingEventType.TRANSCRIPTION_SEGMENT);
@@ -338,6 +338,7 @@ class MeetingEventPublisherTest {
             assertThat(payload).containsEntry("speakerId", 3L);
             assertThat(payload).containsEntry("speakerName", "Eve");
             assertThat(payload).containsEntry("speakerDept", "Phòng CNTT");
+            assertThat(payload).containsEntry("speakerRole", "REVIEWER");
             assertThat(payload).containsEntry("speakerTurnId", "turn-abc");
             assertThat(payload).containsEntry("sequenceNumber", 2);
             assertThat(payload).containsEntry("text", "Xin chào");
@@ -367,12 +368,12 @@ class MeetingEventPublisherTest {
         @Test
         @DisplayName("Sends TRANSCRIPTION_UNAVAILABLE with message")
         void sendsUnavailable() {
-            publisher.publishTranscriptionUnavailable(MEETING_ID, "Gipformer is down");
+            publisher.publishTranscriptionUnavailable(MEETING_ID, "ASR service is down");
 
             MeetingEvent event = captureEvent();
             assertThat(event.getType()).isEqualTo(MeetingEventType.TRANSCRIPTION_UNAVAILABLE);
             Map<String, Object> payload = payload(event);
-            assertThat(payload).containsEntry("message", "Gipformer is down");
+            assertThat(payload).containsEntry("message", "ASR service is down");
         }
     }
 
@@ -409,6 +410,29 @@ class MeetingEventPublisherTest {
             assertThat(payload).containsEntry("documentId", 99L);
             assertThat(payload).containsEntry("fileName", "agenda.pdf");
             assertThat(payload).containsEntry("uploadedBy", "Alice");
+        }
+    }
+
+    @Nested
+    @DisplayName("publishMeetingMessageCreated()")
+    class PublishMeetingMessageCreated {
+
+        @Test
+        @DisplayName("Sends MEETING_MESSAGE_CREATED with message metadata")
+        void sendsMeetingMessageCreated() {
+            ZonedDateTime createdAt = ZonedDateTime.now();
+            publisher.publishMeetingMessageCreated(
+                    MEETING_ID, 88L, 7L, "Nguyễn Văn A", "HOST", "Nội dung trao đổi", createdAt);
+
+            MeetingEvent event = captureEvent();
+            assertThat(event.getType()).isEqualTo(MeetingEventType.MEETING_MESSAGE_CREATED);
+            Map<String, Object> payload = payload(event);
+            assertThat(payload).containsEntry("messageId", 88L);
+            assertThat(payload).containsEntry("memberId", 7L);
+            assertThat(payload).containsEntry("senderName", "Nguyễn Văn A");
+            assertThat(payload).containsEntry("meetingRole", "HOST");
+            assertThat(payload).containsEntry("content", "Nội dung trao đổi");
+            assertThat(payload).containsKey("createdAt");
         }
     }
 

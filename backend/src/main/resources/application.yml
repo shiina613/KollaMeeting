@@ -97,7 +97,8 @@ spring:
 # Requirement 14.2 – JWT configuration
 # ─────────────────────────────────────────────
 jwt:
-  secret: ${JWT_SECRET:changeme-super-secret-key-at-least-32-chars}
+  # Must be a valid Base64-encoded string of at least 32 bytes. Generate: openssl rand -base64 32
+  secret: ${JWT_SECRET:Y2hhbmdlbWUtc3VwZXItc2VjcmV0LWtleS1hdC1sZWFzdC0zMi1jaGFycw==}
   # Default: 24 hours in milliseconds
   expiration-ms: ${JWT_EXPIRATION_MS:86400000}
   # Refresh token TTL: 7 days
@@ -120,6 +121,20 @@ file:
     max-recording-size-mb: 5120
 
 # ─────────────────────────────────────────────
+# Digital signature — Host confirms minutes (Requirement 25.4)
+# PKCS#12 (.p12) or JKS with CA/org certificate + private key.
+# See docs/digital-signature.md
+# ─────────────────────────────────────────────
+digital-signature:
+  enabled: ${DIGITAL_SIGNATURE_ENABLED:false}
+  keystore-path: ${DIGITAL_SIGNATURE_KEYSTORE_PATH:}
+  keystore-password: ${DIGITAL_SIGNATURE_KEYSTORE_PASSWORD:}
+  keystore-type: ${DIGITAL_SIGNATURE_KEYSTORE_TYPE:PKCS12}
+  key-alias: ${DIGITAL_SIGNATURE_KEY_ALIAS:}
+  reason: ${DIGITAL_SIGNATURE_REASON:Xác nhận biên bản cuộc họp}
+  location: ${DIGITAL_SIGNATURE_LOCATION:KollaMeeting}
+
+# ─────────────────────────────────────────────
 # Requirement 14.4 – Jitsi server URL
 # ─────────────────────────────────────────────
 jitsi:
@@ -137,10 +152,10 @@ jaas:
   private-key: ${JAAS_PRIVATE_KEY:}
 
 # ─────────────────────────────────────────────
-# Requirement 14.5 – Gipformer service URL
+# Requirement 14.5 – ASR service URL
 # ─────────────────────────────────────────────
-gipformer:
-  service-url: ${GIPFORMER_SERVICE_URL:http://localhost:8000}
+asr-service:
+  service-url: ${ASR_SERVICE_URL:http://localhost:8000}
   # Health check interval (seconds)
   health-check-interval-s: 30
   # HTTP client timeouts
@@ -150,7 +165,7 @@ gipformer:
   max-retries: 3
   retry-delay-ms: 2000
   # Internal API key for callback authentication
-  callback-api-key: ${GIPFORMER_CALLBACK_API_KEY:internal-callback-key-change-me}
+  callback-api-key: ${ASR_CALLBACK_API_KEY:internal-callback-key-change-me}
 
 # ─────────────────────────────────────────────
 # Redis queue keys (used by TranscriptionQueueService)
@@ -168,6 +183,10 @@ transcription:
 # ─────────────────────────────────────────────
 app:
   timezone: Asia/Ho_Chi_Minh
+  rate-limit:
+    # Set to true only when behind a trusted reverse proxy (nginx, ALB, etc.)
+    # When false, X-Forwarded-For and X-Real-IP headers are ignored to prevent IP spoofing
+    trust-proxy: ${APP_RATE_LIMIT_TRUST_PROXY:false}
 
 # ─────────────────────────────────────────────
 # Logging

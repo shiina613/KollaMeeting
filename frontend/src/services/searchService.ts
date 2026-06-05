@@ -18,7 +18,8 @@ export interface MeetingSearchFilters {
 }
 
 export interface TranscriptionSearchResult {
-  jobId: string
+  segmentId?: number
+  jobId?: string
   meetingId: number
   meetingTitle: string
   speakerName: string
@@ -40,7 +41,7 @@ export async function searchMeetings(
   filters: MeetingSearchFilters,
 ): Promise<ApiResponse<PageResponse<Meeting>>> {
   const params: Record<string, string | number | undefined> = {}
-  if (filters.query) params.query = filters.query
+  if (filters.query?.trim()) params.keyword = filters.query.trim()
   if (filters.startDate) params.startDate = filters.startDate
   if (filters.endDate) params.endDate = filters.endDate
   if (filters.roomId !== undefined) params.roomId = filters.roomId
@@ -60,7 +61,7 @@ export async function searchTranscriptions(
   filters: TranscriptionSearchFilters,
 ): Promise<ApiResponse<PageResponse<TranscriptionSearchResult>>> {
   const params: Record<string, string | number | undefined> = {
-    query: filters.query,
+    keyword: filters.query.trim(),
   }
   if (filters.page !== undefined) params.page = filters.page
   if (filters.size !== undefined) params.size = filters.size

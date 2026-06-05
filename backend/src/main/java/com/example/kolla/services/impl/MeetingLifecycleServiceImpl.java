@@ -9,11 +9,12 @@ import com.example.kolla.models.Meeting;
 import com.example.kolla.models.User;
 import com.example.kolla.repositories.AttendanceLogRepository;
 import com.example.kolla.repositories.MeetingRepository;
-import com.example.kolla.repositories.RaiseHandRequestRepository;
+import com.example.kolla.services.RaiseHandQueueService;
 import com.example.kolla.responses.MeetingResponse;
 import com.example.kolla.services.MeetingLifecycleService;
 import com.example.kolla.services.MinutesService;
 import com.example.kolla.services.NotificationService;
+import com.example.kolla.services.RecordingService;
 import com.example.kolla.services.SpeakingPermissionService;
 import com.example.kolla.websocket.MeetingEventPublisher;
 import lombok.RequiredArgsConstructor;
@@ -60,8 +61,9 @@ public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
     private final AttendanceLogRepository attendanceLogRepository;
     private final NotificationService notificationService;
     private final StringRedisTemplate redisTemplate;
-    private final RaiseHandRequestRepository raiseHandRequestRepository;
+    private final RaiseHandQueueService raiseHandQueueService;
     private final MeetingEventPublisher eventPublisher;
+    private final RecordingService recordingService;
     private final Clock clock;
 
     @Autowired
@@ -164,9 +166,9 @@ public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
 
         // Expire all pending raise-hand requests
         try {
-            raiseHandRequestRepository.expireAllPendingForMeeting(meetingId, saved.getEndedAt());
+            raiseHandQueueService.clearAll(meetingId);
         } catch (Exception e) {
-            log.warn("Could not expire raise-hand requests for meeting id={}: {}",
+            log.warn("Could not clear raise-hand queue for meeting id={}: {}",
                     meetingId, e.getMessage());
         }
 
@@ -181,6 +183,13 @@ public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
                 "MEETING_ENDED",
                 "Meeting ended",
                 "Meeting '" + saved.getTitle() + "' has ended");
+
+        try {
+            recordingService.createAggregateRecordingForMeeting(saved);
+        } catch (Exception e) {
+            log.error("Failed to create aggregate recording for meeting id={}: {}",
+                    meetingId, e.getMessage(), e);
+        }
 
         // Trigger draft minutes generation asynchronously (Requirement 25.1–25.3)
         try {
@@ -235,8 +244,14 @@ public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
     @Override
     @Transactional
     public void onParticipantLeft(Long meetingId, User user) {
-        Meeting meeting = meetingRepository.findById(meetingId).orElse(null);
+        // Pessimistic lock to prevent race condition when multiple key persons leave simultaneously
+        Meeting meeting = meetingRepository.findByIdForUpdate(meetingId).orElse(null);
         if (meeting == null || meeting.getStatus() != MeetingStatus.ACTIVE) {
+            return;
+        }
+
+        // If timeout is already set, no need to set again
+        if (meeting.getWaitingTimeoutAt() != null) {
             return;
         }
 
@@ -278,14 +293,20 @@ public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
                 try {
                     speakingPermissionService.revokeAllPermissions(
                             meeting.getId(), "MEETING_ENDED");
-                    raiseHandRequestRepository.expireAllPendingForMeeting(
-                            meeting.getId(), meeting.getEndedAt());
+                    raiseHandQueueService.clearAll(meeting.getId());
                 } catch (Exception ex) {
                     log.warn("Could not clean up permissions for auto-ended meeting id={}: {}",
                             meeting.getId(), ex.getMessage());
                 }
 
                 // Trigger draft minutes generation (Requirement 25.1–25.3)
+                try {
+                    recordingService.createAggregateRecordingForMeeting(meeting);
+                } catch (Exception ex) {
+                    log.error("Failed to create aggregate recording for auto-ended meeting id={}: {}",
+                            meeting.getId(), ex.getMessage(), ex);
+                }
+
                 try {
                     minutesService.compileDraftMinutes(meeting);
                 } catch (Exception ex) {

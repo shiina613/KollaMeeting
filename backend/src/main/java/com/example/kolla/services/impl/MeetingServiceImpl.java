@@ -3,6 +3,7 @@ package com.example.kolla.services.impl;
 import com.example.kolla.dto.AddMemberRequest;
 import com.example.kolla.dto.CreateMeetingRequest;
 import com.example.kolla.dto.UpdateMeetingRequest;
+import com.example.kolla.enums.MeetingRole;
 import com.example.kolla.enums.MeetingStatus;
 import com.example.kolla.enums.Role;
 import com.example.kolla.exceptions.BadRequestException;
@@ -31,6 +32,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -56,6 +59,7 @@ public class MeetingServiceImpl implements MeetingService {
     private final RoomRepository roomRepository;
     private final DepartmentRepository departmentRepository;
     private final NotificationService notificationService;
+    private final EntityManager entityManager;
 
     // ── Create ────────────────────────────────────────────────────────────────
 
@@ -64,13 +68,11 @@ public class MeetingServiceImpl implements MeetingService {
     public MeetingResponse createMeeting(CreateMeetingRequest request, User creator) {
         validateTimeRange(request.getStartTime(), request.getEndTime());
 
-        // Validate host: must be SECRETARY (Requirement 3.8)
+        String meetingTitle = resolveMeetingTitle(request.getTitle(), request.getName());
+
+        // Validate host/chairperson: any active user may chair a meeting.
         User host = findUserOrThrow(request.getHostUserId());
-        if (host.getRole() != Role.SECRETARY) {
-            throw new BadRequestException(
-                    "Host must have SECRETARY role, but user '"
-                    + host.getUsername() + "' has role " + host.getRole());
-        }
+        validateActiveUser(host, "Host");
 
         // Validate secretary: must be SECRETARY (Requirement 3.8)
         User secretary = findUserOrThrow(request.getSecretaryUserId());
@@ -79,15 +81,28 @@ public class MeetingServiceImpl implements MeetingService {
                     "Secretary must have SECRETARY role, but user '"
                     + secretary.getUsername() + "' has role " + secretary.getRole());
         }
+        validateActiveUser(secretary, "Secretary");
 
         // Resolve room and check scheduling conflicts (Requirement 3.12)
         Room room = null;
         if (request.getRoomId() != null) {
-            room = roomRepository.findById(request.getRoomId())
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            "Room not found with id: " + request.getRoomId()));
+            // Acquire pessimistic lock on the room to prevent race conditions
+            // between conflict check and meeting insert
+            room = entityManager.find(Room.class, request.getRoomId(), LockModeType.PESSIMISTIC_WRITE);
+            if (room == null) {
+                throw new ResourceNotFoundException(
+                        "Room not found with id: " + request.getRoomId());
+            }
             checkSchedulingConflict(request.getRoomId(), request.getStartTime(),
                     request.getEndTime(), null);
+        }
+
+        Long departmentId = request.getDepartmentId();
+        if (departmentId == null && room != null && room.getDepartment() != null) {
+            departmentId = room.getDepartment().getId();
+        }
+        if (departmentId != null && !departmentRepository.existsById(departmentId)) {
+            throw new ResourceNotFoundException("Department not found with id: " + departmentId);
         }
 
         // Generate unique meeting code (Requirement 3.1)
@@ -95,8 +110,9 @@ public class MeetingServiceImpl implements MeetingService {
 
         Meeting meeting = Meeting.builder()
                 .code(code)
-                .title(request.getTitle())
+                .title(meetingTitle)
                 .description(request.getDescription())
+                .departmentId(departmentId)
                 .startTime(request.getStartTime())
                 .endTime(request.getEndTime())
                 .room(room)
@@ -114,14 +130,19 @@ public class MeetingServiceImpl implements MeetingService {
         log.info("Created meeting '{}' (code={}) by user '{}'",
                 saved.getTitle(), saved.getCode(), creator.getUsername());
 
-        // Auto-add creator, host, and secretary as members
-        addMemberIfAbsent(saved, creator);
+        // Auto-add creator, host, and secretary as members with meeting-specific roles.
+        MeetingRole creatorRole = creator.getId().equals(host.getId())
+                ? MeetingRole.HOST
+                : creator.getId().equals(secretary.getId())
+                    ? MeetingRole.SECRETARY
+                    : MeetingRole.MEMBER;
+        addMemberIfAbsent(saved, creator, creatorRole);
         if (!host.getId().equals(creator.getId())) {
-            addMemberIfAbsent(saved, host);
+            addMemberIfAbsent(saved, host, MeetingRole.HOST);
         }
         if (!secretary.getId().equals(creator.getId())
                 && !secretary.getId().equals(host.getId())) {
-            addMemberIfAbsent(saved, secretary);
+            addMemberIfAbsent(saved, secretary, MeetingRole.SECRETARY);
         }
 
         return MeetingResponse.from(saved);
@@ -181,13 +202,13 @@ public class MeetingServiceImpl implements MeetingService {
             throw new ForbiddenException("Only SECRETARY may update meetings");
         }
 
-        // Cannot update an ENDED meeting
-        if (meeting.getStatus() == MeetingStatus.ENDED) {
-            throw new BadRequestException("Cannot update an ended meeting");
+        if (meeting.getStatus() != MeetingStatus.SCHEDULED) {
+            throw new BadRequestException("Only scheduled meetings can be updated");
         }
 
-        if (request.getTitle() != null && !request.getTitle().isBlank()) {
-            meeting.setTitle(request.getTitle());
+        if ((request.getTitle() != null && !request.getTitle().isBlank())
+                || (request.getName() != null && !request.getName().isBlank())) {
+            meeting.setTitle(resolveMeetingTitle(request.getTitle(), request.getName()));
         }
         if (request.getDescription() != null) {
             meeting.setDescription(request.getDescription());
@@ -207,25 +228,38 @@ public class MeetingServiceImpl implements MeetingService {
 
         // Room change — check conflicts (Requirement 3.12)
         if (request.getRoomId() != null) {
-            Room room = roomRepository.findById(request.getRoomId())
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            "Room not found with id: " + request.getRoomId()));
+            // Acquire pessimistic lock on the room to prevent race conditions
+            Room room = entityManager.find(Room.class, request.getRoomId(), LockModeType.PESSIMISTIC_WRITE);
+            if (room == null) {
+                throw new ResourceNotFoundException(
+                        "Room not found with id: " + request.getRoomId());
+            }
             checkSchedulingConflict(request.getRoomId(), newStart, newEnd, id);
             meeting.setRoom(room);
+            if (request.getDepartmentId() == null && room.getDepartment() != null) {
+                meeting.setDepartmentId(room.getDepartment().getId());
+            }
         } else if (meeting.getRoom() != null
                 && (request.getStartTime() != null || request.getEndTime() != null)) {
-            // Time changed but room unchanged — re-check conflicts for existing room
+            // Time changed but room unchanged — lock existing room and re-check conflicts
+            entityManager.find(Room.class, meeting.getRoom().getId(), LockModeType.PESSIMISTIC_WRITE);
             checkSchedulingConflict(meeting.getRoom().getId(), newStart, newEnd, id);
+        }
+
+        if (request.getDepartmentId() != null) {
+            if (!departmentRepository.existsById(request.getDepartmentId())) {
+                throw new ResourceNotFoundException(
+                        "Department not found with id: " + request.getDepartmentId());
+            }
+            meeting.setDepartmentId(request.getDepartmentId());
         }
 
         // Host update
         if (request.getHostUserId() != null) {
             User host = findUserOrThrow(request.getHostUserId());
-            if (host.getRole() != Role.SECRETARY) {
-                throw new BadRequestException(
-                        "Host must have SECRETARY role");
-            }
+            validateActiveUser(host, "Host");
             meeting.setHost(host);
+            addMemberIfAbsent(meeting, host, MeetingRole.HOST);
         }
 
         // Secretary update
@@ -234,7 +268,9 @@ public class MeetingServiceImpl implements MeetingService {
             if (secretary.getRole() != Role.SECRETARY) {
                 throw new BadRequestException("Secretary must have SECRETARY role");
             }
+            validateActiveUser(secretary, "Secretary");
             meeting.setSecretary(secretary);
+            addMemberIfAbsent(meeting, secretary, MeetingRole.SECRETARY);
         }
 
         // Transcription priority update (only while SCHEDULED)
@@ -258,18 +294,22 @@ public class MeetingServiceImpl implements MeetingService {
     public void deleteMeeting(Long id, User requester) {
         Meeting meeting = findMeetingOrThrow(id);
 
-        // Only ADMIN may delete (Requirement 3.6)
-        if (requester.getRole() != Role.ADMIN) {
-            throw new ForbiddenException("Only ADMIN may delete meetings");
+        boolean isAssignedSecretary = meeting.getSecretary() != null
+                && meeting.getSecretary().getId().equals(requester.getId());
+        boolean isCreatorSecretary = meeting.getCreator() != null
+                && meeting.getCreator().getId().equals(requester.getId())
+                && requester.getRole() == Role.SECRETARY;
+        if (!isAssignedSecretary && !isCreatorSecretary) {
+            throw new ForbiddenException(
+                    "Only the meeting creator or assigned Secretary may delete meetings");
         }
 
-        // Cannot delete an ACTIVE meeting
-        if (meeting.getStatus() == MeetingStatus.ACTIVE) {
-            throw new BadRequestException("Cannot delete an active meeting. End it first.");
+        if (meeting.getStatus() != MeetingStatus.SCHEDULED) {
+            throw new BadRequestException("Only scheduled meetings can be deleted");
         }
 
         meetingRepository.delete(meeting);
-        log.info("Deleted meeting id={} '{}' by admin '{}'",
+        log.info("Deleted meeting id={} '{}' by user '{}'",
                 id, meeting.getTitle(), requester.getUsername());
     }
 
@@ -323,6 +363,9 @@ public class MeetingServiceImpl implements MeetingService {
         Member member = Member.builder()
                 .meeting(meeting)
                 .user(user)
+                .meetingRole(request.getMeetingRole() != null
+                        ? request.getMeetingRole()
+                        : MeetingRole.MEMBER)
                 .build();
 
         Member saved = memberRepository.save(member);
@@ -354,7 +397,10 @@ public class MeetingServiceImpl implements MeetingService {
             throw new BadRequestException("Cannot remove members from an ended meeting");
         }
 
-        if (!memberRepository.existsByMeetingIdAndUserId(meetingId, userId)) {
+        Member member = memberRepository.findByMeetingIdAndUserId(meetingId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "User with id " + userId + " is not a member of meeting " + meetingId));
+        if (member == null) {
             throw new ResourceNotFoundException(
                     "User with id " + userId + " is not a member of meeting " + meetingId);
         }
@@ -365,6 +411,10 @@ public class MeetingServiceImpl implements MeetingService {
         }
         if (meeting.getSecretary() != null && meeting.getSecretary().getId().equals(userId)) {
             throw new BadRequestException("Cannot remove the Secretary from the meeting");
+        }
+        if (member.getMeetingRole() == MeetingRole.HOST
+                || member.getMeetingRole() == MeetingRole.SECRETARY) {
+            throw new BadRequestException("Cannot remove protected meeting role: " + member.getMeetingRole());
         }
 
         memberRepository.deleteByMeetingIdAndUserId(meetingId, userId);
@@ -405,6 +455,15 @@ public class MeetingServiceImpl implements MeetingService {
         if (!endTime.isAfter(startTime)) {
             throw new BadRequestException("End time must be after start time");
         }
+        // Prevent scheduling meetings in the past
+        if (startTime.isBefore(LocalDateTime.now())) {
+            throw new BadRequestException("Start time cannot be in the past");
+        }
+        // Prevent unreasonably long meetings (max 24 hours)
+        long durationHours = java.time.Duration.between(startTime, endTime).toHours();
+        if (durationHours > 24) {
+            throw new BadRequestException("Meeting duration cannot exceed 24 hours");
+        }
     }
 
     private Meeting findMeetingOrThrow(Long id) {
@@ -422,26 +481,60 @@ public class MeetingServiceImpl implements MeetingService {
      *
      * 20 chars is long enough to avoid meet.jit.si's "members-only" policy
      * that is triggered for short/guessable room names on the public instance.
+     *
+     * Uses a retry loop with DataIntegrityViolationException handling to
+     * guard against the (unlikely) race condition where two threads generate
+     * the same code between the existsByCode check and the INSERT.
      * Requirements: 3.1
      */
     private String generateUniqueCode() {
-        String code;
-        do {
+        int maxAttempts = 10;
+        for (int attempt = 0; attempt < maxAttempts; attempt++) {
             // Two UUID segments joined = 32 hex chars; take first 20
             String part1 = UUID.randomUUID().toString().replace("-", "");
             String part2 = UUID.randomUUID().toString().replace("-", "");
-            code = (part1 + part2).substring(0, 20).toUpperCase();
-        } while (meetingRepository.existsByCode(code));
-        return code;
+            String code = (part1 + part2).substring(0, 20).toUpperCase();
+            if (!meetingRepository.existsByCode(code)) {
+                return code;
+            }
+            log.debug("Meeting code collision on attempt {}, retrying...", attempt + 1);
+        }
+        // Fallback: use full UUID (32 chars) which is virtually impossible to collide
+        String fallback = UUID.randomUUID().toString().replace("-", "").toUpperCase();
+        log.warn("Meeting code generation exhausted {} attempts, using fallback 32-char code", maxAttempts);
+        return fallback;
     }
 
-    private void addMemberIfAbsent(Meeting meeting, User user) {
-        if (!memberRepository.existsByMeetingIdAndUserId(meeting.getId(), user.getId())) {
-            memberRepository.save(Member.builder()
-                    .meeting(meeting)
-                    .user(user)
-                    .build());
+    private void addMemberIfAbsent(Meeting meeting, User user, MeetingRole role) {
+        java.util.Optional<Member> existing =
+                memberRepository.findByMeetingIdAndUserId(meeting.getId(), user.getId());
+        if (existing.isPresent()) {
+            Member member = existing.get();
+            if (isHigherPriorityRole(role, member.getMeetingRole())) {
+                member.setMeetingRole(role);
+                memberRepository.save(member);
+            }
+            return;
         }
+        memberRepository.save(Member.builder()
+                .meeting(meeting)
+                .user(user)
+                .meetingRole(role != null ? role : MeetingRole.MEMBER)
+                .build());
+    }
+
+    private boolean isHigherPriorityRole(MeetingRole candidate, MeetingRole current) {
+        return roleRank(candidate) > roleRank(current);
+    }
+
+    private int roleRank(MeetingRole role) {
+        if (role == null) return 0;
+        return switch (role) {
+            case MEMBER, GUEST -> 1;
+            case REVIEWER, COMMITTEE_MEMBER -> 2;
+            case SECRETARY -> 3;
+            case HOST -> 4;
+        };
     }
 
     /**
@@ -467,5 +560,19 @@ public class MeetingServiceImpl implements MeetingService {
     private String resolveDeptName(User user, Map<Long, String> deptNames) {
         if (user == null || user.getDepartmentId() == null) return null;
         return deptNames.get(user.getDepartmentId());
+    }
+
+    private void validateActiveUser(User user, String label) {
+        if (!user.isActive()) {
+            throw new BadRequestException(label + " must be an active user");
+        }
+    }
+
+    private String resolveMeetingTitle(String title, String name) {
+        String resolved = title != null && !title.isBlank() ? title : name;
+        if (resolved == null || resolved.isBlank()) {
+            throw new BadRequestException("Meeting name is required");
+        }
+        return resolved.trim();
     }
 }

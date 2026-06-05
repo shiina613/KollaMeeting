@@ -25,7 +25,7 @@ interface MeetingState {
   speakingPermission: SpeakingPermission | null
   /** Pending raise-hand requests (chronological, oldest first) */
   raiseHandRequests: RaiseHandRequest[]
-  /** Whether Gipformer transcription service is available */
+  /** Whether ASR transcription service is available */
   isTranscriptionAvailable: boolean
 
   // ── Lifecycle ────────────────────────────────────────────────────────────

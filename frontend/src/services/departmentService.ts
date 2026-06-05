@@ -9,6 +9,7 @@ import type { ApiResponse } from '../types/api'
 export interface DepartmentDto {
   id: number
   name: string
+  departmentCode?: string
   description?: string
   createdAt?: string
   updatedAt?: string
@@ -16,11 +17,13 @@ export interface DepartmentDto {
 
 export interface CreateDepartmentRequest {
   name: string
+  departmentCode?: string
   description?: string
 }
 
 export interface UpdateDepartmentRequest {
   name?: string
+  departmentCode?: string
   description?: string
 }
 

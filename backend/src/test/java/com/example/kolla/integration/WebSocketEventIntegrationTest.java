@@ -230,7 +230,7 @@ class WebSocketEventIntegrationTest {
         @Test
         @DisplayName("publishTranscriptionUnavailable sends to correct topic")
         void sendsTranscriptionUnavailable() {
-            eventPublisher.publishTranscriptionUnavailable(activeMeeting.getId(), "Gipformer down");
+            eventPublisher.publishTranscriptionUnavailable(activeMeeting.getId(), "ASR service down");
 
             verify(messagingTemplate).convertAndSend(
                     eq("/topic/meeting/" + activeMeeting.getId()),

@@ -100,14 +100,14 @@ function Start-Services {
     }
     Write-Host "[OK] Backend image da duoc build."
 
-    Write-Host "[*] Build gipformer (cap nhat code Python ASR)..."
+    Write-Host "[*] Build asr-service (cap nhat code Python ASR)..."
     # Chi rebuild Layer 6 (COPY code) neu layers truoc (PyTorch, sherpa-onnx) da cache
-    cmd /c "docker compose build gipformer 2>&1"
+    cmd /c "docker compose build asr-service 2>&1"
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "[ERROR] Khong the build gipformer. Chay thu: docker compose build gipformer"
+        Write-Host "[ERROR] Khong the build asr-service. Chay thu: docker compose build asr-service"
         exit 1
     }
-    Write-Host "[OK] Gipformer image da duoc build."
+    Write-Host "[OK] ASR service image da duoc build."
 
     Write-Host "[*] Khoi dong services (tru frontend)..."
     # Restart cloudflared truoc de dam bao lay duoc URL moi (xoa log cu)
@@ -181,9 +181,7 @@ function Update-EnvFile {
 
     $content = $content -replace '(?m)^VITE_API_BASE_URL=.*', "VITE_API_BASE_URL=$apiUrl"
     $content = $content -replace '(?m)^VITE_WS_URL=.*',       "VITE_WS_URL=$wsUrl"
-    # NOTE: CORS_ALLOWED_ORIGINS is intentionally NOT updated here.
-    # It is set to "*" in .env so it works regardless of Cloudflare tunnel URL rotation.
-    # JWT token validation on every request provides the actual security boundary.
+    $content = $content -replace '(?m)^CORS_ALLOWED_ORIGINS=.*', "CORS_ALLOWED_ORIGINS=$corsUrl"
 
     [System.IO.File]::WriteAllText((Resolve-Path $envFile).Path, $content, [System.Text.UTF8Encoding]::new($false))
 

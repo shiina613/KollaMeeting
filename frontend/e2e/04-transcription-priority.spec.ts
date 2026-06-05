@@ -103,7 +103,7 @@ test.describe('Transcription priority: HIGH_PRIORITY → panel visible', () => {
     }
   })
 
-  test('should show TRANSCRIPTION_UNAVAILABLE indicator when Gipformer is down', async ({ page }) => {
+  test('should show TRANSCRIPTION_UNAVAILABLE indicator when ASR service is down', async ({ page }) => {
     await loginAs(page, TEST_ADMIN)
     await page.goto('/meetings')
 
@@ -118,7 +118,7 @@ test.describe('Transcription priority: HIGH_PRIORITY → panel visible', () => {
     await page.goto(`/meetings/${meetingId}/room`)
     await page.waitForLoadState('networkidle')
 
-    // The unavailable indicator may or may not be present depending on Gipformer status
+    // The unavailable indicator may or may not be present depending on ASR service status
     // Just verify the room page loaded correctly
     await expect(page.locator('main')).toBeVisible()
   })

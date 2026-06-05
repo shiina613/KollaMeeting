@@ -1,11 +1,10 @@
 /**
- * MeetingModeToggle — displays the current meeting mode and allows the Host
- * to switch between FREE_MODE and MEETING_MODE.
+ * MeetingModeToggle — hiển thị chế độ cuộc họp (FREE_MODE / MEETING_MODE).
  *
- * - FREE_MODE: all participants can use their mic simultaneously
- * - MEETING_MODE: only the participant with Speaking_Permission can speak
+ * - Mọi thành viên: badge + mô tả (chỉ đọc).
+ * - Chủ trì / thư ký: thêm công tắc chuyển chế độ, chỉ sau khi Jitsi đã join (`conferenceReady`).
  *
- * When switching to MEETING_MODE → muteAll via Jitsi API
+ * When switching to MEETING_MODE → WS MODE_CHANGED triggers muteAll (moderators) or muteLocal
  * When switching to FREE_MODE → restore mic control (no muteAll)
  *
  * Requirements: 21.4, 21.5, 21.6
@@ -24,8 +23,10 @@ export interface MeetingModeToggleProps {
   meetingId: number
   /** Called after a successful mode switch so the parent can trigger Jitsi actions */
   onModeChanged?: (newMode: MeetingMode) => void
-  /** Whether the current user is the Host of this meeting */
-  isHost: boolean
+  /** Chủ trì hoặc thư ký — được thấy và dùng công tắc khi `conferenceReady` */
+  canControlMode: boolean
+  /** Jitsi đã `videoConferenceJoined` — bắt buộc để hiện và bấm công tắc */
+  conferenceReady: boolean
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -33,15 +34,13 @@ export interface MeetingModeToggleProps {
 /**
  * MeetingModeToggle
  *
- * Visible to all participants (shows current mode).
- * Only the Host can click the toggle button.
- *
  * Requirements: 21.4, 21.5, 21.6
  */
 export default function MeetingModeToggle({
   meetingId,
   onModeChanged,
-  isHost,
+  canControlMode,
+  conferenceReady,
 }: MeetingModeToggleProps) {
   const { user } = useAuthStore()
   const mode = useMeetingStore((s) => s.mode)
@@ -49,9 +48,10 @@ export default function MeetingModeToggle({
   const [error, setError] = useState<string | null>(null)
 
   const isMeetingMode = mode === 'MEETING_MODE'
+  const showModeSwitch = canControlMode && conferenceReady
 
   const handleToggle = useCallback(async () => {
-    if (!isHost || isSwitching) return
+    if (!showModeSwitch || isSwitching) return
 
     const targetMode: MeetingMode = isMeetingMode ? 'FREE_MODE' : 'MEETING_MODE'
 
@@ -62,9 +62,6 @@ export default function MeetingModeToggle({
       await api.post<ApiResponse<Meeting>>(`/meetings/${meetingId}/mode`, {
         mode: targetMode,
       })
-      // The WebSocket MODE_CHANGED event will update the store.
-      // We also call onModeChanged immediately so the parent can react
-      // (e.g. muteAll via Jitsi) without waiting for the WS event.
       onModeChanged?.(targetMode)
     } catch (err) {
       const message =
@@ -74,7 +71,7 @@ export default function MeetingModeToggle({
     } finally {
       setIsSwitching(false)
     }
-  }, [isHost, isSwitching, isMeetingMode, meetingId, onModeChanged])
+  }, [showModeSwitch, isSwitching, isMeetingMode, meetingId, onModeChanged])
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -84,10 +81,30 @@ export default function MeetingModeToggle({
       data-testid="meeting-mode-toggle"
       aria-label="Chế độ cuộc họp"
     >
-      {/* Mode indicator — visible to all */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3 flex-wrap">
+        {/* Icon-only badge on < 768px (muted outline style per requirement 9.4) */}
         <span
-          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-label-md font-semibold
+          className={`inline-flex md:hidden items-center gap-1.5 px-2 py-1 rounded-full text-label-md font-semibold border
+            ${isMeetingMode
+              ? 'border-amber-500/50 text-amber-400'
+              : 'border-green-500/50 text-green-400'
+            }`}
+          data-testid="mode-badge-icon"
+          aria-live="polite"
+          aria-label={isMeetingMode ? 'Chế độ họp' : 'Chế độ tự do'}
+          title={isMeetingMode ? 'Chế độ họp' : 'Chế độ tự do'}
+        >
+          <span
+            className="material-symbols-outlined text-[14px]"
+            aria-hidden="true"
+          >
+            {isMeetingMode ? 'record_voice_over' : 'groups'}
+          </span>
+        </span>
+
+        {/* Full badge with text on >= 768px */}
+        <span
+          className={`hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-label-md font-semibold
             ${isMeetingMode
               ? 'bg-amber-100 text-amber-700'
               : 'bg-green-100 text-green-700'
@@ -104,50 +121,81 @@ export default function MeetingModeToggle({
           {isMeetingMode ? 'Chế độ họp' : 'Chế độ tự do'}
         </span>
 
-        {/* Toggle button — only for Host */}
-        {isHost && (
-          <button
-            onClick={handleToggle}
-            disabled={isSwitching}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-label-md font-medium
-              transition-colors disabled:opacity-60 disabled:cursor-not-allowed
-              ${isMeetingMode
-                ? 'bg-green-600 text-white hover:bg-green-700'
-                : 'bg-amber-500 text-white hover:bg-amber-600'
-              }`}
-            aria-label={isMeetingMode ? 'Chuyển sang chế độ tự do' : 'Chuyển sang chế độ họp'}
-            data-testid="mode-toggle-button"
-          >
-            {isSwitching ? (
-              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <span className="material-symbols-outlined text-[14px]" aria-hidden="true">
-                swap_horiz
+        {/* Switch control — hidden on < 768px per requirement 2.3 */}
+        {showModeSwitch && (
+          <div className="hidden md:flex items-center gap-2 shrink-0">
+            <span
+              className={`text-label-md font-medium tabular-nums transition-colors
+                ${isMeetingMode ? 'text-slate-500' : 'text-white'}`}
+              aria-hidden="true"
+            >
+              Tự do
+            </span>
+
+            <button
+              type="button"
+              role="switch"
+              aria-checked={isMeetingMode}
+              aria-label={isMeetingMode ? 'Chuyển sang chế độ tự do' : 'Chuyển sang chế độ họp'}
+              disabled={isSwitching}
+              onClick={handleToggle}
+              data-testid="mode-toggle-button"
+              className={`group relative h-7 w-12 shrink-0 rounded-full transition-colors
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400
+                focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800
+                disabled:opacity-55 disabled:cursor-not-allowed
+                ${isMeetingMode ? 'bg-amber-500 hover:bg-amber-400' : 'bg-slate-600 hover:bg-slate-500'}
+              `}
+            >
+              <span
+                className={`pointer-events-none absolute top-1 left-1 flex h-5 w-5 items-center justify-center
+                  rounded-full bg-white shadow-md ring-1 ring-black/5 transition-transform duration-200 ease-out
+                  ${isMeetingMode ? 'translate-x-5' : 'translate-x-0'}
+                `}
+                aria-hidden="true"
+              >
+                {isSwitching && (
+                  <span
+                    className="h-2.5 w-2.5 border-2 border-slate-500 border-t-transparent rounded-full animate-spin"
+                    aria-hidden="true"
+                  />
+                )}
               </span>
-            )}
-            {isMeetingMode ? 'Chuyển tự do' : 'Chuyển họp'}
-          </button>
+            </button>
+
+            <span
+              className={`text-label-md font-medium tabular-nums transition-colors
+                ${isMeetingMode ? 'text-white' : 'text-slate-500'}`}
+              aria-hidden="true"
+            >
+              Họp
+            </span>
+          </div>
         )}
       </div>
 
-      {/* Error message */}
       {error && (
         <p className="text-label-md text-error" role="alert" data-testid="mode-toggle-error">
           {error}
         </p>
       )}
 
-      {/* Mode description — helps participants understand the current mode */}
-      <p className="text-label-md text-on-surface-variant" aria-live="polite">
+      {/* Description text — hidden on < 768px to save space */}
+      <p className="hidden md:block text-label-md text-slate-400 max-w-md" aria-live="polite">
         {isMeetingMode
           ? 'Chỉ người được cấp quyền mới có thể phát biểu'
           : 'Tất cả thành viên có thể bật mic đồng thời'
         }
       </p>
 
-      {/* Hidden info for screen readers */}
       <span className="sr-only">
-        {user?.id && `Bạn ${isHost ? 'là' : 'không phải'} chủ trì cuộc họp này.`}
+        {user?.id && (
+          canControlMode
+            ? conferenceReady
+              ? 'Bạn có thể chuyển chế độ cuộc họp bằng công tắc.'
+              : 'Đang kết nối phòng — công tắt chế độ sẽ hiện sau khi vào phòng xong.'
+            : 'Bạn xem chế độ hiện tại; chỉ chủ trì hoặc thư ký mới đổi được chế độ.'
+        )}
       </span>
     </div>
   )

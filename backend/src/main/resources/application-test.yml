@@ -24,15 +24,16 @@ spring:
     show-sql: false
 
 jwt:
-  secret: test-secret-key-for-unit-tests-only-32chars
+  secret: dGVzdC1zZWNyZXQta2V5LWZvci11bml0LXRlc3RzLW9ubHktMzJjaGFycw==
   expiration-ms: 3600000
 
 file:
   storage:
     base-path: ./target/test-storage
 
-gipformer:
+asr-service:
   service-url: http://localhost:8000
+  callback-api-key: test-callback-api-key-not-default
 
 logging:
   level:

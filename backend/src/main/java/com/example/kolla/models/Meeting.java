@@ -31,23 +31,26 @@ public class Meeting {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "code", nullable = false, unique = true, length = 50)
+    @Column(name = "MeetingCode", nullable = false, unique = true, length = 50)
     private String code;
 
-    @Column(name = "title", nullable = false, length = 500)
+    @Column(name = "Name", nullable = false, length = 500)
     private String title;
 
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "start_time", nullable = false)
+    @Column(name = "DepartmentId")
+    private Long departmentId;
+
+    @Column(name = "StartTime", nullable = false)
     private LocalDateTime startTime;
 
-    @Column(name = "end_time", nullable = false)
+    @Column(name = "Endtime", nullable = false)
     private LocalDateTime endTime;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "room_id")
+    @JoinColumn(name = "Room_id")
     private Room room;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -55,7 +58,7 @@ public class Meeting {
     private User creator;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
+    @Column(name = "Status", nullable = false)
     @Builder.Default
     private MeetingStatus status = MeetingStatus.SCHEDULED;
 

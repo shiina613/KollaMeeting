@@ -19,6 +19,8 @@ public interface RoomRepository extends JpaRepository<Room, Long> {
 
     List<Room> findByDepartmentId(Long departmentId);
 
+    boolean existsByRoomCode(String roomCode);
+
     /**
      * Returns true if the room has any SCHEDULED or ACTIVE meetings.
      * Used to prevent deletion of rooms with scheduled meetings.

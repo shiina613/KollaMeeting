@@ -253,24 +253,19 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
-    @DisplayName("Redis failure during blacklist check → token is allowed (fail-open)")
-    void redisFailure_allowsToken() throws Exception {
+    @DisplayName("Redis failure during blacklist check → token is rejected (fail-closed)")
+    void redisFailure_rejectsToken() throws Exception {
         when(jwtUtils.validateToken(VALID_TOKEN)).thenReturn(true);
         when(redisTemplate.hasKey(anyString())).thenThrow(new RuntimeException("Redis down"));
-        when(jwtUtils.getUserIdFromToken(VALID_TOKEN)).thenReturn(1L);
-        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-        when(valueOperations.get(anyString())).thenReturn(null);
-        User user = buildUser(1L, "alice", Role.USER);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
 
         MockHttpServletRequest request = requestWithBearer(VALID_TOKEN);
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         filter.doFilterInternal(request, response, filterChain);
 
-        // Fail-open: authentication should be set even when Redis is down
+        // Fail-closed: authentication must not be set when token revocation cannot be checked.
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        assertThat(auth).isNotNull();
+        assertThat(auth).isNull();
         verify(filterChain).doFilter(request, response);
     }
 

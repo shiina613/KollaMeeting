@@ -30,6 +30,17 @@ const ROLE_CLASSES: Record<string, string> = {
   USER: 'bg-slate-100 text-slate-600',
 }
 
+const PROFILE_FIELD_DEFS = [
+  { key: 'dob', label: 'Ngay sinh', type: 'date' },
+  { key: 'phoneNumber', label: 'So dien thoai', type: 'text' },
+  { key: 'degree', label: 'Hoc vi', type: 'text' },
+  { key: 'identification', label: 'CCCD/CMND', type: 'text' },
+  { key: 'address', label: 'Dia chi', type: 'text' },
+  { key: 'bankName', label: 'Ngan hang', type: 'text' },
+  { key: 'bankNumber', label: 'So tai khoan', type: 'text' },
+  { key: 'img', label: 'Anh dai dien', type: 'text' },
+] as const
+
 function RoleBadge({ role }: { role: string }) {
   return (
     <span
@@ -50,7 +61,7 @@ interface CreateUserModalProps {
 
 function CreateUserModal({ onClose, onSuccess }: CreateUserModalProps) {
   const [form, setForm] = useState<CreateUserRequest>({
-    username: '',
+    employeeCode: '',
     email: '',
     fullName: '',
     password: '',
@@ -98,13 +109,13 @@ function CreateUserModal({ onClose, onSuccess }: CreateUserModalProps) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-label-md text-on-surface-variant mb-1">
-              Tên đăng nhập <span className="text-error">*</span>
+              Ma nhan vien <span className="text-error">*</span>
             </label>
             <input
               type="text"
               required
-              value={form.username}
-              onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
+              value={form.employeeCode}
+              onChange={(e) => setForm((f) => ({ ...f, employeeCode: e.target.value }))}
               data-testid="create-username-input"
               className="w-full border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary"
             />
@@ -134,6 +145,21 @@ function CreateUserModal({ onClose, onSuccess }: CreateUserModalProps) {
               data-testid="create-fullname-input"
               className="w-full border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary"
             />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {PROFILE_FIELD_DEFS.map((field) => (
+              <div key={field.key}>
+                <label className="block text-label-md text-on-surface-variant mb-1">
+                  {field.label}
+                </label>
+                <input
+                  type={field.type}
+                  value={form[field.key] ?? ''}
+                  onChange={(e) => setForm((f) => ({ ...f, [field.key]: e.target.value }))}
+                  className="w-full border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+            ))}
           </div>
           <div>
             <label className="block text-label-md text-on-surface-variant mb-1">
@@ -211,10 +237,19 @@ interface EditUserModalProps {
 
 function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) {
   const [form, setForm] = useState<UpdateUserRequest>({
+    employeeCode: user.employeeCode,
     email: user.email,
     fullName: user.fullName,
     role: user.role,
     departmentId: user.department?.id,
+    dob: user.dob,
+    phoneNumber: user.phoneNumber,
+    degree: user.degree,
+    identification: user.identification,
+    address: user.address,
+    bankName: user.bankName,
+    bankNumber: user.bankNumber,
+    img: user.img,
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -258,6 +293,16 @@ function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) {
         )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
+            <label className="block text-label-md text-on-surface-variant mb-1">Ma nhan vien</label>
+            <input
+              type="text"
+              value={form.employeeCode ?? ''}
+              onChange={(e) => setForm((f) => ({ ...f, employeeCode: e.target.value }))}
+              data-testid="edit-employee-code-input"
+              className="w-full border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+          <div>
             <label className="block text-label-md text-on-surface-variant mb-1">Email</label>
             <input
               type="email"
@@ -276,6 +321,21 @@ function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) {
               data-testid="edit-fullname-input"
               className="w-full border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary"
             />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {PROFILE_FIELD_DEFS.map((field) => (
+              <div key={field.key}>
+                <label className="block text-label-md text-on-surface-variant mb-1">
+                  {field.label}
+                </label>
+                <input
+                  type={field.type}
+                  value={form[field.key] ?? ''}
+                  onChange={(e) => setForm((f) => ({ ...f, [field.key]: e.target.value }))}
+                  className="w-full border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+            ))}
           </div>
           <div>
             <label className="block text-label-md text-on-surface-variant mb-1">Vai trò</label>
@@ -643,7 +703,7 @@ export default function UserManagement() {
                   >
                     <td className="px-4 py-3">
                       <div className="font-medium text-on-surface">{u.fullName}</div>
-                      <div className="text-label-md text-on-surface-variant">{u.username}</div>
+                      <div className="text-label-md text-on-surface-variant">{u.employeeCode ?? u.username}</div>
                     </td>
                     <td className="px-4 py-3 text-on-surface-variant hidden md:table-cell">{u.email}</td>
                     <td className="px-4 py-3"><RoleBadge role={u.role} /></td>

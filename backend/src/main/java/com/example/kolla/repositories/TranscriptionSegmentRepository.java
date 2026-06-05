@@ -26,12 +26,12 @@ public interface TranscriptionSegmentRepository extends JpaRepository<Transcript
 
     /**
      * Retrieve all segments for a meeting ordered for minutes assembly.
-     * Sort by (speakerTurnId, sequenceNumber) to reconstruct chronological order.
+     * Sort by segment start time to reconstruct the actual meeting chronology.
      * Requirements: 25.1
      */
     @Query("SELECT s FROM TranscriptionSegment s " +
            "WHERE s.meeting.id = :meetingId " +
-           "ORDER BY s.speakerTurnId, s.sequenceNumber")
+           "ORDER BY s.segmentStartTime ASC, s.speakerTurnId ASC, s.sequenceNumber ASC, s.id ASC")
     List<TranscriptionSegment> findByMeetingIdOrderedForMinutes(@Param("meetingId") Long meetingId);
 
     /**

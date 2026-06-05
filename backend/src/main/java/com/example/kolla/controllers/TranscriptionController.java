@@ -28,7 +28,7 @@ import java.util.List;
  *
  * <h3>Endpoints</h3>
  * <ul>
- *   <li>POST {@code /transcription/callback} — internal callback from Gipformer</li>
+ *   <li>POST {@code /transcription/callback} — internal callback from ASR service</li>
  *   <li>GET  {@code /meetings/{id}/transcription} — list segments for a meeting</li>
  * </ul>
  *
@@ -47,15 +47,15 @@ public class TranscriptionController {
 
     private final TranscriptionService transcriptionService;
 
-    @Value("${gipformer.callback-api-key:internal-api-key}")
+    @Value("${asr-service.callback-api-key:internal-callback-key-change-me}")
     private String expectedCallbackApiKey;
 
-    // ── Gipformer callback ────────────────────────────────────────────────────
+    // ── ASR callback ────────────────────────────────────────────────────
 
     /**
      * POST /api/v1/transcription/callback
      *
-     * <p>Receives a transcription result from Gipformer after it finishes
+     * <p>Receives a transcription result from ASR service after it finishes
      * processing an audio chunk.
      *
      * <p>Idempotency: if a segment already exists for the given {@code jobId},
@@ -71,8 +71,8 @@ public class TranscriptionController {
      */
     @PostMapping("/transcription/callback")
     @Operation(
-            summary = "Receive transcription result from Gipformer (internal)",
-            description = "Called by Gipformer after completing inference on an audio chunk. "
+            summary = "Receive transcription result from ASR service (internal)",
+            description = "Called by ASR service after completing inference on an audio chunk. "
                     + "Requires X-Callback-Api-Key header. "
                     + "Idempotent: duplicate calls for the same jobId return 200 without side effects.")
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
@@ -84,11 +84,15 @@ public class TranscriptionController {
             @RequestHeader(value = "X-Internal-Api-Key", required = false) String apiKey,
             @Valid @RequestBody TranscriptionCallbackRequest request) {
 
-        // Note: In Docker internal network, this endpoint is only reachable from kolla-gipformer.
-        // API key validation is skipped for now; re-enable in production with proper secret management.
-        // Keeping the header parameter for future use without breaking the Gipformer client.
-        log.info("TranscriptionController: received callback for job {} (apiKey={})",
-                request.getJobId(), apiKey != null ? "present" : "absent");
+        // Validate internal API key to prevent external callers from injecting fake results
+        if (apiKey == null || !apiKey.equals(expectedCallbackApiKey)) {
+            log.warn("TranscriptionController: rejected callback for job {} — invalid or missing API key",
+                    request.getJobId());
+            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("Invalid or missing X-Internal-Api-Key"));
+        }
+
+        log.info("TranscriptionController: received callback for job {}", request.getJobId());
 
         TranscriptionSegmentResponse response = transcriptionService.processCallback(request);
         return ResponseEntity.ok(ApiResponse.success(
@@ -114,12 +118,14 @@ public class TranscriptionController {
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "List of transcription segments"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not a member of this meeting"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Meeting not found")
     })
     public ResponseEntity<ApiResponse<List<TranscriptionSegmentResponse>>> getTranscriptionSegments(
             @Parameter(description = "Meeting ID") @PathVariable Long id,
             @AuthenticationPrincipal User currentUser) {
 
+        transcriptionService.checkMeetingMembership(id, currentUser);
         List<TranscriptionSegmentResponse> segments =
                 transcriptionService.getSegmentsForMeeting(id);
         return ResponseEntity.ok(ApiResponse.success(segments));
@@ -141,6 +147,7 @@ public class TranscriptionController {
             @Parameter(description = "Meeting ID") @PathVariable Long id,
             @AuthenticationPrincipal User currentUser) {
 
+        transcriptionService.checkMeetingMembership(id, currentUser);
         List<AudioJobResponse> jobs = transcriptionService.getAudioJobsForMeeting(id);
         return ResponseEntity.ok(ApiResponse.success(jobs));
     }
@@ -162,6 +169,7 @@ public class TranscriptionController {
             @Parameter(description = "Job ID (UUID)") @PathVariable String jobId,
             @AuthenticationPrincipal User currentUser) {
 
+        transcriptionService.checkMeetingMembership(meetingId, currentUser);
         Resource resource = transcriptionService.getAudioResource(meetingId, jobId);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("audio/wav"))

@@ -9,11 +9,12 @@
 -- department
 -- ─────────────────────────────────────────────
 CREATE TABLE department (
-    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
-    name        VARCHAR(255) NOT NULL,
-    description TEXT NULL,
-    created_at  DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    updated_at  DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)
+    id             BIGINT AUTO_INCREMENT PRIMARY KEY,
+    DepartmentCode VARCHAR(100) NULL UNIQUE,
+    Name           VARCHAR(255) NOT NULL,
+    description    TEXT NULL,
+    created_at     DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at     DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ─────────────────────────────────────────────
@@ -21,29 +22,38 @@ CREATE TABLE department (
 -- ─────────────────────────────────────────────
 CREATE TABLE room (
     id            BIGINT AUTO_INCREMENT PRIMARY KEY,
-    name          VARCHAR(255) NOT NULL,
+    RoomCode      VARCHAR(100) NULL UNIQUE,
+    RoomName      VARCHAR(255) NOT NULL,
     capacity      INT NULL,
-    department_id BIGINT NOT NULL,
+    Department_id BIGINT NOT NULL,
     created_at    DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     updated_at    DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-    CONSTRAINT fk_room_department FOREIGN KEY (department_id) REFERENCES department(id)
+    CONSTRAINT fk_room_department FOREIGN KEY (Department_id) REFERENCES department(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ─────────────────────────────────────────────
 -- user
 -- ─────────────────────────────────────────────
 CREATE TABLE user (
-    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
-    username      VARCHAR(100) NOT NULL UNIQUE,
-    password_hash VARCHAR(255) NOT NULL,
-    full_name     VARCHAR(255) NOT NULL,
-    email         VARCHAR(255) NULL UNIQUE,
-    role          ENUM('ADMIN','SECRETARY','USER') NOT NULL DEFAULT 'USER',
-    department_id BIGINT NULL,
-    is_active     TINYINT(1) NOT NULL DEFAULT 1,
-    created_at    DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    updated_at    DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-    CONSTRAINT fk_user_department FOREIGN KEY (department_id) REFERENCES department(id)
+    id             BIGINT AUTO_INCREMENT PRIMARY KEY,
+    Department_id  BIGINT NULL,
+    EmployeeCode   VARCHAR(100) NOT NULL UNIQUE,
+    Name           VARCHAR(255) NOT NULL,
+    Password       VARCHAR(255) NOT NULL,
+    Dob            DATE NULL,
+    PhoneNumber    VARCHAR(30) NULL UNIQUE,
+    Degree         VARCHAR(255) NULL,
+    Identification VARCHAR(100) NULL UNIQUE,
+    Address        VARCHAR(1000) NULL,
+    Email          VARCHAR(255) NULL UNIQUE,
+    BankName       VARCHAR(255) NULL,
+    BankNumber     VARCHAR(100) NULL,
+    Img            VARCHAR(1000) NULL,
+    Role           ENUM('ADMIN','SECRETARY','USER') NOT NULL DEFAULT 'USER',
+    is_active      TINYINT(1) NOT NULL DEFAULT 1,
+    created_at     DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at     DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    CONSTRAINT fk_user_department FOREIGN KEY (Department_id) REFERENCES department(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ─────────────────────────────────────────────
@@ -53,21 +63,22 @@ CREATE TABLE user (
 -- ─────────────────────────────────────────────
 CREATE TABLE meeting (
     id                      BIGINT AUTO_INCREMENT PRIMARY KEY,
-    code                    VARCHAR(50)  NOT NULL UNIQUE COMMENT 'Unique meeting code generated on creation',
-    title                   VARCHAR(500) NOT NULL,
+    MeetingCode             VARCHAR(50)  NOT NULL UNIQUE COMMENT 'Unique meeting code generated on creation',
+    DepartmentId            BIGINT NULL,
+    Room_id                 BIGINT NULL,
+    Name                    VARCHAR(500) NOT NULL,
     description             TEXT NULL,
-    start_time              DATETIME(6)  NOT NULL,
-    end_time                DATETIME(6)  NOT NULL,
-    room_id                 BIGINT NULL,
+    StartTime               DATETIME(6)  NOT NULL,
+    Endtime                 DATETIME(6)  NOT NULL,
     creator_id              BIGINT NOT NULL,
     -- Lifecycle (Requirement 3.11)
-    status                  ENUM('SCHEDULED','ACTIVE','ENDED') NOT NULL DEFAULT 'SCHEDULED',
+    Status                  ENUM('SCHEDULED','ACTIVE','ENDED') NOT NULL DEFAULT 'SCHEDULED',
     -- Meeting mode (Requirement 21.1)
     mode                    ENUM('FREE_MODE','MEETING_MODE') NOT NULL DEFAULT 'FREE_MODE',
     -- Transcription priority for Redis queue
     transcription_priority  ENUM('HIGH_PRIORITY','NORMAL_PRIORITY') NOT NULL DEFAULT 'NORMAL_PRIORITY',
     -- Host & Secretary assignment (Requirement 3.8)
-    host_user_id            BIGINT NULL COMMENT 'SECRETARY or ADMIN role; required before saving',
+    host_user_id            BIGINT NULL COMMENT 'Active user assigned as meeting host',
     secretary_user_id       BIGINT NULL COMMENT 'SECRETARY role; required before saving',
     -- Lifecycle timestamps
     activated_at            DATETIME(6) NULL COMMENT 'SCHEDULED → ACTIVE transition time',
@@ -75,13 +86,14 @@ CREATE TABLE meeting (
     waiting_timeout_at      DATETIME(6) NULL COMMENT 'Auto-end deadline when no Host/Secretary present (10 min)',
     created_at              DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     updated_at              DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
-    CONSTRAINT fk_meeting_room      FOREIGN KEY (room_id)          REFERENCES room(id),
+    CONSTRAINT fk_meeting_room      FOREIGN KEY (Room_id)          REFERENCES room(id),
+    CONSTRAINT fk_meeting_department FOREIGN KEY (DepartmentId)    REFERENCES department(id),
     CONSTRAINT fk_meeting_creator   FOREIGN KEY (creator_id)       REFERENCES user(id),
     CONSTRAINT fk_meeting_host      FOREIGN KEY (host_user_id)     REFERENCES user(id),
     CONSTRAINT fk_meeting_secretary FOREIGN KEY (secretary_user_id) REFERENCES user(id),
     -- Room conflict detection query (Requirement 3.12)
-    INDEX idx_meeting_room_time (room_id, start_time, end_time, status),
-    INDEX idx_meeting_status    (status)
+    INDEX idx_meeting_room_time (Room_id, StartTime, Endtime, Status),
+    INDEX idx_meeting_status    (Status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ─────────────────────────────────────────────
@@ -89,13 +101,23 @@ CREATE TABLE meeting (
 -- Requirement 3.9: only members may join
 -- ─────────────────────────────────────────────
 CREATE TABLE member (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    Meeting_id  BIGINT NOT NULL,
+    User_id     BIGINT NOT NULL,
+    MeetingRole ENUM('HOST','SECRETARY','REVIEWER','COMMITTEE_MEMBER','GUEST','MEMBER') NOT NULL DEFAULT 'MEMBER',
+    added_at    DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    CONSTRAINT fk_member_meeting FOREIGN KEY (Meeting_id) REFERENCES meeting(id) ON DELETE CASCADE,
+    CONSTRAINT fk_member_user    FOREIGN KEY (User_id)    REFERENCES user(id),
+    UNIQUE KEY uk_member_meeting_user (Meeting_id, User_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE meeting_message (
     id         BIGINT AUTO_INCREMENT PRIMARY KEY,
-    meeting_id BIGINT NOT NULL,
-    user_id    BIGINT NOT NULL,
-    added_at   DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    CONSTRAINT fk_member_meeting FOREIGN KEY (meeting_id) REFERENCES meeting(id) ON DELETE CASCADE,
-    CONSTRAINT fk_member_user    FOREIGN KEY (user_id)    REFERENCES user(id),
-    UNIQUE KEY uk_member_meeting_user (meeting_id, user_id)
+    Member_id  BIGINT NOT NULL,
+    Content    TEXT NOT NULL,
+    CreateTime DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    CONSTRAINT fk_msg_member FOREIGN KEY (Member_id) REFERENCES member(id) ON DELETE CASCADE,
+    INDEX idx_msg_member_time (Member_id, CreateTime)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ─────────────────────────────────────────────
@@ -143,15 +165,15 @@ CREATE TABLE recording (
 -- ─────────────────────────────────────────────
 CREATE TABLE document (
     id          BIGINT AUTO_INCREMENT PRIMARY KEY,
-    meeting_id  BIGINT NOT NULL,
-    file_name   VARCHAR(500) NOT NULL,
+    Meeting_id  BIGINT NOT NULL,
+    User_id     BIGINT NOT NULL,
+    Name        VARCHAR(500) NOT NULL,
+    Content     VARCHAR(1000) NOT NULL,
     file_size   BIGINT NULL,
     file_type   VARCHAR(100) NULL,
-    file_path   VARCHAR(1000) NOT NULL,
-    uploaded_by BIGINT NOT NULL,
     uploaded_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    CONSTRAINT fk_doc_meeting FOREIGN KEY (meeting_id) REFERENCES meeting(id) ON DELETE CASCADE,
-    CONSTRAINT fk_doc_user    FOREIGN KEY (uploaded_by) REFERENCES user(id)
+    CONSTRAINT fk_doc_meeting FOREIGN KEY (Meeting_id) REFERENCES meeting(id) ON DELETE CASCADE,
+    CONSTRAINT fk_doc_user    FOREIGN KEY (User_id) REFERENCES user(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ─────────────────────────────────────────────
@@ -270,8 +292,10 @@ CREATE TABLE minutes (
     meeting_id             BIGINT       NOT NULL UNIQUE,
     status                 ENUM('DRAFT','HOST_CONFIRMED','SECRETARY_CONFIRMED') NOT NULL DEFAULT 'DRAFT',
     draft_pdf_path         VARCHAR(500) NULL,
+    draft_docx_path        VARCHAR(500) NULL,
     confirmed_pdf_path     VARCHAR(500) NULL COMMENT 'Host-confirmed PDF với digital stamp',
     secretary_pdf_path     VARCHAR(500) NULL COMMENT 'Secretary-edited final PDF',
+    secretary_docx_path    VARCHAR(500) NULL COMMENT 'Secretary-edited final DOCX',
     content_html           TEXT         NULL COMMENT 'Rich-text content từ Secretary editor',
     host_confirmed_at      DATETIME(6)  NULL,
     host_confirmation_hash VARCHAR(255) NULL COMMENT 'SHA-256(JWT + PDF content)',

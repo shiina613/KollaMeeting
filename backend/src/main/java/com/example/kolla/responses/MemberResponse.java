@@ -1,5 +1,6 @@
 package com.example.kolla.responses;
 
+import com.example.kolla.enums.MeetingRole;
 import com.example.kolla.enums.Role;
 import com.example.kolla.models.Member;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -28,6 +29,7 @@ public class MemberResponse {
     private String fullName;
     private String departmentName;
     private Role role;
+    private MeetingRole meetingRole;
     private LocalDateTime addedAt;
 
     /** Convenience factory from entity (no department name). */
@@ -39,6 +41,7 @@ public class MemberResponse {
                 .username(member.getUser().getUsername())
                 .fullName(member.getUser().getFullName())
                 .role(member.getUser().getRole())
+                .meetingRole(member.getMeetingRole())
                 .addedAt(member.getAddedAt())
                 .build();
     }
@@ -53,6 +56,7 @@ public class MemberResponse {
                 .fullName(member.getUser().getFullName())
                 .departmentName(departmentName)
                 .role(member.getUser().getRole())
+                .meetingRole(member.getMeetingRole())
                 .addedAt(member.getAddedAt())
                 .build();
     }
