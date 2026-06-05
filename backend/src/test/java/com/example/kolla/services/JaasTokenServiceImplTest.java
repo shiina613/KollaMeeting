@@ -346,8 +346,7 @@ class JaasTokenServiceImplTest {
 
             // Assert
             assertThat(header.get("alg").asText()).isEqualTo("RS256");
-            assertThat(header.get("kid").asText())
-                    .startsWith("vpaas-magic-cookie-" + APP_ID + "/");
+            assertThat(header.get("kid").asText()).isEqualTo(API_KEY);
         }
 
         @Test

@@ -134,7 +134,7 @@ public class TranscriptionQueueServiceImpl implements TranscriptionQueueService 
         if (pendingJobs.isEmpty()) {
             return;
         }
-        log.info("Re-queuing {} PENDING jobs after Gipformer recovery", pendingJobs.size());
+        log.info("Re-queuing {} PENDING jobs after ASR service recovery", pendingJobs.size());
         for (TranscriptionJob job : pendingJobs) {
             try {
                 pushJob(job);
@@ -165,13 +165,13 @@ public class TranscriptionQueueServiceImpl implements TranscriptionQueueService 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /**
-     * Store job metadata in a Redis Hash for the Gipformer worker to read.
+     * Store job metadata in a Redis Hash for the ASR worker to read.
      * Key: {@code transcription:job:{jobId}}
      */
     private void storeJobHash(TranscriptionJob job) {
         String hashKey = jobHashPrefix + job.getId();
         Map<String, String> fields = new HashMap<>();
-        // Keys must be snake_case to match Gipformer Python worker's Redis Hash reads
+        // Keys must be snake_case to match ASR Python worker's Redis Hash reads
         fields.put("job_id", job.getId());
         fields.put("meeting_id", String.valueOf(job.getMeeting().getId()));
         fields.put("speaker_id", String.valueOf(job.getSpeakerId()));

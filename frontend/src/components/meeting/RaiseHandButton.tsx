@@ -46,11 +46,7 @@ export default function RaiseHandButton({ meetingId, currentUserId }: RaiseHandB
   const isSpeaker = speakingPermission?.userId === currentUserId
   const hasRaisedHand = raiseHandRequests.some((r) => r.userId === currentUserId)
 
-  // ── Visibility: hidden outside MEETING_MODE or when holding permission ─────
-
-  if (!isMeetingMode || isSpeaker) return null
-
-  // ── Handlers ───────────────────────────────────────────────────────────────
+  // ── Handlers (must stay above any conditional return — Rules of Hooks) ─────
 
   const handleToggle = useCallback(async () => {
     if (isLoading) return
@@ -78,6 +74,10 @@ export default function RaiseHandButton({ meetingId, currentUserId }: RaiseHandB
     }
   }, [meetingId, hasRaisedHand, isLoading])
 
+  // ── Visibility: hidden outside MEETING_MODE or when holding permission ─────
+
+  if (!isMeetingMode || isSpeaker) return null
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -96,6 +96,7 @@ export default function RaiseHandButton({ meetingId, currentUserId }: RaiseHandB
           }`}
         aria-label={hasRaisedHand ? 'Hạ tay' : 'Xin phát biểu'}
         aria-pressed={hasRaisedHand}
+        title={hasRaisedHand ? 'Hạ tay' : 'Xin phát biểu'}
         data-testid="raise-hand-button"
       >
         {isLoading ? (
@@ -112,7 +113,9 @@ export default function RaiseHandButton({ meetingId, currentUserId }: RaiseHandB
             pan_tool
           </span>
         )}
-        {hasRaisedHand ? 'Hạ tay' : 'Xin phát biểu'}
+        <span className="hidden md:inline">
+          {hasRaisedHand ? 'Hạ tay' : 'Xin phát biểu'}
+        </span>
       </button>
 
       {/* Error message */}

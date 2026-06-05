@@ -2,9 +2,7 @@ package com.example.kolla.services;
 
 import com.example.kolla.enums.MeetingMode;
 import com.example.kolla.enums.MeetingStatus;
-import com.example.kolla.enums.RaiseHandStatus;
 import com.example.kolla.models.Meeting;
-import com.example.kolla.models.RaiseHandRequest;
 import com.example.kolla.models.SpeakingPermission;
 import com.example.kolla.models.User;
 import net.jqwik.api.*;

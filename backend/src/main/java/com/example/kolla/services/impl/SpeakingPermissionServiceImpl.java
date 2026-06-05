@@ -13,6 +13,7 @@ import com.example.kolla.repositories.SpeakingPermissionRepository;
 import com.example.kolla.repositories.UserRepository;
 import com.example.kolla.responses.SpeakingPermissionResponse;
 import com.example.kolla.services.MeetingLifecycleService;
+import com.example.kolla.services.RaiseHandQueueService;
 import com.example.kolla.services.SpeakingPermissionService;
 import com.example.kolla.websocket.MeetingEventPublisher;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +45,7 @@ public class SpeakingPermissionServiceImpl implements SpeakingPermissionService 
     private final MeetingRepository meetingRepository;
     private final UserRepository userRepository;
     private final MeetingLifecycleService meetingLifecycleService;
+    private final RaiseHandQueueService raiseHandQueueService;
     private final MeetingEventPublisher eventPublisher;
     private final Clock clock;
 
@@ -120,6 +122,8 @@ public class SpeakingPermissionServiceImpl implements SpeakingPermissionService 
         SpeakingPermission saved = speakingPermissionRepository.save(newPermission);
         log.info("Granted speaking permission to user id={} (turn={}) in meeting id={}",
                 targetUserId, speakerTurnId, meetingId);
+
+        raiseHandQueueService.remove(meetingId, targetUserId);
 
         // Broadcast to all participants (Requirement 22.4, 22.5)
         eventPublisher.publishSpeakingPermissionGranted(

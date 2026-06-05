@@ -4,7 +4,7 @@
  * - Fetches the draft PDF via Axios (JWT-authenticated) and renders it via a
  *   blob URL in an iframe. This bypasses X-Frame-Options: DENY because blob
  *   URLs are same-origin.
- * - Confirm button calls POST /api/v1/meetings/{id}/minutes/confirm
+ * - Confirm button calls POST /api/v1/meetings/{id}/minutes/confirm (PKCS#7 PDF signature on server)
  * - Shows loading state during confirmation
  * - Only for HOST role users (SECRETARY or ADMIN who is the meeting host)
  *
@@ -30,7 +30,7 @@ export interface MinutesConfirmDialogProps {
  * MinutesConfirmDialog
  *
  * Modal dialog that shows the draft PDF and lets the Host confirm it
- * with a digital stamp.
+ * with a server-side digital signature (requires signing keystore on backend).
  *
  * Requirements: 25.4
  */
@@ -151,8 +151,8 @@ export default function MinutesConfirmDialog({
         {/* Body — PDF preview */}
         <div className="flex-1 overflow-auto px-6 py-4">
           <p className="text-body-md text-on-surface-variant mb-3">
-            Vui lòng xem lại biên bản nháp trước khi xác nhận. Sau khi xác nhận, biên bản sẽ được
-            đóng dấu kỹ thuật số với thông tin của bạn.
+            Vui lòng xem lại biên bản nháp trước khi xác nhận. Sau khi xác nhận, biên bản PDF sẽ được
+            ký số bằng chứng thư cấu hình trên máy chủ (có thể kiểm tra chữ ký trong Adobe Reader / Foxit).
           </p>
 
           <div

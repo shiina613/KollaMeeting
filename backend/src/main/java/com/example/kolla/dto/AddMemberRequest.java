@@ -1,5 +1,6 @@
 package com.example.kolla.dto;
 
+import com.example.kolla.enums.MeetingRole;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -18,4 +19,6 @@ public class AddMemberRequest {
 
     @NotNull(message = "User ID is required")
     private Long userId;
+
+    private MeetingRole meetingRole = MeetingRole.MEMBER;
 }

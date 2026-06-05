@@ -3,7 +3,7 @@
  *
  * Tests:
  * - Renders current mode badge correctly (FREE_MODE / MEETING_MODE)
- * - Shows toggle button only for Host
+ * - Shows switch only for moderator when conferenceReady
  * - Calls API with correct mode on toggle
  * - Shows loading state while switching
  * - Shows error message on API failure
@@ -27,9 +27,7 @@ vi.mock('../../services/api', () => ({
 
 vi.mock('../../store/authStore', () => {
   const mockUser = { id: 1, username: 'testuser', email: 'test@example.com', role: 'ADMIN' as const }
-  // Zustand stores are callable hooks — mock as a function that returns state
   const useAuthStore = vi.fn(() => ({ user: mockUser, token: 'test-token' }))
-  // Also expose getState for non-hook usage (e.g. api interceptor)
   useAuthStore.getState = vi.fn(() => ({ user: mockUser, token: 'test-token' }))
   return { default: useAuthStore }
 })
@@ -40,13 +38,15 @@ import api from '../../services/api'
 
 function renderToggle(props: {
   meetingId?: number
-  isHost?: boolean
+  canControlMode?: boolean
+  conferenceReady?: boolean
   onModeChanged?: (mode: import('../../types/meeting').MeetingMode) => void
 }) {
   return render(
     <MeetingModeToggle
       meetingId={props.meetingId ?? 1}
-      isHost={props.isHost ?? false}
+      canControlMode={props.canControlMode ?? false}
+      conferenceReady={props.conferenceReady ?? true}
       onModeChanged={props.onModeChanged}
     />,
   )
@@ -56,7 +56,6 @@ function renderToggle(props: {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  // Reset meeting store to FREE_MODE
   useMeetingStore.setState({ mode: 'FREE_MODE' })
 })
 
@@ -65,44 +64,50 @@ beforeEach(() => {
 describe('MeetingModeToggle — mode badge display', () => {
   it('shows "Chế độ tự do" badge when mode is FREE_MODE', () => {
     useMeetingStore.setState({ mode: 'FREE_MODE' })
-    renderToggle({ isHost: false })
+    renderToggle({ canControlMode: false, conferenceReady: false })
 
     expect(screen.getByTestId('mode-badge')).toHaveTextContent('Chế độ tự do')
   })
 
   it('shows "Chế độ họp" badge when mode is MEETING_MODE', () => {
     useMeetingStore.setState({ mode: 'MEETING_MODE' })
-    renderToggle({ isHost: false })
+    renderToggle({ canControlMode: false, conferenceReady: false })
 
     expect(screen.getByTestId('mode-badge')).toHaveTextContent('Chế độ họp')
   })
 
   it('shows description text for FREE_MODE', () => {
     useMeetingStore.setState({ mode: 'FREE_MODE' })
-    renderToggle({ isHost: false })
+    renderToggle({ canControlMode: false })
 
     expect(screen.getByText('Tất cả thành viên có thể bật mic đồng thời')).toBeInTheDocument()
   })
 
   it('shows description text for MEETING_MODE', () => {
     useMeetingStore.setState({ mode: 'MEETING_MODE' })
-    renderToggle({ isHost: false })
+    renderToggle({ canControlMode: false })
 
     expect(screen.getByText('Chỉ người được cấp quyền mới có thể phát biểu')).toBeInTheDocument()
   })
 })
 
-// ─── Test 2: Toggle button visibility ────────────────────────────────────────
+// ─── Test 2: Mode switch visibility ──────────────────────────────────────────
 
-describe('MeetingModeToggle — toggle button visibility', () => {
-  it('shows toggle button when isHost is true', () => {
-    renderToggle({ isHost: true })
+describe('MeetingModeToggle — mode switch visibility', () => {
+  it('shows switch when canControlMode and conferenceReady', () => {
+    renderToggle({ canControlMode: true, conferenceReady: true })
 
     expect(screen.getByTestId('mode-toggle-button')).toBeInTheDocument()
   })
 
-  it('does NOT show toggle button when isHost is false', () => {
-    renderToggle({ isHost: false })
+  it('does NOT show switch when canControlMode is false', () => {
+    renderToggle({ canControlMode: false, conferenceReady: true })
+
+    expect(screen.queryByTestId('mode-toggle-button')).not.toBeInTheDocument()
+  })
+
+  it('does NOT show switch when conferenceReady is false (still connecting)', () => {
+    renderToggle({ canControlMode: true, conferenceReady: false })
 
     expect(screen.queryByTestId('mode-toggle-button')).not.toBeInTheDocument()
   })
@@ -115,7 +120,7 @@ describe('MeetingModeToggle — API call on toggle', () => {
     useMeetingStore.setState({ mode: 'FREE_MODE' })
     vi.mocked(api.post).mockResolvedValue({ data: { success: true, data: {} } })
 
-    renderToggle({ isHost: true, meetingId: 42 })
+    renderToggle({ canControlMode: true, conferenceReady: true, meetingId: 42 })
 
     await userEvent.click(screen.getByTestId('mode-toggle-button'))
 
@@ -131,7 +136,7 @@ describe('MeetingModeToggle — API call on toggle', () => {
     useMeetingStore.setState({ mode: 'MEETING_MODE' })
     vi.mocked(api.post).mockResolvedValue({ data: { success: true, data: {} } })
 
-    renderToggle({ isHost: true, meetingId: 42 })
+    renderToggle({ canControlMode: true, conferenceReady: true, meetingId: 42 })
 
     await userEvent.click(screen.getByTestId('mode-toggle-button'))
 
@@ -148,7 +153,7 @@ describe('MeetingModeToggle — API call on toggle', () => {
     vi.mocked(api.post).mockResolvedValue({ data: { success: true, data: {} } })
     const onModeChanged = vi.fn()
 
-    renderToggle({ isHost: true, meetingId: 1, onModeChanged })
+    renderToggle({ canControlMode: true, conferenceReady: true, meetingId: 1, onModeChanged })
 
     await userEvent.click(screen.getByTestId('mode-toggle-button'))
 
@@ -162,7 +167,7 @@ describe('MeetingModeToggle — API call on toggle', () => {
     vi.mocked(api.post).mockRejectedValue(new Error('Network error'))
     const onModeChanged = vi.fn()
 
-    renderToggle({ isHost: true, meetingId: 1, onModeChanged })
+    renderToggle({ canControlMode: true, conferenceReady: true, meetingId: 1, onModeChanged })
 
     await userEvent.click(screen.getByTestId('mode-toggle-button'))
 
@@ -177,13 +182,12 @@ describe('MeetingModeToggle — API call on toggle', () => {
 // ─── Test 4: Loading state ────────────────────────────────────────────────────
 
 describe('MeetingModeToggle — loading state', () => {
-  it('disables the toggle button while switching', async () => {
+  it('disables the switch while switching', async () => {
     useMeetingStore.setState({ mode: 'FREE_MODE' })
 
-    // Never resolves — keeps the button in loading state
     vi.mocked(api.post).mockReturnValue(new Promise(() => {}))
 
-    renderToggle({ isHost: true })
+    renderToggle({ canControlMode: true, conferenceReady: true })
 
     await userEvent.click(screen.getByTestId('mode-toggle-button'))
 
@@ -200,7 +204,7 @@ describe('MeetingModeToggle — error display', () => {
       response: { data: { message: 'Bạn không có quyền chuyển chế độ' } },
     })
 
-    renderToggle({ isHost: true })
+    renderToggle({ canControlMode: true, conferenceReady: true })
 
     await userEvent.click(screen.getByTestId('mode-toggle-button'))
 
@@ -215,7 +219,7 @@ describe('MeetingModeToggle — error display', () => {
     useMeetingStore.setState({ mode: 'FREE_MODE' })
     vi.mocked(api.post).mockRejectedValue(new Error('Network error'))
 
-    renderToggle({ isHost: true })
+    renderToggle({ canControlMode: true, conferenceReady: true })
 
     await userEvent.click(screen.getByTestId('mode-toggle-button'))
 
@@ -229,20 +233,17 @@ describe('MeetingModeToggle — error display', () => {
   it('clears error on next successful toggle', async () => {
     useMeetingStore.setState({ mode: 'FREE_MODE' })
 
-    // First call fails
     vi.mocked(api.post)
       .mockRejectedValueOnce(new Error('fail'))
       .mockResolvedValueOnce({ data: { success: true, data: {} } })
 
-    renderToggle({ isHost: true })
+    renderToggle({ canControlMode: true, conferenceReady: true })
 
-    // First click — fails
     await userEvent.click(screen.getByTestId('mode-toggle-button'))
     await waitFor(() => {
       expect(screen.getByTestId('mode-toggle-error')).toBeInTheDocument()
     })
 
-    // Second click — succeeds
     await userEvent.click(screen.getByTestId('mode-toggle-button'))
     await waitFor(() => {
       expect(screen.queryByTestId('mode-toggle-error')).not.toBeInTheDocument()
@@ -253,28 +254,34 @@ describe('MeetingModeToggle — error display', () => {
 // ─── Test 6: Accessibility ────────────────────────────────────────────────────
 
 describe('MeetingModeToggle — accessibility', () => {
-  it('has correct aria-label on toggle button for FREE_MODE', () => {
+  it('exposes role="switch" with aria-checked for FREE_MODE', () => {
     useMeetingStore.setState({ mode: 'FREE_MODE' })
-    renderToggle({ isHost: true })
+    renderToggle({ canControlMode: true, conferenceReady: true })
 
-    expect(screen.getByTestId('mode-toggle-button')).toHaveAttribute(
+    const sw = screen.getByTestId('mode-toggle-button')
+    expect(sw).toHaveAttribute('role', 'switch')
+    expect(sw).toHaveAttribute('aria-checked', 'false')
+    expect(sw).toHaveAttribute(
       'aria-label',
       'Chuyển sang chế độ họp',
     )
   })
 
-  it('has correct aria-label on toggle button for MEETING_MODE', () => {
+  it('exposes role="switch" with aria-checked for MEETING_MODE', () => {
     useMeetingStore.setState({ mode: 'MEETING_MODE' })
-    renderToggle({ isHost: true })
+    renderToggle({ canControlMode: true, conferenceReady: true })
 
-    expect(screen.getByTestId('mode-toggle-button')).toHaveAttribute(
+    const sw = screen.getByTestId('mode-toggle-button')
+    expect(sw).toHaveAttribute('role', 'switch')
+    expect(sw).toHaveAttribute('aria-checked', 'true')
+    expect(sw).toHaveAttribute(
       'aria-label',
       'Chuyển sang chế độ tự do',
     )
   })
 
   it('mode badge has aria-live="polite"', () => {
-    renderToggle({ isHost: false })
+    renderToggle({ canControlMode: false })
 
     expect(screen.getByTestId('mode-badge')).toHaveAttribute('aria-live', 'polite')
   })

@@ -45,6 +45,8 @@ export interface JitsiFrameProps {
   onParticipantJoined?: (event: JitsiParticipantEvent) => void
   onParticipantLeft?: (event: JitsiParticipantEvent) => void
   onVideoConferenceLeft?: () => void
+  /** Fired once when the local participant has joined the Jitsi conference (room ready). */
+  onVideoConferenceJoined?: () => void
   /** Fired when local user's mic mute state changes. `isMuted=false` = mic is ON. */
   onAudioMuteStatusChanged?: (isMuted: boolean) => void
   className?: string
@@ -67,14 +69,23 @@ declare global {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const JitsiFrame = forwardRef<JitsiFrameHandle, JitsiFrameProps>(
-  function JitsiFrame({ meetingCode, displayName, jwt, onVideoConferenceLeft, onAudioMuteStatusChanged, className = '' }, ref) {
+  function JitsiFrame({ meetingCode, displayName, jwt, onVideoConferenceLeft, onVideoConferenceJoined, onAudioMuteStatusChanged, className = '' }, ref) {
     const containerRef = useRef<HTMLDivElement>(null)
     const apiRef = useRef<JitsiAPI | null>(null)
     const [isReady, setIsReady] = useState(false)
     const [scriptError, setScriptError] = useState(false)
     const onAudioMuteStatusChangedRef = useRef(onAudioMuteStatusChanged)
+    const onVideoConferenceJoinedRef = useRef(onVideoConferenceJoined)
 
     const [scriptLoaded, setScriptLoaded] = useState(false)
+
+    useEffect(() => {
+      onVideoConferenceJoinedRef.current = onVideoConferenceJoined
+    }, [onVideoConferenceJoined])
+
+    useEffect(() => {
+      onAudioMuteStatusChangedRef.current = onAudioMuteStatusChanged
+    }, [onAudioMuteStatusChanged])
 
     // Load external_api.js once
     useEffect(() => {
@@ -148,7 +159,10 @@ const JitsiFrame = forwardRef<JitsiFrameHandle, JitsiFrameProps>(
       apiRef.current = api
 
       api.addEventListeners({
-        videoConferenceJoined: () => setIsReady(true),
+        videoConferenceJoined: () => {
+          setIsReady(true)
+          onVideoConferenceJoinedRef.current?.()
+        },
         videoConferenceLeft: () => onVideoConferenceLeft?.(),
         audioMuteStatusChanged: (data: unknown) => {
           const { muted } = data as { muted: boolean }
@@ -187,12 +201,21 @@ const JitsiFrame = forwardRef<JitsiFrameHandle, JitsiFrameProps>(
         }).catch(() => { /* ignore */ })
       },
       muteAll: () => {
-        // muteEveryone only mutes remote participants, so also mute self
-        apiRef.current?.executeCommand('muteEveryone', 'audio')
-        // Mute local user as well
-        apiRef.current?.isAudioMuted().then((muted: boolean) => {
+        const api = apiRef.current
+        if (!api) return
+        // muteEveryone is moderator-only in Jitsi; non-moderators throw and can crash React.
+        try {
+          api.executeCommand('muteEveryone', 'audio')
+        } catch {
+          /* non-moderator or API not ready */
+        }
+        api.isAudioMuted().then((muted: boolean) => {
           if (!muted) {
-            apiRef.current?.executeCommand('toggleAudio')
+            try {
+              apiRef.current?.executeCommand('toggleAudio')
+            } catch {
+              /* ignore */
+            }
           }
         }).catch(() => { /* ignore */ })
       },

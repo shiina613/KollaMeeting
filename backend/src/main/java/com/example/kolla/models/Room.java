@@ -28,14 +28,17 @@ public class Room {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "name", nullable = false)
+    @Column(name = "RoomName", nullable = false)
     private String name;
+
+    @Column(name = "RoomCode", unique = true, length = 100)
+    private String roomCode;
 
     @Column(name = "capacity")
     private Integer capacity;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "department_id", nullable = false)
+    @JoinColumn(name = "Department_id", nullable = false)
     private Department department;
 
     @CreatedDate

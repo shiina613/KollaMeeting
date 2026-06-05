@@ -19,6 +19,8 @@ import type {
   RoomAvailabilityResponse,
   RaiseHandRequest,
   SpeakingPermission,
+  MeetingRole,
+  MeetingMessage,
 } from '../types/meeting'
 
 // ─── Meetings ─────────────────────────────────────────────────────────────────
@@ -100,10 +102,11 @@ export async function listMeetingMembers(
 export async function addMeetingMember(
   meetingId: number,
   userId: number,
+  meetingRole: MeetingRole = 'MEMBER',
 ): Promise<ApiResponse<void>> {
   const response = await api.post<ApiResponse<void>>(
     `/meetings/${meetingId}/members`,
-    { userId },
+    { userId, meetingRole },
   )
   return response.data
 }
@@ -118,6 +121,28 @@ export async function removeMeetingMember(
   await api.delete(`/meetings/${meetingId}/members/${userId}`)
 }
 
+// ─── Meeting messages ───────────────────────────────────────────────────────
+
+export async function listMeetingMessages(
+  meetingId: number,
+): Promise<ApiResponse<MeetingMessage[]>> {
+  const response = await api.get<ApiResponse<MeetingMessage[]>>(
+    `/meetings/${meetingId}/messages`,
+  )
+  return response.data
+}
+
+export async function createMeetingMessage(
+  meetingId: number,
+  content: string,
+): Promise<ApiResponse<MeetingMessage>> {
+  const response = await api.post<ApiResponse<MeetingMessage>>(
+    `/meetings/${meetingId}/messages`,
+    { content },
+  )
+  return response.data
+}
+
 // ─── Meeting lifecycle ────────────────────────────────────────────────────────
 
 /**
@@ -125,6 +150,18 @@ export async function removeMeetingMember(
  */
 export async function joinMeeting(id: number): Promise<ApiResponse<void>> {
   const response = await api.post<ApiResponse<void>>(`/meetings/${id}/join`)
+  return response.data
+}
+
+/**
+ * Get users currently in the meeting (open attendance logs).
+ */
+export async function getActiveParticipants(
+  meetingId: number,
+): Promise<ApiResponse<Array<{ userId: number; userFullName?: string; username?: string }>>> {
+  const response = await api.get<
+    ApiResponse<Array<{ userId: number; userFullName?: string; username?: string }>>
+  >(`/meetings/${meetingId}/participants`)
   return response.data
 }
 

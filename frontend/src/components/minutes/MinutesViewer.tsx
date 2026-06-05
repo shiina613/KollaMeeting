@@ -83,7 +83,7 @@ export default function MinutesViewer({ meetingId, version, status }: MinutesVie
         const response = await api.get<Blob>(
           `/meetings/${meetingId}/minutes/download`,
           {
-            params: { version, inline: true },
+            params: { version, format: 'pdf', inline: true },
             responseType: 'blob',
           },
         )

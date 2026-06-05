@@ -5,8 +5,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
+import org.springframework.messaging.MessageDeliveryException;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -19,6 +22,7 @@ import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBr
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -49,7 +53,10 @@ import java.util.List;
 @RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
+    private static final String BLACKLIST_KEY_PREFIX = "jwt:blacklist:";
+
     private final JwtUtils jwtUtils;
+    private final StringRedisTemplate redisTemplate;
 
     @Value("${CORS_ALLOWED_ORIGINS:http://localhost:3000}")
     private String corsAllowedOrigins;
@@ -58,13 +65,18 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
+        List<String> origins = Arrays.asList(corsAllowedOrigins.split(","));
+        String[] originPatterns = origins.contains("*")
+                ? new String[]{"*"}
+                : origins.toArray(new String[0]);
+
         // Native WebSocket endpoint (no SockJS) — used by frontend in LAN/tunnel mode
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*");
+                .setAllowedOriginPatterns(originPatterns);
 
         // SockJS fallback endpoint — for browsers that don't support native WebSocket
         registry.addEndpoint("/ws-sockjs")
-                .setAllowedOriginPatterns("*")
+                .setAllowedOriginPatterns(originPatterns)
                 .withSockJS();
     }
 
@@ -98,24 +110,44 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
                 if (StompCommand.CONNECT.equals(accessor.getCommand())) {
                     String token = extractToken(accessor);
-                    if (token != null && jwtUtils.validateToken(token)) {
-                        try {
-                            Long userId = jwtUtils.getUserIdFromToken(token);
-                            String role = jwtUtils.getRoleFromToken(token);
+                    if (token == null || !jwtUtils.validateToken(token)) {
+                        log.warn("WebSocket CONNECT rejected: missing or invalid JWT token");
+                        throw new MessageDeliveryException(
+                                "Authentication required: invalid or missing JWT token");
+                    }
 
-                            UsernamePasswordAuthenticationToken auth =
-                                    new UsernamePasswordAuthenticationToken(
-                                            userId.toString(),
-                                            null,
-                                            List.of(new SimpleGrantedAuthority("ROLE_" + role)));
+                    // Check token blacklist (revoked tokens) — fail-closed on Redis errors
+                    if (isTokenBlacklisted(token)) {
+                        log.warn("WebSocket CONNECT rejected: token is blacklisted (revoked)");
+                        throw new MessageDeliveryException(
+                                "Authentication required: token has been revoked");
+                    }
 
-                            accessor.setUser(auth);
-                            log.debug("WebSocket CONNECT authenticated: userId={}", userId);
-                        } catch (Exception e) {
-                            log.warn("WebSocket CONNECT JWT extraction failed: {}", e.getMessage());
+                    try {
+                        Long userId = jwtUtils.getUserIdFromToken(token);
+
+                        // Check per-user token invalidation (e.g. after password reset)
+                        if (isUserTokenInvalidated(userId, token)) {
+                            log.warn("WebSocket CONNECT rejected: user token invalidated, userId={}", userId);
+                            throw new MessageDeliveryException(
+                                    "Authentication required: token has been invalidated");
                         }
-                    } else {
-                        log.warn("WebSocket CONNECT with missing or invalid JWT token");
+
+                        String role = jwtUtils.getRoleFromToken(token);
+
+                        UsernamePasswordAuthenticationToken auth =
+                                new UsernamePasswordAuthenticationToken(
+                                        userId.toString(),
+                                        null,
+                                        List.of(new SimpleGrantedAuthority("ROLE_" + role)));
+
+                        accessor.setUser(auth);
+                        log.debug("WebSocket CONNECT authenticated: userId={}", userId);
+                    } catch (MessageDeliveryException e) {
+                        throw e; // re-throw our own exceptions
+                    } catch (Exception e) {
+                        log.warn("WebSocket CONNECT JWT extraction failed: {}", e.getMessage());
+                        throw new MessageDeliveryException("Authentication failed");
                     }
                 }
 
@@ -137,5 +169,43 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         }
         // Fallback: token passed as a native header named "token"
         return accessor.getFirstNativeHeader("token");
+    }
+
+    /**
+     * Checks if a token is blacklisted in Redis.
+     * Fail-closed: if Redis is unavailable, treats the token as blacklisted
+     * to prevent revoked tokens from being accepted.
+     */
+    private boolean isTokenBlacklisted(String token) {
+        try {
+            Boolean exists = redisTemplate.hasKey(BLACKLIST_KEY_PREFIX + token);
+            return Boolean.TRUE.equals(exists);
+        } catch (RedisConnectionFailureException e) {
+            log.error("Redis unavailable during WebSocket blacklist check, rejecting token: {}", e.getMessage());
+            return true; // Fail-closed
+        } catch (Exception e) {
+            log.error("Redis blacklist check failed during WebSocket CONNECT: {}", e.getMessage());
+            return true; // Fail-closed
+        }
+    }
+
+    /**
+     * Checks if a user's tokens have been invalidated (e.g. after role change or password reset).
+     * Fail-closed: if Redis is unavailable, assumes token is invalidated.
+     */
+    private boolean isUserTokenInvalidated(Long userId, String token) {
+        try {
+            String userBlacklistKey = "jwt:blacklist:user:" + userId;
+            String invalidatedAt = redisTemplate.opsForValue().get(userBlacklistKey);
+            if (invalidatedAt != null) {
+                long issuedAt = jwtUtils.getIssuedAtFromToken(token);
+                return issuedAt <= Long.parseLong(invalidatedAt);
+            }
+            return false;
+        } catch (Exception e) {
+            log.error("Redis user-invalidation check failed for userId={} during WebSocket CONNECT: {}",
+                    userId, e.getMessage());
+            return true; // Fail-closed
+        }
     }
 }

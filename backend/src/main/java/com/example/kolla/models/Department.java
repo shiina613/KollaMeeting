@@ -28,8 +28,11 @@ public class Department {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "name", nullable = false)
+    @Column(name = "Name", nullable = false)
     private String name;
+
+    @Column(name = "DepartmentCode", unique = true, length = 100)
+    private String departmentCode;
 
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;

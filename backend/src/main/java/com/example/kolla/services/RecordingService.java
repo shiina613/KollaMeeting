@@ -1,5 +1,6 @@
 package com.example.kolla.services;
 
+import com.example.kolla.models.Meeting;
 import com.example.kolla.models.User;
 import com.example.kolla.responses.RecordingResponse;
 import org.springframework.core.io.Resource;
@@ -55,4 +56,10 @@ public interface RecordingService {
      * Requirements: 7.7
      */
     Resource downloadRecording(Long recordingId, User currentUser) throws IOException;
+
+    /**
+     * Build a downloadable aggregate WAV recording from stored audio chunks.
+     * Returns null when the meeting has no audio chunks.
+     */
+    RecordingResponse createAggregateRecordingForMeeting(Meeting meeting) throws IOException;
 }

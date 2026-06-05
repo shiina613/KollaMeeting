@@ -25,7 +25,7 @@ public interface MeetingModeService {
      *
      * <p>When switching to FREE_MODE while a participant holds Speaking_Permission:
      * <ol>
-     *   <li>Finalize the current audio chunk (signal Gipformer to flush)</li>
+     *   <li>Finalize the current audio chunk (signal ASR service to flush)</li>
      *   <li>Push the finalized chunk to the Redis transcription queue</li>
      *   <li>Revoke speaking permission</li>
      *   <li>Expire all pending raise-hand requests</li>

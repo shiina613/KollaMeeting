@@ -9,6 +9,8 @@ import type { ApiResponse } from '../types/api'
 export interface RoomDto {
   id: number
   name: string
+  roomName?: string
+  roomCode?: string
   capacity?: number
   departmentId?: number
   departmentName?: string
@@ -18,12 +20,16 @@ export interface RoomDto {
 
 export interface CreateRoomRequest {
   name: string
+  roomName?: string
+  roomCode?: string
   capacity?: number
   departmentId: number
 }
 
 export interface UpdateRoomRequest {
   name?: string
+  roomName?: string
+  roomCode?: string
   capacity?: number
   departmentId?: number
 }

@@ -173,6 +173,7 @@ public class SearchServiceImpl implements SearchService {
 
         return TranscriptionSearchResult.builder()
                 .segmentId(segment.getId())
+                .jobId(segment.getJobId())
                 .meetingId(segmentMeetingId)
                 .meetingTitle(meetingTitle)
                 .speakerName(segment.getSpeakerName())

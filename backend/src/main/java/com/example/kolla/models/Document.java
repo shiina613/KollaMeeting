@@ -28,10 +28,10 @@ public class Document {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "meeting_id", nullable = false)
+    @JoinColumn(name = "Meeting_id", nullable = false)
     private Meeting meeting;
 
-    @Column(name = "file_name", nullable = false, length = 500)
+    @Column(name = "Name", nullable = false, length = 500)
     private String fileName;
 
     @Column(name = "file_size")
@@ -40,11 +40,11 @@ public class Document {
     @Column(name = "file_type", length = 100)
     private String fileType;
 
-    @Column(name = "file_path", nullable = false, length = 1000)
+    @Column(name = "Content", nullable = false, length = 1000)
     private String filePath;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "uploaded_by", nullable = false)
+    @JoinColumn(name = "User_id", nullable = false)
     private User uploadedBy;
 
     @CreatedDate

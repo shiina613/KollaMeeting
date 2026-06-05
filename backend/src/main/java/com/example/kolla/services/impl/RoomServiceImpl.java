@@ -62,9 +62,14 @@ public class RoomServiceImpl implements RoomService {
     @Transactional
     public RoomResponse createRoom(CreateRoomRequest request) {
         Department department = findDepartmentOrThrow(request.getDepartmentId());
+        if (request.getRoomCode() != null && !request.getRoomCode().isBlank()
+                && roomRepository.existsByRoomCode(request.getRoomCode().trim())) {
+            throw new BadRequestException("Room with code '" + request.getRoomCode() + "' already exists");
+        }
 
         Room room = Room.builder()
-                .name(request.getName())
+                .roomCode(blankToNull(request.getRoomCode()))
+                .name(resolveRoomName(request.getName(), request.getRoomName()))
                 .capacity(request.getCapacity())
                 .department(department)
                 .build();
@@ -80,8 +85,19 @@ public class RoomServiceImpl implements RoomService {
     public RoomResponse updateRoom(Long id, UpdateRoomRequest request) {
         Room room = findRoomOrThrow(id);
 
+        if (request.getRoomCode() != null) {
+            String roomCode = blankToNull(request.getRoomCode());
+            if (roomCode != null
+                    && !roomCode.equals(room.getRoomCode())
+                    && roomRepository.existsByRoomCode(roomCode)) {
+                throw new BadRequestException("Room with code '" + roomCode + "' already exists");
+            }
+            room.setRoomCode(roomCode);
+        }
         if (request.getName() != null && !request.getName().isBlank()) {
             room.setName(request.getName());
+        } else if (request.getRoomName() != null && !request.getRoomName().isBlank()) {
+            room.setName(request.getRoomName());
         }
         if (request.getCapacity() != null) {
             room.setCapacity(request.getCapacity());
@@ -162,5 +178,17 @@ public class RoomServiceImpl implements RoomService {
     private Department findDepartmentOrThrow(Long id) {
         return departmentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Department not found with id: " + id));
+    }
+
+    private String resolveRoomName(String name, String roomName) {
+        String resolved = name != null && !name.isBlank() ? name : roomName;
+        if (resolved == null || resolved.isBlank()) {
+            throw new BadRequestException("Room name is required");
+        }
+        return resolved.trim();
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }

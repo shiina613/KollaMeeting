@@ -21,7 +21,9 @@ import java.time.LocalDateTime;
 public class RoomResponse {
 
     private Long id;
+    private String roomCode;
     private String name;
+    private String roomName;
     private Integer capacity;
     private Long departmentId;
     private String departmentName;
@@ -31,7 +33,9 @@ public class RoomResponse {
     public static RoomResponse from(Room room) {
         return RoomResponse.builder()
                 .id(room.getId())
+                .roomCode(room.getRoomCode())
                 .name(room.getName())
+                .roomName(room.getName())
                 .capacity(room.getCapacity())
                 .departmentId(room.getDepartment() != null ? room.getDepartment().getId() : null)
                 .departmentName(room.getDepartment() != null ? room.getDepartment().getName() : null)

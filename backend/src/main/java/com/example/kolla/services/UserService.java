@@ -1,6 +1,7 @@
 package com.example.kolla.services;
 
 import com.example.kolla.dto.CreateUserRequest;
+import com.example.kolla.dto.ChangePasswordRequest;
 import com.example.kolla.dto.ResetPasswordRequest;
 import com.example.kolla.dto.UpdateUserRequest;
 import com.example.kolla.models.User;
@@ -70,6 +71,11 @@ public interface UserService {
      * @param requester the authenticated user making the request
      */
     UserResponse updateUser(Long id, UpdateUserRequest request, User requester);
+
+    /**
+     * Change the current user's own password after verifying their current password.
+     */
+    void changeOwnPassword(ChangePasswordRequest request, User requester);
 
     /**
      * Toggle a user's active status (active ↔ inactive). ADMIN only.

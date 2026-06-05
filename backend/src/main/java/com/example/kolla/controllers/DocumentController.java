@@ -128,8 +128,9 @@ public class DocumentController {
 
         Resource resource = documentService.downloadDocument(id, currentUser);
 
-        // Use the resource filename for Content-Disposition; fall back to generic name
-        String filename = resource.getFilename() != null ? resource.getFilename() : "document";
+        // Sanitize filename to prevent header injection (remove quotes, newlines, special chars)
+        String rawFilename = resource.getFilename() != null ? resource.getFilename() : "document";
+        String filename = rawFilename.replaceAll("[^a-zA-Z0-9._\\-]", "_");
 
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)

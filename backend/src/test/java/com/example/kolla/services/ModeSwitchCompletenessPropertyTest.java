@@ -2,9 +2,7 @@ package com.example.kolla.services;
 
 import com.example.kolla.enums.MeetingMode;
 import com.example.kolla.enums.MeetingStatus;
-import com.example.kolla.enums.RaiseHandStatus;
 import com.example.kolla.models.Meeting;
-import com.example.kolla.models.RaiseHandRequest;
 import com.example.kolla.models.SpeakingPermission;
 import com.example.kolla.models.User;
 import net.jqwik.api.*;
@@ -41,6 +39,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ModeSwitchCompletenessPropertyTest {
 
+    /** In-memory raise-hand queue entry (mirrors Redis queue semantics). */
+    record PendingRaiseHand(Long userId, LocalDateTime requestedAt) {
+    }
+
     // ── Meeting state model ───────────────────────────────────────────────────
 
     /**
@@ -49,7 +51,7 @@ class ModeSwitchCompletenessPropertyTest {
     static class MeetingState {
         Meeting meeting;
         List<SpeakingPermission> permissions;
-        List<RaiseHandRequest> raiseHandRequests;
+        List<PendingRaiseHand> raiseHandRequests;
         List<String> broadcastEvents; // ordered list of events broadcast
 
         MeetingState(Meeting meeting) {
@@ -67,10 +69,7 @@ class ModeSwitchCompletenessPropertyTest {
         }
 
         long countPendingRaiseHands() {
-            return raiseHandRequests.stream()
-                    .filter(rhr -> rhr.getMeeting().getId().equals(meeting.getId()))
-                    .filter(rhr -> rhr.getStatus() == RaiseHandStatus.PENDING)
-                    .count();
+            return raiseHandRequests.size();
         }
 
         boolean hasEvent(String eventType) {
@@ -126,14 +125,8 @@ class ModeSwitchCompletenessPropertyTest {
             }
         }
 
-        // Step 2: Expire all pending raise-hand requests
-        for (RaiseHandRequest rhr : state.raiseHandRequests) {
-            if (rhr.getMeeting().getId().equals(meetingId)
-                    && rhr.getStatus() == RaiseHandStatus.PENDING) {
-                rhr.setStatus(RaiseHandStatus.EXPIRED);
-                rhr.setResolvedAt(now);
-            }
-        }
+        // Step 2: Clear raise-hand queue (Redis clearAll)
+        state.raiseHandRequests.clear();
 
         // Step 3: Update meeting mode
         state.meeting.setMode(MeetingMode.FREE_MODE);
@@ -169,16 +162,7 @@ class ModeSwitchCompletenessPropertyTest {
     }
 
     private void addPendingRaiseHand(MeetingState state, Long userId, LocalDateTime requestedAt) {
-        Meeting meeting = state.meeting;
-        User user = userStub(userId);
-        RaiseHandRequest rhr = RaiseHandRequest.builder()
-                .id((long) (state.raiseHandRequests.size() + 1))
-                .meeting(meeting)
-                .user(user)
-                .requestedAt(requestedAt)
-                .status(RaiseHandStatus.PENDING)
-                .build();
-        state.raiseHandRequests.add(rhr);
+        state.raiseHandRequests.add(new PendingRaiseHand(userId, requestedAt));
     }
 
     // ── Properties ────────────────────────────────────────────────────────────
@@ -211,13 +195,13 @@ class ModeSwitchCompletenessPropertyTest {
     }
 
     /**
-     * Property 12b: Switching to FREE_MODE expires all pending raise-hand requests.
+     * Property 12b: Switching to FREE_MODE clears all pending raise-hand requests.
      *
-     * <p>After MEETING_MODE → FREE_MODE, all PENDING raise-hand requests must be EXPIRED.
+     * <p>After MEETING_MODE → FREE_MODE, the raise-hand queue must be empty.
      */
     @Property(tries = 300)
-    @Label("P12b: Switching to FREE_MODE expires all pending raise-hand requests")
-    void switchToFreeModeExpiresAllPendingRaiseHands(
+    @Label("P12b: Switching to FREE_MODE clears all pending raise-hand requests")
+    void switchToFreeModeClearsAllPendingRaiseHands(
             @ForAll @Positive long meetingId,
             @ForAll @IntRange(min = 0, max = 5) int pendingCount) {
 
@@ -232,7 +216,7 @@ class ModeSwitchCompletenessPropertyTest {
 
         long pendingAfter = state.countPendingRaiseHands();
         assertThat(pendingAfter)
-                .as("After switching to FREE_MODE, no PENDING raise-hand requests must remain")
+                .as("After switching to FREE_MODE, raise-hand queue must be empty")
                 .isEqualTo(0L);
     }
 

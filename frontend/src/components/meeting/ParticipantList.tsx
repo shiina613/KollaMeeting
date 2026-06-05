@@ -4,9 +4,10 @@
  * Driven by WebSocket events via the meetingStore.
  * Displays a speaking indicator for the participant holding Speaking_Permission.
  *
- * Requirements: 5.6
+ * Requirements: 5.6, 11.1, 11.4
  */
 
+import { useState, useCallback } from 'react'
 import useMeetingStore from '../../store/meetingStore'
 import type { Participant } from '../../types/meeting'
 
@@ -39,7 +40,7 @@ function ParticipantItem({ participant, isSpeaking, isCurrentUser }: Participant
   return (
     <li
       className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors
-        ${isSpeaking ? 'bg-green-50' : 'hover:bg-surface-container'}
+        ${isSpeaking ? 'bg-green-900/30' : 'hover:bg-slate-700'}
         ${!participant.isConnected ? 'opacity-50' : ''}
       `}
       aria-label={`${participant.userName}${isCurrentUser ? ' (bạn)' : ''}${isSpeaking ? ', đang phát biểu' : ''}${!participant.isConnected ? ', đã ngắt kết nối' : ''}`}
@@ -49,7 +50,7 @@ function ParticipantItem({ participant, isSpeaking, isCurrentUser }: Participant
         className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-label-md font-semibold
           ${isSpeaking
             ? 'bg-green-500 text-white ring-2 ring-green-400 ring-offset-1'
-            : 'bg-primary/10 text-primary'
+            : 'bg-primary/20 text-blue-300'
           }`}
         aria-hidden="true"
       >
@@ -58,10 +59,10 @@ function ParticipantItem({ participant, isSpeaking, isCurrentUser }: Participant
 
       {/* Name */}
       <div className="flex-1 min-w-0">
-        <span className="text-body-sm text-on-surface truncate block">
+        <span className="text-body-sm text-slate-200 truncate block">
           {participant.userName}
           {isCurrentUser && (
-            <span className="text-on-surface-variant text-label-md ml-1">(bạn)</span>
+            <span className="text-slate-400 text-label-md ml-1">(bạn)</span>
           )}
         </span>
       </div>
@@ -69,7 +70,7 @@ function ParticipantItem({ participant, isSpeaking, isCurrentUser }: Participant
       {/* Speaking indicator */}
       {isSpeaking && (
         <span
-          className="material-symbols-outlined text-[18px] text-green-600 shrink-0"
+          className="material-symbols-outlined text-[18px] text-green-400 shrink-0"
           aria-hidden="true"
           title="Đang phát biểu"
           style={{ fontVariationSettings: "'FILL' 1" }}
@@ -81,7 +82,7 @@ function ParticipantItem({ participant, isSpeaking, isCurrentUser }: Participant
       {/* Disconnected indicator */}
       {!participant.isConnected && (
         <span
-          className="material-symbols-outlined text-[16px] text-on-surface-variant shrink-0"
+          className="material-symbols-outlined text-[16px] text-slate-500 shrink-0"
           aria-hidden="true"
           title="Đã ngắt kết nối"
         >
@@ -109,13 +110,50 @@ export default function ParticipantList({ currentUserId }: ParticipantListProps)
   const connected = participants.filter((p) => p.isConnected)
   const disconnected = participants.filter((p) => !p.isConnected)
 
+  const activeMeeting = useMeetingStore((s) => s.activeMeeting)
+  const [copied, setCopied] = useState(false)
+
+  const handleCopyMeetingCode = useCallback(async () => {
+    const code = activeMeeting?.meetingCode
+    if (!code) return
+    try {
+      await navigator.clipboard.writeText(code)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Fallback: ignore clipboard errors silently
+    }
+  }, [activeMeeting?.meetingCode])
+
   if (participants.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-6 text-on-surface-variant">
-        <span className="material-symbols-outlined text-3xl mb-2" aria-hidden="true">
+      <div
+        className="flex flex-col items-center justify-center py-8 text-slate-400 px-4"
+        data-testid="participant-list-empty"
+      >
+        <span
+          className="material-symbols-outlined text-[48px] opacity-60 mb-3"
+          aria-hidden="true"
+        >
           group
         </span>
-        <p className="text-body-sm">Chưa có thành viên nào</p>
+        <p className="text-body-sm text-center mb-3">
+          Thành viên sẽ xuất hiện khi họ tham gia cuộc họp.
+        </p>
+        {activeMeeting?.meetingCode && (
+          <button
+            onClick={handleCopyMeetingCode}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-body-sm font-medium
+              bg-primary/20 text-blue-300 hover:bg-primary/30 transition-colors"
+            aria-label="Sao chép mã cuộc họp"
+            data-testid="copy-meeting-code-btn"
+          >
+            <span className="material-symbols-outlined text-[16px]" aria-hidden="true">
+              {copied ? 'check' : 'content_copy'}
+            </span>
+            {copied ? 'Đã sao chép!' : 'Sao chép mã cuộc họp'}
+          </button>
+        )}
       </div>
     )
   }
@@ -124,7 +162,7 @@ export default function ParticipantList({ currentUserId }: ParticipantListProps)
     <div className="flex flex-col gap-1" data-testid="participant-list">
       {/* Connected participants */}
       <div className="mb-1">
-        <p className="text-label-md text-on-surface-variant px-3 mb-1">
+        <p className="text-label-md text-slate-400 px-3 mb-1">
           Đang tham gia ({connected.length})
         </p>
         <ul className="space-y-0.5" aria-label="Danh sách thành viên đang tham gia">
@@ -142,7 +180,7 @@ export default function ParticipantList({ currentUserId }: ParticipantListProps)
       {/* Disconnected participants */}
       {disconnected.length > 0 && (
         <div>
-          <p className="text-label-md text-on-surface-variant px-3 mb-1">
+          <p className="text-label-md text-slate-400 px-3 mb-1">
             Đã rời ({disconnected.length})
           </p>
           <ul className="space-y-0.5" aria-label="Danh sách thành viên đã rời">

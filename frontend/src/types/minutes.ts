@@ -9,6 +9,8 @@ export type MinutesStatus = 'DRAFT' | 'HOST_CONFIRMED' | 'SECRETARY_CONFIRMED'
 
 export type MinutesVersion = 'draft' | 'confirmed' | 'secretary'
 
+export type MinutesFormat = 'pdf' | 'docx'
+
 // ─── Minutes domain model ─────────────────────────────────────────────────────
 
 export interface Minutes {
@@ -17,8 +19,15 @@ export interface Minutes {
   status: MinutesStatus
   contentHtml?: string
   draftPdfPath?: string
+  draftDocxPath?: string
   confirmedPdfPath?: string
   secretaryPdfPath?: string
+  secretaryDocxPath?: string
+  draftAvailable?: boolean
+  confirmedAvailable?: boolean
+  secretaryAvailable?: boolean
+  draftDocxAvailable?: boolean
+  secretaryDocxAvailable?: boolean
   createdAt: string   // ISO 8601 UTC+7
   updatedAt: string
   confirmedAt?: string

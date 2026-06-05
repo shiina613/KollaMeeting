@@ -1,310 +1,218 @@
 # KollaMeeting
 
-Hệ thống quản lý cuộc họp doanh nghiệp tích hợp hội nghị video, phiên âm thời gian thực, ghi âm và tạo biên bản tự động.
+Hệ thống thư ký ảo cho phòng họp trực tuyến: quản lý lịch họp, nhúng Jitsi/JaaS, điều phối chế độ họp, ghi âm, phiên âm tiếng Việt, tạo biên bản DOCX/PDF và ký số PDF.
 
----
+Tài liệu chuẩn để đối chiếu repo là DOCX 3.8 đã nộp. File [docs/DOCX_ALIGNMENT.md](docs/DOCX_ALIGNMENT.md) map các claim chính trong Word sang code path, endpoint, schema và test.
 
 ## Tính năng chính
 
-- **Quản lý cuộc họp** — tạo, lên lịch, kích hoạt, kết thúc với phát hiện xung đột lịch
-- **Hội nghị video** — Jitsi Meet tự host, tích hợp trực tiếp vào giao diện
-- **Phiên âm tự động** — Gipformer (sherpa-onnx) nhận audio PCM qua WebSocket, hỗ trợ GPU CUDA
-- **Ghi âm** — bắt đầu/dừng ghi, lưu file, tải xuống
-- **Biên bản cuộc họp** — quy trình Nháp → Xác nhận (Chủ trì) → Công bố (Thư ký), xuất PDF
-- **Thông báo thời gian thực** — WebSocket STOMP/SockJS
-- **Giơ tay phát biểu** — quản lý người phát biểu theo thời gian thực
-- **Điểm danh** — ghi log tham gia/rời phòng kèm IP và thiết bị
-- **Tìm kiếm** — full-text search trên cuộc họp và phiên âm
-- **Phân quyền** — ADMIN / SECRETARY / USER với kiểm soát truy cập theo vai trò
+- Quản lý phòng ban, phòng họp, người dùng theo vai trò `ADMIN`, `SECRETARY`, `USER`.
+- Thư ký tạo/sửa/xóa cuộc họp chưa diễn ra; host/chủ trì là user active bất kỳ; secretary của meeting phải có role `SECRETARY`.
+- Thành viên meeting có `MeetingRole`: `HOST`, `SECRETARY`, `REVIEWER`, `COMMITTEE_MEMBER`, `GUEST`, `MEMBER`.
+- Nhúng Jitsi Meet hoặc JaaS bằng Jitsi External API. Backend không xử lý SDP/ICE/media WebRTC.
+- STOMP WebSocket cho control events, presence, raise hand, meeting mode và tin nhắn cuộc họp.
+- `/ws/audio` nhận PCM 16 kHz mono trong `MEETING_MODE`, lưu WAV chunk, đẩy Redis queue cho ASR.
+- ASR service FastAPI dùng PhoWhisper-medium CT2 `int8_float16` mặc định; Gipformer là backend thay thế.
+- Kết thúc meeting tạo transcript, biên bản DOCX/PDF, PDF có thể ký số bằng keystore PKCS#12/JKS.
+- Docker Compose deploy toàn bộ KollaMeeting stack và công bố demo bằng Cloudflare Quick Tunnel.
 
----
+## Kiến trúc demo
 
-## Kiến trúc hệ thống
+```text
+Internet
+  -> Cloudflare Edge
+  -> cloudflared container
+  -> Nginx :8888
+       /      -> frontend :3000
+       /api   -> backend  :8080
+       /ws    -> backend  :8080
 
-```
-[Internet]
-    │ HTTPS
-    ▼
-[Cloudflare Edge]
-    │ outbound tunnel
-    ▼
-cloudflared container
-    │
-    ▼
-Nginx :8888 (HTTP plain, reverse proxy)
-  ├── /          → Frontend  :3000  (React 18 + Vite)
-  ├── /api       → Backend   :8080  (Spring Boot 3.2)
-  └── /ws        → Backend   :8080  (WebSocket STOMP)
+backend -> MySQL :3306
+backend -> Redis :6379
+backend -> asr-service :8000
 
-Nginx :8443 (HTTPS self-signed — LAN access)
-
-Backend
-  ├── MySQL  :3306  (dữ liệu chính, Flyway migrations)
-  ├── Redis  :6379  (hàng đợi transcription, cache)
-  └── Gipformer :8000  (FastAPI + sherpa-onnx ASR)
-
-Video: meet.jit.si (Jitsi public — không self-host)
+Video media -> meet.jit.si hoặc JaaS bên ngoài
 ```
 
----
+Không self-host Jitsi trong Docker stack demo. Jitsi self-host cần UDP media (JVB port 10000), trong khi Cloudflare Tunnel phù hợp HTTP/TCP. Vì vậy Docker stack chỉ chạy thành phần thuộc KollaMeeting; Jitsi/JaaS bên ngoài xử lý media.
 
-## Tech Stack
+## Docker Compose services
 
-| Layer | Công nghệ |
-|---|---|
-| Frontend | React 18, TypeScript, Vite, Tailwind CSS, Zustand, React Router v6 |
-| Backend | Spring Boot 3.2, Spring Security, Spring WebSocket (STOMP), JPA/Hibernate |
-| Database | MySQL 8.0, Flyway |
-| Cache / Queue | Redis 7 |
-| Video | Jitsi Meet (meet.jit.si public) |
-| ASR | Gipformer — Python FastAPI + sherpa-onnx (CUDA / CPU ONNX) |
-| Proxy / SSL | Nginx 1.25, Cloudflare Tunnel (cloudflared) |
-| Container | Docker, Docker Compose |
+- `frontend`: React 18 + Vite.
+- `backend`: Spring Boot 3.2, REST `/api/v1`, STOMP `/ws`, binary `/ws/audio`.
+- `mysql`: MySQL 8.0, Flyway migrations.
+- `redis`: queue/cache cho ASR và state realtime ngắn hạn.
+- `asr-service`: FastAPI + PhoWhisper/Gipformer.
+- `nginx`: reverse proxy cho frontend/backend/ws.
+- `cloudflared`: Quick Tunnel demo hoặc Named Tunnel khi có domain.
 
----
+## Chạy demo bằng một lệnh
 
-## Yêu cầu
-
-- Docker Engine ≥ 24 và Docker Compose v2
-- (Tuỳ chọn) NVIDIA GPU + `nvidia-container-toolkit` để chạy Gipformer với CUDA
-
----
-
-## Khởi động nhanh
-
-### 1. Clone và cấu hình môi trường
+Chuẩn bị `.env`:
 
 ```bash
-git clone <repo-url> KollaMeeting
-cd KollaMeeting
 cp .env.example .env
 ```
 
-Mở `.env` và điền các giá trị bắt buộc:
+Windows PowerShell:
 
-```dotenv
-# MySQL — đổi mật khẩu trước khi deploy
-MYSQL_ROOT_PASSWORD=strong-root-password
-MYSQL_PASSWORD=strong-app-password
-
-# JWT — tạo bằng: openssl rand -hex 32
-JWT_SECRET=your-secret-at-least-32-chars
-
-# Gipformer — cuda hoặc cpu
-DEVICE=cuda
-```
-
-> Các biến `VITE_API_BASE_URL`, `VITE_WS_URL`, `CORS_ALLOWED_ORIGINS` sẽ được startup script **tự động cập nhật** sau mỗi lần khởi động — không cần điền thủ công.
-
-### 2. Khởi động (1 lệnh duy nhất)
-
-**Windows (PowerShell):**
 ```powershell
 .\scripts\start.ps1
 ```
 
-**WSL2 / Linux (bash):**
+WSL2/Linux:
+
 ```bash
 ./scripts/start.sh
 ```
 
-Script sẽ tự động:
-1. Kiểm tra Docker Desktop đang chạy (Windows only)
-2. Khởi động tất cả services trừ frontend
-3. Đọc Cloudflare Tunnel URL từ log `cloudflared` (timeout 30s)
-4. Cập nhật `VITE_API_BASE_URL`, `VITE_WS_URL`, `CORS_ALLOWED_ORIGINS` trong `.env`
-5. Rebuild và khởi động frontend container
-6. In URL để truy cập: `✅ Kolla đang chạy tại: https://xxx-yyy-zzz.trycloudflare.com`
+Script có nhiệm vụ:
 
-Lần đầu build mất khoảng 5–10 phút. Sau khi xong, truy cập URL được in ra màn hình.
+1. Kiểm tra Docker đang chạy.
+2. Build/start backend, mysql, redis, asr-service, nginx và cloudflared.
+3. Lấy Quick Tunnel URL từ log `cloudflared`.
+4. Cập nhật URL browser cần dùng trong `.env`.
+5. Rebuild/start frontend để Vite bake đúng URL mới.
+6. In URL cuối cùng dạng `https://xxx.trycloudflare.com`.
 
-> **Lưu ý:** Tunnel URL thay đổi sau mỗi lần restart. Chỉ cần chạy lại `start.ps1` / `start.sh` để cập nhật tự động.
+Quick Tunnel là chế độ demo/nghiệm thu ngắn hạn 2-3 ngày, mỗi ngày chạy một lần. URL sẽ đổi sau mỗi lần chạy script. Vận hành lâu dài cần Cloudflare Named Tunnel/domain cố định qua `CLOUDFLARE_TUNNEL_TOKEN`.
 
-### 3. Verify tunnel hoạt động
+## Truy cập local
 
-```bash
-# Kiểm tra cloudflared đã kết nối thành công
-docker logs kolla-cloudflared
-
-# Tìm dòng chứa URL dạng:
-# +--------------------------------------------------------------------------------------------+
-# |  Your quick Tunnel has been created! Visit it at (it may take some time to be reachable):  |
-# |  https://xxx-yyy-zzz.trycloudflare.com                                                     |
-# +--------------------------------------------------------------------------------------------+
+```text
+http://localhost:8888
+https://localhost:8443
+http://localhost:3000
+http://localhost:8080/api/v1
+http://localhost:8000/health
 ```
 
-Sau đó truy cập URL từ browser **bên ngoài mạng LAN** để xác nhận tunnel hoạt động.
+## ASR model
 
-### 4. Truy cập LAN (không cần tunnel)
+Model PhoWhisper CT2 local đặt tại:
 
-Nginx vẫn expose port `8443` (HTTPS self-signed) và `8888` (HTTP plain) ra Windows host:
-
-```
-https://localhost:8443        # HTTPS (bỏ qua cảnh báo self-signed cert)
-http://localhost:8888         # HTTP plain
+```text
+asr-service/models/phowhisper-medium-ct2-int8_float16/
 ```
 
-> **Lưu ý:** `scripts/setup-portproxy.ps1` **không còn cần thiết** khi dùng Cloudflare Tunnel. Script này chỉ được giữ lại cho trường hợp cần truy cập LAN từ máy khác trong cùng mạng (LAN fallback).
-
-### 5. Nâng cấp lên Named Tunnel (khi có domain cố định)
-
-Khi muốn có URL cố định thay vì URL ngẫu nhiên mỗi lần restart:
-
-1. Tạo tunnel trên [Cloudflare Zero Trust dashboard](https://one.dash.cloudflare.com/)
-2. Cấu hình DNS CNAME record trỏ domain về tunnel
-3. Lấy tunnel token và thêm vào `.env`:
-   ```dotenv
-   CLOUDFLARE_TUNNEL_TOKEN=eyJ...
-   ```
-4. Chạy lại `start.ps1` / `start.sh` như bình thường — không cần thay đổi kiến trúc.
-
-### 6. Chạy local (không cần tunnel)
-
-```bash
-# Chỉ cần đổi các biến sau trong .env
-VITE_API_BASE_URL=http://localhost:8080/api/v1
-VITE_WS_URL=ws://localhost:8080/ws
-CORS_ALLOWED_ORIGINS=http://localhost:3000
-
-docker compose up -d frontend backend mysql redis gipformer
-```
-
-Truy cập `http://localhost:3000`.
-
----
-
-## Tại sao không dùng Jitsi self-hosted?
-
-Jitsi Meet self-hosted dùng **WebRTC UDP** (JVB port 10000) cho media stream. Cloudflare Tunnel chỉ hỗ trợ TCP/HTTP — không thể tunnel UDP traffic. Do đó, Kolla chuyển sang dùng **Jitsi public** (`meet.jit.si`) để video call hoạt động qua tunnel mà không cần cấu hình thêm.
-
----
-
-## Cấu trúc thư mục
-
-```
-KollaMeeting/
-├── backend/          # Spring Boot 3.2
-│   ├── src/main/java/com/example/kolla/
-│   │   ├── config/       # Security, WebSocket, Redis, CORS
-│   │   ├── controllers/  # REST endpoints
-│   │   ├── models/       # JPA entities
-│   │   ├── services/     # Business logic
-│   │   ├── dto/          # Request/Response DTOs
-│   │   └── enums/        # MeetingStatus, Role, ...
-│   └── src/main/resources/db/migration/  # Flyway SQL
-│
-├── frontend/         # React 18 + Vite
-│   └── src/
-│       ├── pages/        # LoginPage, DashboardPage, MeetingRoomPage, ...
-│       ├── components/   # Layout, shared UI
-│       ├── store/        # Zustand stores (auth, notification)
-│       ├── services/     # Axios API clients
-│       └── router/       # AppRouter, ProtectedRoute
-│
-├── gipformer/        # Python FastAPI + sherpa-onnx (ASR)
-├── nginx/            # nginx.conf template + entrypoint
-├── docker-compose.yml
-├── .env.example
-└── README.md
-```
-
----
+Thư mục `asr-service/models/` bị ignore để không commit model weights. Docker Compose mount thư mục này vào `/app/models:ro`. Nếu chưa có model local, đặt `ASR_BACKEND=gipformer` để dùng Gipformer tải từ Hugging Face hoặc chuẩn bị model PhoWhisper trước khi demo.
 
 ## API chính
 
-Tất cả endpoint đều có prefix `/api/v1`. Xem đầy đủ tại Swagger UI.
+Tất cả endpoint có prefix `/api/v1`.
 
 | Method | Endpoint | Mô tả |
 |---|---|---|
 | POST | `/auth/login` | Đăng nhập, nhận JWT |
 | POST | `/auth/logout` | Đăng xuất |
 | POST | `/auth/refresh` | Làm mới access token |
-| GET | `/meetings` | Danh sách cuộc họp (phân trang, lọc) |
-| POST | `/meetings` | Tạo cuộc họp mới |
+| GET | `/users/me` | Hồ sơ người dùng hiện tại |
+| PUT | `/users/me` | Cập nhật hồ sơ cá nhân |
+| POST | `/users/me/change-password` | Đổi mật khẩu |
+| GET/POST | `/users` | Quản lý người dùng |
+| GET/POST | `/departments` | Quản lý phòng ban |
+| GET/POST | `/rooms` | Quản lý phòng họp |
+| GET | `/meetings` | Danh sách cuộc họp |
+| POST | `/meetings` | Thư ký tạo cuộc họp |
 | GET | `/meetings/{id}` | Chi tiết cuộc họp |
-| PUT | `/meetings/{id}` | Cập nhật cuộc họp |
-| DELETE | `/meetings/{id}` | Xoá cuộc họp |
-| POST | `/meetings/{id}/activate` | Kích hoạt cuộc họp |
-| POST | `/meetings/{id}/end` | Kết thúc cuộc họp |
+| PUT | `/meetings/{id}` | Thư ký sửa meeting `SCHEDULED` |
+| DELETE | `/meetings/{id}` | Thư ký xóa meeting `SCHEDULED` |
+| GET/POST | `/meetings/{id}/members` | Danh sách/thêm thành viên và `MeetingRole` |
+| POST | `/meetings/{id}/activate` | Bắt đầu cuộc họp |
+| POST | `/meetings/{id}/end` | Kết thúc cuộc họp, tạo transcript/minutes/audio tổng hợp |
 | POST | `/meetings/{id}/join` | Tham gia phòng họp |
 | POST | `/meetings/{id}/leave` | Rời phòng họp |
-| GET | `/meetings/{id}/members` | Danh sách thành viên |
+| GET/POST | `/meetings/{id}/messages` | Tin nhắn cuộc họp, lưu DB và broadcast STOMP |
+| GET | `/meetings/{id}/transcription` | Kết quả phiên âm |
+| GET/PUT | `/meetings/{id}/minutes` | Xem/sửa biên bản |
+| POST | `/meetings/{id}/minutes/confirm` | Host xác nhận và ký PDF |
+| GET | `/meetings/{id}/minutes/download?format=pdf\|docx` | Tải biên bản PDF/DOCX |
 | POST | `/meetings/{id}/recordings/start` | Bắt đầu ghi âm |
 | POST | `/recordings/{id}/stop` | Dừng ghi âm |
-| GET | `/recordings/{id}/download` | Tải file ghi âm |
-| GET | `/meetings/{id}/transcription` | Lấy kết quả phiên âm |
-| GET/PUT | `/meetings/{id}/minutes` | Biên bản cuộc họp |
-| GET | `/notifications` | Danh sách thông báo |
-| GET | `/search` | Tìm kiếm cuộc họp / phiên âm |
-| GET | `/users` | Quản lý người dùng (ADMIN) |
-| GET | `/departments` | Quản lý phòng ban (ADMIN) |
-| GET | `/rooms` | Quản lý phòng họp (ADMIN) |
+| GET | `/recordings/{id}/download` | Tải audio |
+| GET | `/search` | Tìm kiếm cuộc họp/phiên âm |
 
-### WebSocket
+## WebSocket
 
 | Endpoint | Giao thức | Mô tả |
 |---|---|---|
-| `/ws` | STOMP/SockJS | Thông báo, sự kiện cuộc họp, giơ tay |
-| `/ws/audio` | Binary WebSocket | Stream PCM audio đến Gipformer |
+| `/ws` | STOMP/SockJS | Meeting events, notifications, raise hand, messages |
+| `/ws/audio` | Binary WebSocket | PCM audio đến backend để tạo ASR jobs |
 
-**Subscribe topics:**
-- `/topic/meeting/{meetingId}` — sự kiện broadcast cho tất cả thành viên
-- `/user/queue/notifications` — thông báo cá nhân
-- `/user/queue/errors` — lỗi cá nhân
+Subscribe topics:
 
----
+- `/topic/meeting/{meetingId}`: event realtime của meeting.
+- `/user/queue/notifications`: thông báo cá nhân.
+- `/user/queue/errors`: lỗi cá nhân.
 
-## Phân quyền
+Event quan trọng:
 
-| Vai trò | Quyền |
-|---|---|
-| `ADMIN` | Toàn quyền: quản lý user, phòng ban, phòng họp, tất cả cuộc họp |
-| `SECRETARY` | Tạo/sửa cuộc họp, quản lý biên bản, công bố biên bản |
-| `USER` | Xem và tham gia cuộc họp được mời |
+- `MEETING_STARTED`
+- `MODE_CHANGED`
+- `SPEAKING_PERMISSION_GRANTED`
+- `TRANSCRIPTION_COMPLETED`
+- `MEETING_MESSAGE_CREATED`
+- `MINUTES_READY`
+- `MEETING_ENDED`
 
----
+## Schema alignment
 
-## Biến môi trường quan trọng
+Fresh Flyway schema dùng tên cột vật lý khớp DOCX cho các bảng chính:
 
-| Biến | Bắt buộc | Mô tả |
-|---|---|---|
-| `JWT_SECRET` | ✅ | Khoá ký JWT (≥ 32 ký tự) |
-| `MYSQL_ROOT_PASSWORD` | ✅ | Mật khẩu root MySQL |
-| `MYSQL_PASSWORD` | ✅ | Mật khẩu user MySQL |
-| `GIPFORMER_CALLBACK_API_KEY` | ✅ | API key nội bộ cho Gipformer callback |
-| `VITE_API_BASE_URL` | auto | URL backend từ phía trình duyệt — tự động cập nhật bởi startup script |
-| `VITE_WS_URL` | auto | WebSocket URL — tự động cập nhật bởi startup script |
-| `CORS_ALLOWED_ORIGINS` | auto | Origin được phép gọi API — tự động cập nhật bởi startup script |
-| `CLOUDFLARE_TUNNEL_TOKEN` | — | Token Named Tunnel (để trống cho Quick Tunnel mode) |
-| `DEVICE` | — | `cuda` hoặc `cpu` cho Gipformer (mặc định: `cuda`) |
+- `user`: `Department_id`, `EmployeeCode`, `Name`, `Password`, `Dob`, `PhoneNumber`, `Degree`, `Identification`, `Address`, `Email`, `BankName`, `BankNumber`, `Img`, `Role`.
+- `department`: `DepartmentCode`, `Name`.
+- `room`: `RoomCode`, `RoomName`.
+- `meeting`: `MeetingCode`, `DepartmentId`, `Room_id`, `Name`, `StartTime`, `Endtime`, `Status`.
+- `member`: `User_id`, `Meeting_id`, `MeetingRole`.
+- `document`: `Meeting_id`, `User_id`, `Name`, `Content`.
+- `meeting_message`: `Member_id`, `Content`, `CreateTime`.
 
-> **Lưu ý:** Khi đổi mạng / IP hoặc sau mỗi lần restart, chạy lại `.\scripts\start.ps1` (Windows) hoặc `./scripts/start.sh` (WSL2) để cập nhật URL tự động.
+Các cột runtime như `mode`, `transcription_priority`, `host_user_id`, `secretary_user_id`, `draft_docx_path`, `confirmed_pdf_path` là phần triển khai bổ sung để hệ thống chạy thật, không thay thế schema Word.
 
----
+## Kiểm thử
 
-## Phát triển
+```powershell
+git diff --check
 
-### Backend
-
-```bash
 cd backend
-./mvnw spring-boot:run
-# Chạy tests
-./mvnw test
+.\mvnw.cmd test
+
+cd ..\frontend
+npm run test
+npm run build
+
+cd ..
+docker compose config
 ```
 
-### Frontend
+Kiểm tra migration MySQL:
 
-```bash
-cd frontend
-npm install
-npm run dev       # dev server tại http://localhost:5173
-npm run test      # Vitest
-npm run lint      # ESLint
+```powershell
+docker exec -i kolla-mysql mysql -uroot -p%MYSQL_ROOT_PASSWORD% kolla_meeting < backend/src/main/resources/db/migration/check_migration_integrity.sql
 ```
 
----
+## Cấu trúc thư mục
 
-## Giấy phép
+```text
+KollaMeeting/
+  backend/        Spring Boot backend
+  frontend/       React/Vite frontend
+  asr-service/    FastAPI ASR service
+  nginx/          reverse proxy
+  scripts/        one-command demo startup scripts
+  secrets/        local keystore/secrets, ignored by git
+  docs/           repo alignment documents
+  docker-compose.yml
+  .env.example
+  plan.md
+```
 
-Dự án nội bộ — Đồ án tốt nghiệp.
+## Repo hygiene
+
+Không commit:
+
+- DOCX gốc đã nộp.
+- Model weights trong `asr-service/models/`.
+- WAV demo/test trong `asr-service/data/`.
+- `frontend/playwright-report/`, `frontend/test-results/`.
+- `secrets/*`, `.env`, runtime storage và benchmark artifacts.

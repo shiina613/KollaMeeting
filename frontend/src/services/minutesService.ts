@@ -7,7 +7,7 @@
 import api from './api'
 import useAuthStore from '../store/authStore'
 import type { ApiResponse } from '../types/api'
-import type { Minutes, MinutesVersion } from '../types/minutes'
+import type { Minutes, MinutesFormat, MinutesVersion } from '../types/minutes'
 
 // ─── Get minutes info ─────────────────────────────────────────────────────────
 
@@ -63,12 +63,32 @@ export async function editMinutes(
 export function getMinutesDownloadUrl(
   meetingId: number,
   version: MinutesVersion,
+  format: MinutesFormat = 'pdf',
 ): string {
   const baseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api/v1'
   const token = useAuthStore.getState().token
   const tokenParam = token ? `&token=${encodeURIComponent(token)}` : ''
   // inline=true → backend serves Content-Disposition: inline so the iframe renders the PDF
-  return `${baseUrl}/meetings/${meetingId}/minutes/download?version=${version}&inline=true${tokenParam}`
+  return `${baseUrl}/meetings/${meetingId}/minutes/download?version=${version}&format=${format}&inline=true${tokenParam}`
+}
+
+const MINUTES_MIME_TYPES: Record<MinutesFormat, string> = {
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+}
+
+const VERSION_FILE_LABELS: Record<MinutesVersion, string> = {
+  draft: 'nhap',
+  confirmed: 'xac-nhan',
+  secretary: 'thu-ky',
+}
+
+export function getMinutesDownloadFilename(
+  meetingId: number,
+  version: MinutesVersion,
+  format: MinutesFormat,
+): string {
+  return `bien-ban-${VERSION_FILE_LABELS[version]}-${meetingId}.${format}`
 }
 
 /**
@@ -76,32 +96,34 @@ export function getMinutesDownloadUrl(
  * Uses blob URL to support auth header injection.
  * Requirements: 25.6
  */
-export async function downloadMinutesPdf(
+export async function downloadMinutesFile(
   meetingId: number,
   version: MinutesVersion,
+  format: MinutesFormat = 'pdf',
 ): Promise<void> {
   const response = await api.get(
     `/meetings/${meetingId}/minutes/download`,
     {
-      params: { version },
+      params: { version, format },
       responseType: 'blob',
     },
   )
 
-  const blob = new Blob([response.data as BlobPart], { type: 'application/pdf' })
+  const blob = new Blob([response.data as BlobPart], { type: MINUTES_MIME_TYPES[format] })
   const url = URL.createObjectURL(blob)
-
-  const versionLabels: Record<MinutesVersion, string> = {
-    draft: 'ban-nhap',
-    confirmed: 'ban-xac-nhan',
-    secretary: 'ban-thu-ky',
-  }
 
   const link = document.createElement('a')
   link.href = url
-  link.download = `bien-ban-${versionLabels[version]}-${meetingId}.pdf`
+  link.download = getMinutesDownloadFilename(meetingId, version, format)
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
+}
+
+export async function downloadMinutesPdf(
+  meetingId: number,
+  version: MinutesVersion,
+): Promise<void> {
+  return downloadMinutesFile(meetingId, version, 'pdf')
 }

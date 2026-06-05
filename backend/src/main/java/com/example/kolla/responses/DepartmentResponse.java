@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 public class DepartmentResponse {
 
     private Long id;
+    private String departmentCode;
     private String name;
     private String description;
     private LocalDateTime createdAt;
@@ -29,6 +30,7 @@ public class DepartmentResponse {
     public static DepartmentResponse from(Department department) {
         return DepartmentResponse.builder()
                 .id(department.getId())
+                .departmentCode(department.getDepartmentCode())
                 .name(department.getName())
                 .description(department.getDescription())
                 .createdAt(department.getCreatedAt())

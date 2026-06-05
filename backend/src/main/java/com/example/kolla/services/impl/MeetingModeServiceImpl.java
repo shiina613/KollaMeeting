@@ -9,11 +9,11 @@ import com.example.kolla.models.Meeting;
 import com.example.kolla.models.SpeakingPermission;
 import com.example.kolla.models.User;
 import com.example.kolla.repositories.MeetingRepository;
-import com.example.kolla.repositories.RaiseHandRequestRepository;
 import com.example.kolla.repositories.SpeakingPermissionRepository;
 import com.example.kolla.responses.MeetingResponse;
 import com.example.kolla.services.MeetingLifecycleService;
 import com.example.kolla.services.MeetingModeService;
+import com.example.kolla.services.RaiseHandQueueService;
 import com.example.kolla.services.SpeakingPermissionService;
 import com.example.kolla.websocket.MeetingEventPublisher;
 import lombok.RequiredArgsConstructor;
@@ -50,7 +50,7 @@ public class MeetingModeServiceImpl implements MeetingModeService {
 
     /**
      * Redis key prefix for signalling audio chunk finalization.
-     * The Gipformer audio stream handler listens for this key to flush the current chunk.
+     * The audio stream handler listens for this key to flush the current chunk.
      * Format: {@code meeting:{meetingId}:finalize_chunk:{speakerTurnId}}
      */
     private static final String FINALIZE_CHUNK_KEY_PREFIX =
@@ -58,7 +58,7 @@ public class MeetingModeServiceImpl implements MeetingModeService {
 
     private final MeetingRepository meetingRepository;
     private final SpeakingPermissionRepository speakingPermissionRepository;
-    private final RaiseHandRequestRepository raiseHandRequestRepository;
+    private final RaiseHandQueueService raiseHandQueueService;
     private final MeetingLifecycleService meetingLifecycleService;
     private final SpeakingPermissionService speakingPermissionService;
     private final MeetingEventPublisher eventPublisher;
@@ -208,13 +208,9 @@ public class MeetingModeServiceImpl implements MeetingModeService {
                     speakerTurnId, meetingId);
         }
 
-        // Step 4: Expire all pending raise-hand requests (Requirement 21.3)
-        int expiredRequests = raiseHandRequestRepository
-                .expireAllPendingForMeeting(meetingId, now);
-        if (expiredRequests > 0) {
-            log.debug("Expired {} raise-hand request(s) for meeting id={} (mode switch)",
-                    expiredRequests, meetingId);
-        }
+        // Step 4: Clear raise-hand queue (Requirement 21.3)
+        raiseHandQueueService.clearAll(meetingId);
+        log.debug("Cleared raise-hand queue for meeting id={} (mode switch)", meetingId);
 
         // Step 5: Update meeting mode in DB
         meeting.setMode(MeetingMode.FREE_MODE);

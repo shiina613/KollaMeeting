@@ -22,8 +22,9 @@ class JwtUtilsTest {
 
     private JwtUtils jwtUtils;
 
-    // A 32-char secret that is valid for HS256
-    private static final String TEST_SECRET = "test-secret-key-for-unit-tests-only-32chars";
+    // A Base64-encoded secret (at least 32 bytes decoded) valid for HS256
+    private static final String TEST_SECRET = "dGVzdC1zZWNyZXQta2V5LWZvci11bml0LXRlc3RzLW9ubHktMzJjaGFycw==";
+    private static final String OTHER_SECRET = "ZGlmZmVyZW50LXNlY3JldC1rZXktZm9yLXRlc3RpbmctMzJjaGFycw==";
     private static final long EXPIRATION_MS = 3_600_000L; // 1 hour
 
     private User testUser;
@@ -135,7 +136,7 @@ class JwtUtilsTest {
     void validateToken_returnsFalseForWrongSecret() {
         // Create a JwtUtils with a different secret
         JwtUtils otherJwtUtils = new JwtUtils();
-        ReflectionTestUtils.setField(otherJwtUtils, "jwtSecret", "different-secret-key-for-testing-32chars");
+        ReflectionTestUtils.setField(otherJwtUtils, "jwtSecret", OTHER_SECRET);
         ReflectionTestUtils.setField(otherJwtUtils, "jwtExpirationMs", EXPIRATION_MS);
         ReflectionTestUtils.setField(otherJwtUtils, "refreshExpirationMs", 604_800_000L);
 

@@ -1,0 +1,6 @@
+target/
+.jqwik-database
+*.log
+.env
+secrets/
+storage/

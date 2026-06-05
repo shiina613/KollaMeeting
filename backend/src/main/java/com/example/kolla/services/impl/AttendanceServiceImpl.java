@@ -14,6 +14,7 @@ import com.example.kolla.responses.AttendanceLogResponse;
 import com.example.kolla.services.AttendanceService;
 import com.example.kolla.services.MeetingLifecycleService;
 import com.example.kolla.services.SpeakingPermissionService;
+import com.example.kolla.websocket.MeetingEventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,6 +41,7 @@ public class AttendanceServiceImpl implements AttendanceService {
     private final MeetingRepository meetingRepository;
     private final MemberRepository memberRepository;
     private final MeetingLifecycleService meetingLifecycleService;
+    private final MeetingEventPublisher eventPublisher;
     private final Clock clock;
 
     @Autowired
@@ -99,6 +101,17 @@ public class AttendanceServiceImpl implements AttendanceService {
         // Notify lifecycle service — may cancel waiting timeout (Requirement 3.11)
         meetingLifecycleService.onParticipantJoined(meetingId, user);
 
+        // Broadcast to all clients in the meeting room (Requirement 5.1, 5.6)
+        String displayName = user.getFullName() != null && !user.getFullName().isBlank()
+                ? user.getFullName()
+                : user.getUsername();
+        try {
+            eventPublisher.publishParticipantJoined(meetingId, user.getId(), displayName);
+        } catch (Exception e) {
+            log.warn("Failed to broadcast PARTICIPANT_JOINED for meeting id={}: {}",
+                    meetingId, e.getMessage());
+        }
+
         return AttendanceLogResponse.from(saved);
     }
 
@@ -141,6 +154,13 @@ public class AttendanceServiceImpl implements AttendanceService {
 
         // Notify lifecycle service — may start waiting timeout (Requirement 3.11)
         meetingLifecycleService.onParticipantLeft(meetingId, user);
+
+        try {
+            eventPublisher.publishParticipantLeft(meetingId, user.getId());
+        } catch (Exception e) {
+            log.warn("Failed to broadcast PARTICIPANT_LEFT for meeting id={}: {}",
+                    meetingId, e.getMessage());
+        }
 
         return AttendanceLogResponse.from(saved);
     }

@@ -2,10 +2,12 @@ package com.example.kolla.repositories;
 
 import com.example.kolla.enums.MeetingStatus;
 import com.example.kolla.models.Meeting;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -24,6 +26,14 @@ public interface MeetingRepository extends JpaRepository<Meeting, Long>, JpaSpec
     Optional<Meeting> findByCode(String code);
 
     boolean existsByCode(String code);
+
+    /**
+     * Find meeting by ID with pessimistic write lock.
+     * Used for concurrent-safe lifecycle transitions (e.g., waiting timeout).
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT m FROM Meeting m WHERE m.id = :id")
+    Optional<Meeting> findByIdForUpdate(@Param("id") Long id);
 
     // ── Filtered list queries ─────────────────────────────────────────────────
 

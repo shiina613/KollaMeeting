@@ -9,7 +9,7 @@
  * Features:
  * - Requests microphone permission on `startCapture()`
  * - Shows a permission-denied state when the user blocks the mic
- * - Resamples to 16kHz mono (required by Gipformer WAV input)
+ * - Resamples to 16kHz mono (required by ASR service WAV input)
  * - Sends Int16 PCM frames as ArrayBuffer over a dedicated binary WebSocket
  * - Cleans up AudioContext, MediaStream, and WebSocket on `stopCapture()` / unmount
  *
@@ -21,7 +21,7 @@ import useAuthStore from '../store/authStore'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-/** Target sample rate for Gipformer (WAV 16kHz mono). */
+/** Target sample rate for ASR (WAV 16kHz mono). */
 const TARGET_SAMPLE_RATE = 16_000
 
 /** ScriptProcessorNode buffer size (samples per channel per callback). */

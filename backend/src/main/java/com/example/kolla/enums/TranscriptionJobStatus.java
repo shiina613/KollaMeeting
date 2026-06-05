@@ -5,13 +5,13 @@ package com.example.kolla.enums;
  * Requirements: 8.7, 8.10, 8.11
  */
 public enum TranscriptionJobStatus {
-    /** Job created but not yet pushed to Redis queue (e.g. Gipformer unavailable). */
+    /** Job created but not yet pushed to Redis queue (e.g. ASR service unavailable). */
     PENDING,
     /** Job pushed to Redis Sorted Set, waiting for worker to pick it up. */
     QUEUED,
     /** Worker has popped the job and is running inference. */
     PROCESSING,
-    /** Gipformer returned a result; segment persisted. */
+    /** ASR service returned a result; segment persisted. */
     COMPLETED,
     /** All retries exhausted; job failed permanently. */
     FAILED

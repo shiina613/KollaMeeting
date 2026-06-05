@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   previously HIGH_PRIORITY meeting must be downgraded to NORMAL_PRIORITY.
  * </blockquote>
  *
- * <p>This constraint ensures Gipformer resources are focused on one meeting
+ * <p>This constraint ensures ASR service resources are focused on one meeting
  * for near-real-time transcription display.
  *
  * Requirements: 8.12

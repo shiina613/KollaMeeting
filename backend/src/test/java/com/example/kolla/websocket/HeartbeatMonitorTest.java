@@ -366,9 +366,9 @@ class HeartbeatMonitorTest {
     class HeartbeatTimeoutConstant {
 
         @Test
-        @DisplayName("Timeout is 10 seconds as per requirements")
-        void timeoutIs10Seconds() {
-            assertThat(HeartbeatMonitor.HEARTBEAT_TIMEOUT_SECONDS).isEqualTo(10L);
+        @DisplayName("Timeout is 60 seconds as documented by the monitor")
+        void timeoutIs60Seconds() {
+            assertThat(HeartbeatMonitor.HEARTBEAT_TIMEOUT_SECONDS).isEqualTo(60L);
         }
     }
 

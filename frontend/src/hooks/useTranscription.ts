@@ -21,7 +21,7 @@ import type { MeetingEvent, TranscriptionSegmentPayload } from '../types/meeting
 export interface UseTranscriptionReturn {
   /** Sorted transcription segments (by speakerTurnId then sequenceNumber). */
   segments: TranscriptionSegment[]
-  /** Whether the Gipformer transcription service is currently available. */
+  /** Whether the ASR transcription service is currently available. */
   isTranscriptionAvailable: boolean
   /** Add a new segment (or ignore if duplicate jobId). */
   addSegment: (segment: TranscriptionSegment) => void
@@ -69,10 +69,11 @@ export function useTranscription(): UseTranscriptionReturn {
           speakerId: payload.speakerId,
           speakerName: payload.speakerName,
           speakerDept: (payload as { speakerDept?: string }).speakerDept ?? '',
+          speakerRole: payload.speakerRole ?? payload.meetingRole,
           speakerTurnId: payload.speakerTurnId,
           sequenceNumber: payload.sequenceNumber,
           text: payload.text,
-          confidence: payload.confidence,
+          confidence: payload.confidence ?? null,
           segmentStartTime: payload.segmentStartTime,
         })
       } else if (event.type === 'TRANSCRIPTION_UNAVAILABLE') {

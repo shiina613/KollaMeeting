@@ -158,14 +158,15 @@ public class MeetingController {
 
     /**
      * DELETE /api/v1/meetings/{id}
-     * Delete a meeting. ADMIN only.
+     * Delete a scheduled meeting. SECRETARY only.
      * Requirements: 3.6
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Delete a meeting (ADMIN only)")
+    @PreAuthorize("hasRole('SECRETARY')")
+    @Operation(summary = "Delete a scheduled meeting (SECRETARY only)")
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Meeting deleted"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Only scheduled meetings can be deleted"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Meeting not found")

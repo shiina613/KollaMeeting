@@ -1,5 +1,6 @@
 package com.example.kolla.controllers;
 
+import com.example.kolla.dto.ChangePasswordRequest;
 import com.example.kolla.dto.CreateUserRequest;
 import com.example.kolla.dto.ResetPasswordRequest;
 import com.example.kolla.dto.UpdateUserRequest;
@@ -55,6 +56,26 @@ public class UserController {
 
         UserResponse response = userService.getCurrentUser(currentUser);
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PutMapping("/me")
+    @Operation(summary = "Update current user profile")
+    public ResponseEntity<ApiResponse<UserResponse>> updateCurrentUser(
+            @Valid @RequestBody UpdateUserRequest request,
+            @AuthenticationPrincipal User currentUser) {
+
+        UserResponse response = userService.updateUser(currentUser.getId(), request, currentUser);
+        return ResponseEntity.ok(ApiResponse.success("Profile updated successfully", response));
+    }
+
+    @PostMapping("/me/change-password")
+    @Operation(summary = "Change current user password")
+    public ResponseEntity<ApiResponse<Void>> changeOwnPassword(
+            @Valid @RequestBody ChangePasswordRequest request,
+            @AuthenticationPrincipal User currentUser) {
+
+        userService.changeOwnPassword(request, currentUser);
+        return ResponseEntity.ok(ApiResponse.success("Password changed successfully", null));
     }
 
     // ── GET /users/candidates ─────────────────────────────────────────────────
@@ -232,7 +253,8 @@ public class UserController {
     /**
      * POST /api/v1/users/{id}/reset-password
      * Reset a user's password. ADMIN only.
-     * Returns the generated temporary password in the response (shown once).
+     * The temporary password is returned ONCE in the response for the admin to communicate
+     * to the user securely. It is not logged or stored in plaintext.
      * Requirements: 11.8, 11.9, 11.10
      */
     @PostMapping("/{id}/reset-password")
@@ -251,8 +273,10 @@ public class UserController {
             @AuthenticationPrincipal User currentUser) {
 
         String tempPassword = userService.resetPassword(id, request, currentUser);
+        // NOTE: This response must be transmitted over HTTPS only.
+        // The admin should communicate this password to the user through a secure channel.
         return ResponseEntity.ok(ApiResponse.success(
-                "Password reset successfully",
+                "Password reset successfully. Communicate the temporary password to the user securely.",
                 Map.of("temporaryPassword", tempPassword)));
     }
 }

@@ -2,7 +2,6 @@ package com.example.kolla.dto;
 
 import com.example.kolla.enums.TranscriptionPriority;
 import jakarta.validation.constraints.Future;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -22,9 +21,11 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class CreateMeetingRequest {
 
-    @NotBlank(message = "Meeting title is required")
     @Size(max = 500, message = "Title must not exceed 500 characters")
     private String title;
+
+    @Size(max = 500, message = "Name must not exceed 500 characters")
+    private String name;
 
     @Size(max = 5000, message = "Description must not exceed 5000 characters")
     private String description;
@@ -38,9 +39,10 @@ public class CreateMeetingRequest {
     /** Optional room ID. */
     private Long roomId;
 
+    private Long departmentId;
+
     /**
-     * Host user ID — must be a SECRETARY or ADMIN role user.
-     * Required per Requirement 3.8.
+     * Host/chairperson user ID. The host only needs to be an active user.
      */
     @NotNull(message = "Host user ID is required")
     private Long hostUserId;

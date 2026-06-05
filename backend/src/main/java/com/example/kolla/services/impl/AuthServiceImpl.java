@@ -40,6 +40,12 @@ public class AuthServiceImpl implements AuthService {
     @Value("${jwt.expiration-ms:86400000}")
     private long jwtExpirationMs;
 
+    @Value("${jwt.refresh-expiration-ms:604800000}")
+    private long jwtRefreshExpirationMs;
+
+    @Value("${app.rate-limit.trust-proxy:false}")
+    private boolean trustProxy;
+
     @Override
     public AuthResponse login(LoginRequest request, HttpServletRequest httpRequest) {
         try {
@@ -86,6 +92,7 @@ public class AuthServiceImpl implements AuthService {
             return;
         }
         try {
+            // Blacklist the access token
             long ttlMs = jwtUtils.getRemainingTtlMs(token);
             if (ttlMs > 0) {
                 redisTemplate.opsForValue().set(
@@ -93,7 +100,19 @@ public class AuthServiceImpl implements AuthService {
                         "1",
                         ttlMs,
                         TimeUnit.MILLISECONDS);
-                log.debug("Token blacklisted with TTL {}ms", ttlMs);
+                log.debug("Access token blacklisted with TTL {}ms", ttlMs);
+            }
+
+            // Also invalidate all tokens for this user (including refresh tokens)
+            // by storing a "logged out at" timestamp. The refresh endpoint checks this.
+            String username = jwtUtils.getSubjectFromToken(token);
+            if (username != null) {
+                redisTemplate.opsForValue().set(
+                        BLACKLIST_KEY_PREFIX + "user:" + username,
+                        String.valueOf(System.currentTimeMillis()),
+                        jwtRefreshExpirationMs,
+                        TimeUnit.MILLISECONDS);
+                log.debug("User '{}' session invalidated (refresh tokens revoked)", username);
             }
         } catch (Exception e) {
             log.warn("Failed to blacklist token: {}", e.getMessage());
@@ -111,14 +130,39 @@ public class AuthServiceImpl implements AuthService {
         try {
             username = jwtUtils.getSubjectFromToken(refreshToken);
         } catch (Exception e) {
-            throw new UnauthorizedException("Cannot extract user from refresh token");
+            throw new UnauthorizedException("Invalid refresh token");
         }
         if (username == null || username.isBlank()) {
-            throw new UnauthorizedException("Cannot extract user from refresh token");
+            throw new UnauthorizedException("Invalid refresh token");
+        }
+
+        // Check if user has logged out (refresh token revoked)
+        try {
+            String logoutTimestamp = redisTemplate.opsForValue().get(
+                    BLACKLIST_KEY_PREFIX + "user:" + username);
+            if (logoutTimestamp != null) {
+                long logoutAt = Long.parseLong(logoutTimestamp);
+                long tokenIssuedAt = jwtUtils.getIssuedAtFromToken(refreshToken);
+                if (tokenIssuedAt <= logoutAt) {
+                    log.warn("Refresh token used after logout for user '{}'", username);
+                    throw new UnauthorizedException("Session has been invalidated. Please login again.");
+                }
+            }
+        } catch (UnauthorizedException e) {
+            throw e;
+        } catch (Exception e) {
+            // Redis error — fail-open for refresh to avoid locking out users
+            log.warn("Failed to check logout status for '{}': {}", username, e.getMessage());
         }
 
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new UnauthorizedException("User not found: " + username));
+                .orElseThrow(() -> new UnauthorizedException("Invalid refresh token"));
+
+        // Reject refresh if user account has been deactivated
+        if (!user.isActive()) {
+            log.warn("Refresh token used for deactivated user '{}'", username);
+            throw new UnauthorizedException("Account is disabled");
+        }
 
         String newAccessToken = jwtUtils.generateAccessToken(
                 user, user.getId(), user.getRole().name());
@@ -139,9 +183,15 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private String getClientIp(HttpServletRequest request) {
-        String xForwardedFor = request.getHeader("X-Forwarded-For");
-        if (xForwardedFor != null && !xForwardedFor.isBlank()) {
-            return xForwardedFor.split(",")[0].trim();
+        if (trustProxy) {
+            String xForwardedFor = request.getHeader("X-Forwarded-For");
+            if (xForwardedFor != null && !xForwardedFor.isBlank()) {
+                return xForwardedFor.split(",")[0].trim();
+            }
+            String xRealIp = request.getHeader("X-Real-IP");
+            if (xRealIp != null && !xRealIp.isBlank()) {
+                return xRealIp.trim();
+            }
         }
         return request.getRemoteAddr();
     }

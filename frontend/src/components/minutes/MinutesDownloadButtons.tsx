@@ -1,83 +1,88 @@
-/**
- * MinutesDownloadButtons — download buttons for all three minutes versions.
- *
- * - Three buttons: "Tải bản nháp", "Tải bản xác nhận", "Tải bản thư ký"
- * - Each button calls GET /api/v1/meetings/{id}/minutes/download?version=...
- * - Buttons are disabled for versions not yet available based on status
- * - Triggers browser file download using blob URL with auth header
- *
- * Requirements: 25.6
- */
-
 import { useState } from 'react'
-import { downloadMinutesPdf } from '../../services/minutesService'
-import type { MinutesStatus, MinutesVersion } from '../../types/minutes'
-
-// ─── Types ────────────────────────────────────────────────────────────────────
+import { downloadMinutesFile } from '../../services/minutesService'
+import type { Minutes, MinutesFormat, MinutesVersion } from '../../types/minutes'
 
 export interface MinutesDownloadButtonsProps {
   meetingId: number
-  status: MinutesStatus
+  minutes: Minutes
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/**
- * Determine whether a given version is available based on the current status.
- */
-function isVersionAvailable(version: MinutesVersion, status: MinutesStatus): boolean {
-  switch (version) {
-    case 'draft':
-      return true
-    case 'confirmed':
-      return status === 'HOST_CONFIRMED' || status === 'SECRETARY_CONFIRMED'
-    case 'secretary':
-      return status === 'SECRETARY_CONFIRMED'
-    default:
-      return false
-  }
-}
-
-// ─── Button config ────────────────────────────────────────────────────────────
 
 interface VersionConfig {
   version: MinutesVersion
+  label: string
+  unavailableIcon: string
+}
+
+interface FormatConfig {
+  format: MinutesFormat
   label: string
   icon: string
 }
 
 const VERSION_CONFIGS: VersionConfig[] = [
-  { version: 'draft', label: 'Tải bản nháp', icon: 'draft' },
-  { version: 'confirmed', label: 'Tải bản xác nhận', icon: 'verified' },
-  { version: 'secretary', label: 'Tải bản thư ký', icon: 'edit_document' },
+  { version: 'draft', label: 'Bản nháp', unavailableIcon: 'draft' },
+  { version: 'confirmed', label: 'Bản xác nhận', unavailableIcon: 'verified' },
+  { version: 'secretary', label: 'Bản thư ký', unavailableIcon: 'edit_document' },
 ]
 
-// ─── Component ────────────────────────────────────────────────────────────────
+const FORMAT_CONFIGS: FormatConfig[] = [
+  { format: 'pdf', label: 'PDF', icon: 'picture_as_pdf' },
+  { format: 'docx', label: 'Word', icon: 'description' },
+]
 
-/**
- * MinutesDownloadButtons
- *
- * Renders three download buttons for draft, confirmed, and secretary versions.
- * Disabled buttons are shown for unavailable versions with a tooltip.
- *
- * Requirements: 25.6
- */
+function isVersionPdfAvailable(version: MinutesVersion, minutes: Minutes): boolean {
+  switch (version) {
+    case 'draft':
+      return minutes.draftAvailable ?? true
+    case 'confirmed':
+      return minutes.confirmedAvailable
+        ?? (minutes.status === 'HOST_CONFIRMED' || minutes.status === 'SECRETARY_CONFIRMED')
+    case 'secretary':
+      return minutes.secretaryAvailable ?? minutes.status === 'SECRETARY_CONFIRMED'
+    default:
+      return false
+  }
+}
+
+function isVersionDocxAvailable(version: MinutesVersion, minutes: Minutes): boolean {
+  switch (version) {
+    case 'draft':
+      return minutes.draftDocxAvailable ?? !!minutes.draftDocxPath
+    case 'confirmed':
+      return (minutes.status === 'HOST_CONFIRMED' || minutes.status === 'SECRETARY_CONFIRMED')
+        && (minutes.draftDocxAvailable ?? !!minutes.draftDocxPath)
+    case 'secretary':
+      return minutes.secretaryDocxAvailable ?? !!minutes.secretaryDocxPath
+    default:
+      return false
+  }
+}
+
+function isDownloadAvailable(
+  version: MinutesVersion,
+  format: MinutesFormat,
+  minutes: Minutes,
+): boolean {
+  return format === 'pdf'
+    ? isVersionPdfAvailable(version, minutes)
+    : isVersionDocxAvailable(version, minutes)
+}
+
 export default function MinutesDownloadButtons({
   meetingId,
-  status,
+  minutes,
 }: MinutesDownloadButtonsProps) {
-  // Track which version is currently downloading
-  const [downloading, setDownloading] = useState<MinutesVersion | null>(null)
+  const [downloading, setDownloading] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  const handleDownload = async (version: MinutesVersion) => {
+  const handleDownload = async (version: MinutesVersion, format: MinutesFormat) => {
     if (downloading) return
 
-    setDownloading(version)
+    setDownloading(`${version}-${format}`)
     setErrorMessage(null)
 
     try {
-      await downloadMinutesPdf(meetingId, version)
+      await downloadMinutesFile(meetingId, version, format)
     } catch (err) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
@@ -95,44 +100,47 @@ export default function MinutesDownloadButtons({
       aria-label="Tải biên bản cuộc họp"
     >
       <div className="flex flex-wrap gap-2">
-        {VERSION_CONFIGS.map(({ version, label, icon }) => {
-          const available = isVersionAvailable(version, status)
-          const isDownloadingThis = downloading === version
+        {VERSION_CONFIGS.flatMap(({ version, label, unavailableIcon }) =>
+          FORMAT_CONFIGS.map(({ format, label: formatLabel, icon }) => {
+            const available = isDownloadAvailable(version, format, minutes)
+            const downloadKey = `${version}-${format}`
+            const isDownloadingThis = downloading === downloadKey
+            const actionLabel = `${label} ${formatLabel}`
 
-          return (
-            <button
-              key={version}
-              onClick={() => handleDownload(version)}
-              disabled={!available || !!downloading}
-              title={available ? label : `${label} chưa có sẵn`}
-              className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg
-                text-label-md font-medium transition-colors
-                ${available
-                  ? 'bg-secondary-container text-on-secondary-container hover:bg-secondary-container/80'
-                  : 'bg-surface-variant text-on-surface-variant/50 cursor-not-allowed'
-                }
-                disabled:opacity-60`}
-              aria-label={available ? label : `${label} (chưa có sẵn)`}
-              aria-disabled={!available}
-              data-testid={`download-btn-${version}`}
-            >
-              {isDownloadingThis ? (
-                <div
-                  className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"
-                  aria-hidden="true"
-                />
-              ) : (
-                <span className="material-symbols-outlined text-[16px]" aria-hidden="true">
-                  {available ? 'download' : icon}
-                </span>
-              )}
-              {label}
-            </button>
-          )
-        })}
+            return (
+              <button
+                key={downloadKey}
+                onClick={() => handleDownload(version, format)}
+                disabled={!available || !!downloading}
+                title={available ? `Tải ${actionLabel}` : `${actionLabel} chưa có sẵn`}
+                className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg
+                  text-label-md font-medium transition-colors
+                  ${available
+                    ? 'bg-secondary-container text-on-secondary-container hover:bg-secondary-container/80'
+                    : 'bg-surface-variant text-on-surface-variant/50 cursor-not-allowed'
+                  }
+                  disabled:opacity-60`}
+                aria-label={available ? `Tải ${actionLabel}` : `${actionLabel} (chưa có sẵn)`}
+                aria-disabled={!available}
+                data-testid={`download-btn-${version}-${format}`}
+              >
+                {isDownloadingThis ? (
+                  <div
+                    className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <span className="material-symbols-outlined text-[16px]" aria-hidden="true">
+                    {available ? icon : unavailableIcon}
+                  </span>
+                )}
+                {actionLabel}
+              </button>
+            )
+          }),
+        )}
       </div>
 
-      {/* Error message */}
       {errorMessage && (
         <p
           className="text-body-sm text-error"

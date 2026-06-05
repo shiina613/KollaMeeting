@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -23,6 +24,10 @@ import java.io.IOException;
  * JWT authentication filter — runs once per request.
  * Extracts Bearer token, validates it, checks Redis blacklist,
  * and sets the SecurityContext if valid.
+ *
+ * Security policy: fail-closed — if Redis is unavailable, tokens are rejected
+ * to prevent revoked tokens from being accepted.
+ *
  * Requirements: 2.6, 19.7
  */
 @Slf4j
@@ -51,15 +56,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     Long userId = jwtUtils.getUserIdFromToken(token);
 
                     // Check per-user token invalidation (e.g. after role change or password reset)
-                    String userBlacklistKey = "jwt:blacklist:user:" + userId;
-                    String invalidatedAt = redisTemplate.opsForValue().get(userBlacklistKey);
-                    if (invalidatedAt != null) {
-                        long issuedAt = jwtUtils.getIssuedAtFromToken(token);
-                        if (issuedAt <= Long.parseLong(invalidatedAt)) {
-                            log.debug("Token for userId={} was issued before invalidation, rejecting", userId);
-                            filterChain.doFilter(request, response);
-                            return;
-                        }
+                    if (isUserTokenInvalidated(userId, token)) {
+                        log.debug("Token for userId={} was issued before invalidation, rejecting", userId);
+                        filterChain.doFilter(request, response);
+                        return;
                     }
 
                     User user = userRepository.findById(userId).orElse(null);
@@ -75,6 +75,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                 userId, user.getUsername(), user.getRole());
                     }
                 }
+            } catch (RedisConnectionFailureException e) {
+                // Fail-closed: reject authentication when Redis is unavailable
+                log.error("Redis unavailable during JWT authentication, rejecting token: {}", e.getMessage());
             } catch (Exception e) {
                 log.debug("Could not authenticate from JWT token: {}", e.getMessage());
             }
@@ -84,30 +87,49 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private String extractToken(HttpServletRequest request) {
-        // 1. Standard Authorization header (all API calls)
+        // Standard Authorization header (all API calls)
         String header = request.getHeader("Authorization");
         if (StringUtils.hasText(header) && header.startsWith(BEARER_PREFIX)) {
             return header.substring(BEARER_PREFIX.length());
         }
-        // 2. Query param fallback — used by PDF iframe src (browser cannot set headers on iframe)
-        //    Only accepted for the minutes/download endpoint to limit the attack surface.
-        String requestUri = request.getRequestURI();
-        if (requestUri != null && requestUri.contains("/minutes/download")) {
-            String tokenParam = request.getParameter("token");
-            if (StringUtils.hasText(tokenParam)) {
-                return tokenParam;
-            }
-        }
+        // NOTE: Query parameter token support has been removed for security reasons.
+        // Tokens in URLs are logged in access logs, browser history, and referrer headers.
+        // For PDF/file downloads, use a short-lived download token or POST-based approach instead.
         return null;
     }
 
+    /**
+     * Checks if a token is blacklisted in Redis.
+     * Fail-closed: if Redis is unavailable, treats the token as blacklisted
+     * to prevent revoked tokens from being accepted.
+     */
     private boolean isBlacklisted(String token) {
         try {
             Boolean exists = redisTemplate.hasKey(BLACKLIST_KEY_PREFIX + token);
             return Boolean.TRUE.equals(exists);
         } catch (Exception e) {
-            log.warn("Redis blacklist check failed, allowing token: {}", e.getMessage());
+            log.error("Redis blacklist check failed, rejecting token for safety: {}", e.getMessage());
+            return true; // Fail-closed: reject token when Redis is unavailable
+        }
+    }
+
+    /**
+     * Checks if a user's tokens have been invalidated (e.g. after role change or password reset).
+     * Fail-closed: if Redis is unavailable, assumes token is invalidated.
+     */
+    private boolean isUserTokenInvalidated(Long userId, String token) {
+        try {
+            String userBlacklistKey = "jwt:blacklist:user:" + userId;
+            String invalidatedAt = redisTemplate.opsForValue().get(userBlacklistKey);
+            if (invalidatedAt != null) {
+                long issuedAt = jwtUtils.getIssuedAtFromToken(token);
+                return issuedAt <= Long.parseLong(invalidatedAt);
+            }
             return false;
+        } catch (Exception e) {
+            log.error("Redis user-invalidation check failed for userId={}, rejecting token: {}",
+                    userId, e.getMessage());
+            return true; // Fail-closed: reject token when Redis is unavailable
         }
     }
 }
