@@ -20,5 +20,6 @@ public class AddMemberRequest {
     @NotNull(message = "User ID is required")
     private Long userId;
 
+    @Builder.Default
     private MeetingRole meetingRole = MeetingRole.MEMBER;
 }

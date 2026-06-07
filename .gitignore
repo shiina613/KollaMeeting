@@ -13,7 +13,6 @@ keys/*.pem
 
 # Submitted/reference documents kept local
 style.md
-# *.docx
 *.pk
 *.pub
 

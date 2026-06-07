@@ -17,6 +17,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class CreateDepartmentRequest {
 
+    @NotBlank(message = "Department code is required")
     @Size(max = 100, message = "Department code must not exceed 100 characters")
     private String departmentCode;
 

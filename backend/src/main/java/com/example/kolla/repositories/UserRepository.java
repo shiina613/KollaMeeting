@@ -30,27 +30,26 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByIdentification(String identification);
 
     /**
-     * Returns active users with the given role, ordered by full name.
-     * Used to populate host/secretary dropdowns in the meeting form.
+     * Returns users with the given role, ordered by full name.
+     * Used to populate meeting candidate dropdowns.
      */
-    List<User> findByRoleAndIsActiveTrueOrderByFullNameAsc(Role role);
+    List<User> findByRoleOrderByFullNameAsc(Role role);
 
     /**
-     * Returns all active users ordered by full name.
+     * Returns all users ordered by full name.
      * Used to populate the member picker panel.
      */
-    List<User> findByIsActiveTrueOrderByFullNameAsc();
+    List<User> findAllByOrderByFullNameAsc();
 
     /**
-     * Search active users by full name or username (case-insensitive, partial match).
+     * Search users by full name or username (case-insensitive, partial match).
      * Used to add members to a meeting. Accessible by any authenticated user.
      */
     @Query("""
             SELECT u FROM User u
-            WHERE u.isActive = true
-              AND (LOWER(u.fullName) LIKE LOWER(CONCAT('%', :q, '%'))
+            WHERE LOWER(u.fullName) LIKE LOWER(CONCAT('%', :q, '%'))
                 OR LOWER(u.username) LIKE LOWER(CONCAT('%', :q, '%'))
-                OR LOWER(u.employeeCode) LIKE LOWER(CONCAT('%', :q, '%')))
+                OR LOWER(u.employeeCode) LIKE LOWER(CONCAT('%', :q, '%'))
             ORDER BY u.fullName ASC
             """)
     List<User> searchByNameOrUsername(@Param("q") String query, org.springframework.data.domain.Pageable pageable);

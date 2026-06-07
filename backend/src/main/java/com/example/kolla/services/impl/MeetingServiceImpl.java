@@ -38,7 +38,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -70,6 +69,13 @@ public class MeetingServiceImpl implements MeetingService {
 
         String meetingTitle = resolveMeetingTitle(request.getTitle(), request.getName());
 
+        if (request.getRoomId() == null) {
+            throw new BadRequestException("Room ID is required");
+        }
+        if (request.getDepartmentId() == null) {
+            throw new BadRequestException("Department ID is required");
+        }
+
         // Validate host/chairperson: any active user may chair a meeting.
         User host = findUserOrThrow(request.getHostUserId());
         validateActiveUser(host, "Host");
@@ -84,32 +90,23 @@ public class MeetingServiceImpl implements MeetingService {
         validateActiveUser(secretary, "Secretary");
 
         // Resolve room and check scheduling conflicts (Requirement 3.12)
-        Room room = null;
-        if (request.getRoomId() != null) {
-            // Acquire pessimistic lock on the room to prevent race conditions
-            // between conflict check and meeting insert
-            room = entityManager.find(Room.class, request.getRoomId(), LockModeType.PESSIMISTIC_WRITE);
-            if (room == null) {
-                throw new ResourceNotFoundException(
-                        "Room not found with id: " + request.getRoomId());
-            }
-            checkSchedulingConflict(request.getRoomId(), request.getStartTime(),
-                    request.getEndTime(), null);
+        // Acquire pessimistic lock on the room to prevent race conditions
+        // between conflict check and meeting insert
+        Room room = entityManager.find(Room.class, request.getRoomId(), LockModeType.PESSIMISTIC_WRITE);
+        if (room == null) {
+            throw new ResourceNotFoundException(
+                    "Room not found with id: " + request.getRoomId());
         }
+        checkSchedulingConflict(request.getRoomId(), request.getStartTime(),
+                request.getEndTime(), null);
 
         Long departmentId = request.getDepartmentId();
-        if (departmentId == null && room != null && room.getDepartment() != null) {
-            departmentId = room.getDepartment().getId();
-        }
-        if (departmentId != null && !departmentRepository.existsById(departmentId)) {
+        if (!departmentRepository.existsById(departmentId)) {
             throw new ResourceNotFoundException("Department not found with id: " + departmentId);
         }
 
-        // Generate unique meeting code (Requirement 3.1)
-        String code = generateUniqueCode();
-
         Meeting meeting = Meeting.builder()
-                .code(code)
+                .code("MTG-PENDING")
                 .title(meetingTitle)
                 .description(request.getDescription())
                 .departmentId(departmentId)
@@ -127,6 +124,8 @@ public class MeetingServiceImpl implements MeetingService {
                 .build();
 
         Meeting saved = meetingRepository.save(meeting);
+        saved.setCode(formatMeetingCode(saved.getId()));
+        saved = meetingRepository.save(saved);
         log.info("Created meeting '{}' (code={}) by user '{}'",
                 saved.getTitle(), saved.getCode(), creator.getUsername());
 
@@ -163,13 +162,12 @@ public class MeetingServiceImpl implements MeetingService {
     @Transactional(readOnly = true)
     public Page<MeetingResponse> listMeetings(MeetingStatus status,
                                                Long roomId,
-                                               Long creatorId,
                                                LocalDateTime startFrom,
                                                LocalDateTime startTo,
                                                Pageable pageable,
                                                User requester) {
         Page<Meeting> page = meetingRepository
-                .findAllFiltered(status, roomId, creatorId, startFrom, startTo, pageable);
+                .findAllFiltered(status, roomId, startFrom, startTo, pageable);
 
         // Batch-load departments for all host/secretary users in this page
         Set<Long> deptIds = page.getContent().stream()
@@ -476,33 +474,11 @@ public class MeetingServiceImpl implements MeetingService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
     }
 
-    /**
-     * Generates a unique 20-character alphanumeric meeting code.
-     *
-     * 20 chars is long enough to avoid meet.jit.si's "members-only" policy
-     * that is triggered for short/guessable room names on the public instance.
-     *
-     * Uses a retry loop with DataIntegrityViolationException handling to
-     * guard against the (unlikely) race condition where two threads generate
-     * the same code between the existsByCode check and the INSERT.
-     * Requirements: 3.1
-     */
-    private String generateUniqueCode() {
-        int maxAttempts = 10;
-        for (int attempt = 0; attempt < maxAttempts; attempt++) {
-            // Two UUID segments joined = 32 hex chars; take first 20
-            String part1 = UUID.randomUUID().toString().replace("-", "");
-            String part2 = UUID.randomUUID().toString().replace("-", "");
-            String code = (part1 + part2).substring(0, 20).toUpperCase();
-            if (!meetingRepository.existsByCode(code)) {
-                return code;
-            }
-            log.debug("Meeting code collision on attempt {}, retrying...", attempt + 1);
+    private String formatMeetingCode(Long id) {
+        if (id == null) {
+            throw new BadRequestException("Meeting ID is required to generate meeting code");
         }
-        // Fallback: use full UUID (32 chars) which is virtually impossible to collide
-        String fallback = UUID.randomUUID().toString().replace("-", "").toUpperCase();
-        log.warn("Meeting code generation exhausted {} attempts, using fallback 32-char code", maxAttempts);
-        return fallback;
+        return "MTG-%06d".formatted(id);
     }
 
     private void addMemberIfAbsent(Meeting meeting, User user, MeetingRole role) {

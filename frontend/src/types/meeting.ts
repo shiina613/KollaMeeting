@@ -280,7 +280,7 @@ export interface CreateMeetingRequest {
   startTime: string
   endTime: string
   roomId: number
-  departmentId?: number
+  departmentId: number
   hostUserId: number
   secretaryUserId: number
   transcriptionPriority?: TranscriptionPriority

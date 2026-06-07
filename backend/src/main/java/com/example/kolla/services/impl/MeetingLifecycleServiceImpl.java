@@ -88,7 +88,7 @@ public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
         Meeting meeting = findMeetingOrThrow(meetingId);
 
         // Permission check: only Host or the Secretary *of this meeting* (TASK-001)
-        if (!isHostOrAdmin(meeting, requester) && !isSecretaryOfMeeting(meeting, requester)) {
+        if (!hasHostAuthority(meeting, requester) && !isSecretaryOfMeeting(meeting, requester)) {
             throw new ForbiddenException(
                     "Only the Host or Secretary of this meeting may activate it");
         }
@@ -273,8 +273,11 @@ public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
     @Scheduled(fixedDelay = 30_000)
     @Transactional
     public void processExpiredWaitingTimeouts() {
-        List<Meeting> expired = meetingRepository
-                .findMeetingsWithExpiredWaitingTimeout(LocalDateTime.now(clock));
+        LocalDateTime now = LocalDateTime.now(clock);
+        List<Meeting> expired = meetingRepository.findByStatus(MeetingStatus.ACTIVE).stream()
+                .filter(meeting -> meeting.getWaitingTimeoutAt() != null)
+                .filter(meeting -> !meeting.getWaitingTimeoutAt().isAfter(now))
+                .toList();
 
         for (Meeting meeting : expired) {
             try {
@@ -329,8 +332,7 @@ public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
      * Requirements: 3.10, 21.7
      */
     @Override
-    public boolean isHostOrAdmin(Meeting meeting, User user) {
-        // NOTE: ADMIN no longer bypasses this check (TASK-001)
+    public boolean hasHostAuthority(Meeting meeting, User user) {
         return meeting.getHost() != null
                 && meeting.getHost().getId().equals(user.getId());
     }

@@ -80,6 +80,7 @@ class WebSocketEventIntegrationTest {
                 .passwordHash("$2a$12$hashed")
                 .fullName("WS Admin")
                 .role(Role.ADMIN)
+                .departmentId(1L)
                 .isActive(true)
                 .build());
 
@@ -89,15 +90,18 @@ class WebSocketEventIntegrationTest {
                 .passwordHash("$2a$12$hashed")
                 .fullName("WS Secretary")
                 .role(Role.SECRETARY)
+                .departmentId(1L)
                 .isActive(true)
                 .build());
 
         Department dept = departmentRepository.save(Department.builder()
+                .departmentCode("DEPT-WS-" + System.nanoTime())
                 .name("WS Dept " + System.nanoTime())
                 .description("Test")
                 .build());
 
         Room room = roomRepository.save(Room.builder()
+                .roomCode("ROOM-WS-" + System.nanoTime())
                 .name("WS Room " + System.nanoTime())
                 .capacity(10)
                 .department(dept)
@@ -109,6 +113,7 @@ class WebSocketEventIntegrationTest {
                 .description("WebSocket integration test")
                 .startTime(LocalDateTime.now().plusHours(1))
                 .endTime(LocalDateTime.now().plusHours(2))
+                .departmentId(dept.getId())
                 .room(room)
                 .creator(admin)
                 .host(admin)

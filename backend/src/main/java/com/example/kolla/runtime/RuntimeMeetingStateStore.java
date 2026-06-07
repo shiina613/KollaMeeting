@@ -15,6 +15,7 @@ import com.example.kolla.models.SpeakingPermission;
 import com.example.kolla.models.StorageLog;
 import com.example.kolla.models.TranscriptionJob;
 import com.example.kolla.models.TranscriptionSegment;
+import com.example.kolla.models.User;
 import com.example.kolla.repositories.MeetingRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -237,6 +238,7 @@ public class RuntimeMeetingStateStore {
             attendanceLog.setId(attendanceIds.getAndIncrement());
         }
         attendanceById.put(attendanceLog.getId(), attendanceLog);
+        writeAttendanceState(attendanceLog);
         return attendanceLog;
     }
 
@@ -245,6 +247,7 @@ public class RuntimeMeetingStateStore {
     }
 
     public Optional<AttendanceLog> findOpenAttendanceLog(Long meetingId, Long userId) {
+        loadAttendanceForMeeting(meetingId);
         return attendanceById.values().stream()
                 .filter(log -> log.getMeeting() != null && meetingId.equals(log.getMeeting().getId()))
                 .filter(log -> log.getUser() != null && userId.equals(log.getUser().getId()))
@@ -253,6 +256,7 @@ public class RuntimeMeetingStateStore {
     }
 
     public List<AttendanceLog> findAttendanceByMeetingId(Long meetingId) {
+        loadAttendanceForMeeting(meetingId);
         return attendanceById.values().stream()
                 .filter(log -> log.getMeeting() != null && meetingId.equals(log.getMeeting().getId()))
                 .sorted(Comparator.comparing(AttendanceLog::getJoinTime, Comparator.nullsLast(Comparator.naturalOrder())))
@@ -417,6 +421,10 @@ public class RuntimeMeetingStateStore {
 
     private Path auditPath(Long meetingId) {
         return meetingPath(meetingId).resolve("audit");
+    }
+
+    private Path attendancePath(Long meetingId) {
+        return meetingPath(meetingId).resolve("attendance");
     }
 
     private Optional<Meeting> meeting(Long meetingId) {
@@ -728,6 +736,82 @@ public class RuntimeMeetingStateStore {
                     .forEach(this::loadRecordingsForMeeting);
         } catch (IOException e) {
             log.warn("Could not scan recordings: {}", e.getMessage());
+        }
+    }
+
+    private void writeAttendanceState(AttendanceLog attendanceLog) {
+        if (attendanceLog.getMeeting() == null || attendanceLog.getMeeting().getId() == null) {
+            return;
+        }
+        try {
+            Long meetingId = attendanceLog.getMeeting().getId();
+            Path path = attendanceStatePath(meetingId, attendanceLog.getId());
+            Files.createDirectories(path.getParent());
+            Properties p = new Properties();
+            set(p, "id", attendanceLog.getId());
+            set(p, "meetingId", meetingId);
+            set(p, "userId", attendanceLog.getUser() != null ? attendanceLog.getUser().getId() : null);
+            set(p, "username", attendanceLog.getUser() != null ? attendanceLog.getUser().getUsername() : null);
+            set(p, "fullName", attendanceLog.getUser() != null ? attendanceLog.getUser().getFullName() : null);
+            set(p, "joinTime", attendanceLog.getJoinTime());
+            set(p, "leaveTime", attendanceLog.getLeaveTime());
+            set(p, "durationSeconds", attendanceLog.getDurationSeconds());
+            set(p, "ipAddress", attendanceLog.getIpAddress());
+            set(p, "deviceInfo", attendanceLog.getDeviceInfo());
+            try (Writer writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
+                p.store(writer, "KollaMeeting attendance runtime state");
+            }
+        } catch (IOException e) {
+            log.warn("Could not persist attendance log {}: {}", attendanceLog.getId(), e.getMessage());
+        }
+    }
+
+    private Path attendanceStatePath(Long meetingId, Long attendanceId) {
+        return attendancePath(meetingId).resolve("attendance-" + attendanceId + ".properties");
+    }
+
+    private void loadAttendanceForMeeting(Long meetingId) {
+        Path dir = attendancePath(meetingId);
+        if (!Files.exists(dir)) {
+            return;
+        }
+        try (Stream<Path> paths = Files.list(dir)) {
+            paths.filter(path -> path.getFileName().toString().startsWith("attendance-"))
+                    .forEach(this::loadAttendancePath);
+        } catch (IOException e) {
+            log.warn("Could not scan attendance logs for meeting {}: {}", meetingId, e.getMessage());
+        }
+    }
+
+    private void loadAttendancePath(Path path) {
+        try {
+            Properties p = loadProperties(path);
+            Long meetingId = longProp(p, "meetingId");
+            Long id = longProp(p, "id");
+            if (meetingId == null || id == null || attendanceById.containsKey(id)) {
+                return;
+            }
+            meeting(meetingId).ifPresent(meeting -> {
+                User user = User.builder()
+                        .id(longProp(p, "userId"))
+                        .username(p.getProperty("username"))
+                        .fullName(p.getProperty("fullName"))
+                        .build();
+                AttendanceLog attendanceLog = AttendanceLog.builder()
+                        .id(id)
+                        .meeting(meeting)
+                        .user(user)
+                        .joinTime(dateTimeProp(p, "joinTime"))
+                        .leaveTime(dateTimeProp(p, "leaveTime"))
+                        .durationSeconds(longProp(p, "durationSeconds"))
+                        .ipAddress(p.getProperty("ipAddress"))
+                        .deviceInfo(p.getProperty("deviceInfo"))
+                        .build();
+                attendanceById.put(id, attendanceLog);
+                attendanceIds.accumulateAndGet(id + 1, Math::max);
+            });
+        } catch (IOException e) {
+            log.warn("Could not load attendance log {}: {}", path, e.getMessage());
         }
     }
 

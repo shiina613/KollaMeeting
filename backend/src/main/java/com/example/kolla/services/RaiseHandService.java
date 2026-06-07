@@ -41,7 +41,7 @@ public interface RaiseHandService {
 
     /**
      * Get all pending raise-hand requests for a meeting, in chronological order.
-     * Only the Host (or ADMIN) may view the full list.
+     * Only the Host may view the full list.
      *
      * @param meetingId the meeting ID
      * @param requester the requesting user (must be Host or ADMIN)

@@ -12,7 +12,7 @@ import java.time.LocalDate;
 
 /**
  * Request DTO for updating an existing user.
- * All fields are optional — only non-null fields are applied.
+ * All fields are optional Ã¢â‚¬â€ only non-null fields are applied.
  * Requirements: 11.1, 11.4, 11.6
  */
 @Data
@@ -35,7 +35,6 @@ public class UpdateUserRequest {
 
     private Long departmentId;
 
-    private Boolean isActive;
 
     private LocalDate dob;
 

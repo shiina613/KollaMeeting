@@ -208,10 +208,10 @@ public class MinutesServiceImpl implements MinutesService {
 
         Meeting meeting = findMeetingOrThrow(meetingId);
 
-        // Only the Host (or ADMIN) may confirm
-        if (!isHostOrAdmin(meeting, requester)) {
+        // Only the meeting host may confirm minutes.
+        if (!isHost(meeting, requester)) {
             throw new ForbiddenException(
-                    "Only the meeting Host or an ADMIN may confirm the minutes");
+                    "Only the meeting Host may confirm the minutes");
         }
 
         Minutes minutes = findMinutesOrThrow(meetingId);
@@ -781,10 +781,7 @@ public class MinutesServiceImpl implements MinutesService {
 
     // ── Access control helpers ────────────────────────────────────────────────
 
-    private boolean isHostOrAdmin(Meeting meeting, User user) {
-        if (user.getRole() == Role.ADMIN) {
-            return true;
-        }
+    private boolean isHost(Meeting meeting, User user) {
         return meeting.getHost() != null
                 && meeting.getHost().getId().equals(user.getId());
     }

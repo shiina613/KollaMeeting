@@ -8,9 +8,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
 
@@ -24,23 +21,22 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@EntityListeners(AuditingEntityListener.class)
 public class Meeting {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "MeetingCode", nullable = false, unique = true, length = 50)
+    @Column(name = "MeetingCode", nullable = false, length = 50)
     private String code;
 
     @Column(name = "Name", nullable = false, length = 500)
     private String title;
 
-    @Column(name = "description", columnDefinition = "TEXT")
+    @Transient
     private String description;
 
-    @Column(name = "DepartmentId")
+    @Column(name = "DepartmentId", nullable = false)
     private Long departmentId;
 
     @Column(name = "StartTime", nullable = false)
@@ -50,11 +46,10 @@ public class Meeting {
     private LocalDateTime endTime;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "Room_id")
+    @JoinColumn(name = "Room_id", nullable = false)
     private Room room;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "creator_id", nullable = false)
+    @Transient
     private User creator;
 
     @Enumerated(EnumType.STRING)
@@ -62,38 +57,32 @@ public class Meeting {
     @Builder.Default
     private MeetingStatus status = MeetingStatus.SCHEDULED;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "mode", nullable = false)
+    @Transient
     @Builder.Default
     private MeetingMode mode = MeetingMode.FREE_MODE;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "transcription_priority", nullable = false)
+    @Transient
     @Builder.Default
     private TranscriptionPriority transcriptionPriority = TranscriptionPriority.NORMAL_PRIORITY;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "host_user_id")
+    @Transient
     private User host;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "secretary_user_id")
+    @Transient
     private User secretary;
 
-    @Column(name = "activated_at")
+    @Transient
     private LocalDateTime activatedAt;
 
-    @Column(name = "ended_at")
+    @Transient
     private LocalDateTime endedAt;
 
-    @Column(name = "waiting_timeout_at")
+    @Transient
     private LocalDateTime waitingTimeoutAt;
 
-    @CreatedDate
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Transient
     private LocalDateTime createdAt;
 
-    @LastModifiedDate
-    @Column(name = "updated_at", nullable = false)
+    @Transient
     private LocalDateTime updatedAt;
 }

@@ -46,10 +46,11 @@ Ranh gioi schema: database vat ly chi co 7 bang DOCX. Du lieu van hanh nhu bien 
 
 | Luong | Endpoint/code | Dieu kien alignment |
 |---|---|---|
-| Tao meeting | `POST /api/v1/meetings` | Role `SECRETARY`; host la active user; secretary co role `SECRETARY`; tao `MeetingCode`; auto add host/secretary vao `member` voi `MeetingRole` |
+| Tao meeting | `POST /api/v1/meetings` | Role `SECRETARY`; bat buoc `Room_id` va `DepartmentId`; host la active user; secretary co role `SECRETARY`; tao `MeetingCode`; auto add host/secretary vao `member` voi `MeetingRole` |
 | Sua meeting | `PUT /api/v1/meetings/{id}` | Role `SECRETARY`; chi meeting `SCHEDULED`; check xung dot phong/thoi gian |
 | Xoa meeting | `DELETE /api/v1/meetings/{id}` | Role `SECRETARY`; chi meeting `SCHEDULED`; khong xoa meeting dang/da dien ra |
 | Tin nhan trao doi | `GET/POST /api/v1/meetings/{meetingId}/messages` | Luu DB `meeting_message`, broadcast STOMP `MEETING_MESSAGE_CREATED` |
+| Tai lieu meeting | `POST /api/v1/meetings/{meetingId}/documents` | Chi secretary duoc upload; file vat ly luu `storage/meetings/<meeting_id>/documents/`, cot `document.Content` luu relative path |
 | Meeting mode va ASR | STOMP mode events + `/ws/audio` | Chi nhan audio khi meeting o `MEETING_MODE`; audio la PCM 16kHz mono, tao WAV chunk va queue Redis |
 | Ket thuc meeting | `POST /api/v1/meetings/{id}/end` | Chuyen `ACTIVE -> ENDED`, tao transcript/minutes, ghi am tong hop |
 | Bien ban | `/meetings/{id}/minutes` va `/download?format=pdf/docx` | Tao draft DOCX/PDF; host confirm ky PDF; secretary publish DOCX/PDF |

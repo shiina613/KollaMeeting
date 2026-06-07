@@ -46,7 +46,6 @@ public interface MeetingRepository extends JpaRepository<Meeting, Long>, JpaSpec
             SELECT m FROM Meeting m
             WHERE (:status IS NULL OR m.status = :status)
               AND (:roomId IS NULL OR m.room.id = :roomId)
-              AND (:creatorId IS NULL OR m.creator.id = :creatorId)
               AND (:startFrom IS NULL OR m.startTime >= :startFrom)
               AND (:startTo IS NULL OR m.startTime <= :startTo)
             ORDER BY m.startTime DESC
@@ -54,7 +53,6 @@ public interface MeetingRepository extends JpaRepository<Meeting, Long>, JpaSpec
     Page<Meeting> findAllFiltered(
             @Param("status") MeetingStatus status,
             @Param("roomId") Long roomId,
-            @Param("creatorId") Long creatorId,
             @Param("startFrom") LocalDateTime startFrom,
             @Param("startTo") LocalDateTime startTo,
             Pageable pageable);
@@ -99,19 +97,6 @@ public interface MeetingRepository extends JpaRepository<Meeting, Long>, JpaSpec
             @Param("excludeId") Long excludeId);
 
     // ── Lifecycle queries ─────────────────────────────────────────────────────
-
-    /**
-     * Find all ACTIVE meetings where neither host nor secretary is currently connected.
-     * Used by the waiting timeout monitor.
-     * Requirements: 3.11
-     */
-    @Query("""
-            SELECT m FROM Meeting m
-            WHERE m.status = com.example.kolla.enums.MeetingStatus.ACTIVE
-              AND m.waitingTimeoutAt IS NOT NULL
-              AND m.waitingTimeoutAt <= :now
-            """)
-    List<Meeting> findMeetingsWithExpiredWaitingTimeout(@Param("now") LocalDateTime now);
 
     /**
      * Find meetings by status.

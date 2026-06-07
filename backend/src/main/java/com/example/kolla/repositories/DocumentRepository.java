@@ -8,10 +8,10 @@ import java.util.List;
 
 /**
  * Repository for Document entities.
- * Requirements: 9.1–9.7
+ * Requirements: 9.1â€“9.7
  */
 @Repository
 public interface DocumentRepository extends JpaRepository<Document, Long> {
 
-    List<Document> findByMeetingIdOrderByUploadedAtDesc(Long meetingId);
+    List<Document> findByMeetingIdOrderByIdDesc(Long meetingId);
 }

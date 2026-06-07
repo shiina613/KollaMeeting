@@ -82,7 +82,7 @@ public class MeetingModeServiceImpl implements MeetingModeService {
         Meeting meeting = findMeetingOrThrow(meetingId);
 
         // Permission check: Host only (TASK-001 — ADMIN and Secretary removed)
-        if (!meetingLifecycleService.isHostOrAdmin(meeting, requester)) {
+        if (!meetingLifecycleService.hasHostAuthority(meeting, requester)) {
             throw new ForbiddenException(
                     "Only the Host may switch meeting modes");
         }

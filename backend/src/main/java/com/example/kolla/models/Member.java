@@ -14,8 +14,7 @@ import java.time.LocalDateTime;
  * Requirements: 3.9
  */
 @Entity
-@Table(name = "member",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"Meeting_id", "User_id"}))
+@Table(name = "member")
 @Data
 @Builder
 @NoArgsConstructor
@@ -39,7 +38,7 @@ public class Member {
     @Builder.Default
     private MeetingRole meetingRole = MeetingRole.MEMBER;
 
-    @Column(name = "added_at", nullable = false)
+    @Transient
     @Builder.Default
     private LocalDateTime addedAt = LocalDateTime.now();
 }

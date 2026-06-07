@@ -36,9 +36,10 @@ public class CreateMeetingRequest {
     @NotNull(message = "End time is required")
     private LocalDateTime endTime;
 
-    /** Optional room ID. */
+    @NotNull(message = "Room ID is required")
     private Long roomId;
 
+    @NotNull(message = "Department ID is required")
     private Long departmentId;
 
     /**
@@ -60,5 +61,6 @@ public class CreateMeetingRequest {
      * NORMAL_PRIORITY: STT saved to DB only (used for minutes after meeting ends).
      * Defaults to NORMAL_PRIORITY if not specified.
      */
+    @Builder.Default
     private TranscriptionPriority transcriptionPriority = TranscriptionPriority.NORMAL_PRIORITY;
 }

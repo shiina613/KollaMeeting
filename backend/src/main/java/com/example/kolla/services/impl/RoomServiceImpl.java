@@ -5,10 +5,8 @@ import com.example.kolla.dto.UpdateRoomRequest;
 import com.example.kolla.enums.MeetingStatus;
 import com.example.kolla.exceptions.BadRequestException;
 import com.example.kolla.exceptions.ResourceNotFoundException;
-import com.example.kolla.models.Department;
 import com.example.kolla.models.Meeting;
 import com.example.kolla.models.Room;
-import com.example.kolla.repositories.DepartmentRepository;
 import com.example.kolla.repositories.RoomRepository;
 import com.example.kolla.responses.RoomAvailabilityResponse;
 import com.example.kolla.responses.RoomResponse;
@@ -31,7 +29,6 @@ import java.util.List;
 public class RoomServiceImpl implements RoomService {
 
     private final RoomRepository roomRepository;
-    private final DepartmentRepository departmentRepository;
 
     private static final List<MeetingStatus> ACTIVE_STATUSES =
             List.of(MeetingStatus.SCHEDULED, MeetingStatus.ACTIVE);
@@ -47,7 +44,7 @@ public class RoomServiceImpl implements RoomService {
     @Override
     @Transactional(readOnly = true)
     public List<RoomResponse> listRoomsByDepartment(Long departmentId) {
-        return roomRepository.findByDepartmentId(departmentId).stream()
+        return roomRepository.findAll().stream()
                 .map(RoomResponse::from)
                 .toList();
     }
@@ -61,7 +58,6 @@ public class RoomServiceImpl implements RoomService {
     @Override
     @Transactional
     public RoomResponse createRoom(CreateRoomRequest request) {
-        Department department = findDepartmentOrThrow(request.getDepartmentId());
         if (request.getRoomCode() != null && !request.getRoomCode().isBlank()
                 && roomRepository.existsByRoomCode(request.getRoomCode().trim())) {
             throw new BadRequestException("Room with code '" + request.getRoomCode() + "' already exists");
@@ -70,13 +66,10 @@ public class RoomServiceImpl implements RoomService {
         Room room = Room.builder()
                 .roomCode(blankToNull(request.getRoomCode()))
                 .name(resolveRoomName(request.getName(), request.getRoomName()))
-                .capacity(request.getCapacity())
-                .department(department)
                 .build();
 
         Room saved = roomRepository.save(room);
-        log.info("Created room '{}' (id={}) in department '{}'",
-                saved.getName(), saved.getId(), department.getName());
+        log.info("Created room '{}' (id={})", saved.getName(), saved.getId());
         return RoomResponse.from(saved);
     }
 
@@ -99,14 +92,6 @@ public class RoomServiceImpl implements RoomService {
         } else if (request.getRoomName() != null && !request.getRoomName().isBlank()) {
             room.setName(request.getRoomName());
         }
-        if (request.getCapacity() != null) {
-            room.setCapacity(request.getCapacity());
-        }
-        if (request.getDepartmentId() != null) {
-            Department department = findDepartmentOrThrow(request.getDepartmentId());
-            room.setDepartment(department);
-        }
-
         Room saved = roomRepository.save(room);
         log.info("Updated room '{}' (id={})", saved.getName(), saved.getId());
         return RoomResponse.from(saved);
@@ -173,11 +158,6 @@ public class RoomServiceImpl implements RoomService {
     private Room findRoomOrThrow(Long id) {
         return roomRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Room not found with id: " + id));
-    }
-
-    private Department findDepartmentOrThrow(Long id) {
-        return departmentRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Department not found with id: " + id));
     }
 
     private String resolveRoomName(String name, String roomName) {

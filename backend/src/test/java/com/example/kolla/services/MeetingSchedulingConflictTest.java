@@ -65,6 +65,7 @@ class MeetingSchedulingConflictTest {
                 .passwordHash("password")
                 .fullName("Admin User")
                 .role(Role.ADMIN)
+                .departmentId(1L)
                 .isActive(true)
                 .build());
 
@@ -74,16 +75,19 @@ class MeetingSchedulingConflictTest {
                 .passwordHash("password")
                 .fullName("Secretary User")
                 .role(Role.SECRETARY)
+                .departmentId(1L)
                 .isActive(true)
                 .build());
 
         // Create test department and room
         Department department = departmentRepository.save(Department.builder()
+                .departmentCode("DEPT-CONFLICT-" + System.nanoTime())
                 .name("Test Department")
                 .description("Test")
                 .build());
 
         room = roomRepository.save(Room.builder()
+                .roomCode("ROOM-CONFLICT-A-" + System.nanoTime())
                 .name("Conference Room A")
                 .capacity(10)
                 .department(department)
@@ -105,6 +109,7 @@ class MeetingSchedulingConflictTest {
                 .startTime(baseTime)
                 .endTime(baseTime.plusHours(1))
                 .roomId(room.getId())
+                .departmentId(room.getDepartment().getId())
                 .hostUserId(secretary.getId())
                 .secretaryUserId(secretary.getId())
                 .build();
@@ -127,6 +132,7 @@ class MeetingSchedulingConflictTest {
                 .startTime(baseTime.plusHours(1))
                 .endTime(baseTime.plusHours(3))
                 .roomId(room.getId())
+                .departmentId(room.getDepartment().getId())
                 .hostUserId(secretary.getId())
                 .secretaryUserId(secretary.getId())
                 .build();
@@ -148,6 +154,7 @@ class MeetingSchedulingConflictTest {
                 .startTime(baseTime.minusHours(1))
                 .endTime(baseTime.plusHours(1))
                 .roomId(room.getId())
+                .departmentId(room.getDepartment().getId())
                 .hostUserId(secretary.getId())
                 .secretaryUserId(secretary.getId())
                 .build();
@@ -169,6 +176,7 @@ class MeetingSchedulingConflictTest {
                 .startTime(baseTime.minusHours(1))
                 .endTime(baseTime.plusHours(2))
                 .roomId(room.getId())
+                .departmentId(room.getDepartment().getId())
                 .hostUserId(secretary.getId())
                 .secretaryUserId(secretary.getId())
                 .build();
@@ -190,6 +198,7 @@ class MeetingSchedulingConflictTest {
                 .startTime(baseTime.minusHours(2))
                 .endTime(baseTime.minusHours(1))
                 .roomId(room.getId())
+                .departmentId(room.getDepartment().getId())
                 .hostUserId(secretary.getId())
                 .secretaryUserId(secretary.getId())
                 .build();
@@ -213,6 +222,7 @@ class MeetingSchedulingConflictTest {
                 .startTime(baseTime.plusHours(2))
                 .endTime(baseTime.plusHours(3))
                 .roomId(room.getId())
+                .departmentId(room.getDepartment().getId())
                 .hostUserId(secretary.getId())
                 .secretaryUserId(secretary.getId())
                 .build();
@@ -231,6 +241,7 @@ class MeetingSchedulingConflictTest {
 
         // Create another room
         Room room2 = roomRepository.save(Room.builder()
+                .roomCode("ROOM-CONFLICT-B-" + System.nanoTime())
                 .name("Conference Room B")
                 .capacity(10)
                 .department(room.getDepartment())
@@ -243,6 +254,7 @@ class MeetingSchedulingConflictTest {
                 .startTime(baseTime)
                 .endTime(baseTime.plusHours(1))
                 .roomId(room2.getId())
+                .departmentId(room2.getDepartment().getId())
                 .hostUserId(secretary.getId())
                 .secretaryUserId(secretary.getId())
                 .build();
@@ -268,6 +280,7 @@ class MeetingSchedulingConflictTest {
                 .startTime(baseTime)
                 .endTime(baseTime.plusHours(1))
                 .roomId(room.getId())
+                .departmentId(room.getDepartment().getId())
                 .hostUserId(secretary.getId())
                 .secretaryUserId(secretary.getId())
                 .build();
@@ -300,6 +313,7 @@ class MeetingSchedulingConflictTest {
     void testUpdateMeeting_RoomChangeCreatesConflict() {
         // Given: meeting in room A and meeting in room B at same time
         Room room2 = roomRepository.save(Room.builder()
+                .roomCode("ROOM-CONFLICT-C-" + System.nanoTime())
                 .name("Conference Room B")
                 .capacity(10)
                 .department(room.getDepartment())
@@ -311,6 +325,7 @@ class MeetingSchedulingConflictTest {
         // When/Then: attempt to move meetingInRoomB to room A (conflict)
         UpdateMeetingRequest request = UpdateMeetingRequest.builder()
                 .roomId(room.getId())
+                .departmentId(room.getDepartment().getId())
                 .build();
 
         assertThatThrownBy(() -> meetingService.updateMeeting(meetingInRoomB.getId(), request, secretary))
@@ -366,6 +381,7 @@ class MeetingSchedulingConflictTest {
                 .startTime(baseTime)
                 .endTime(baseTime.plusHours(1))
                 .roomId(room.getId())
+                .departmentId(room.getDepartment().getId())
                 .hostUserId(secretary.getId())
                 .secretaryUserId(secretary.getId())
                 .build();
@@ -392,6 +408,7 @@ class MeetingSchedulingConflictTest {
                 .description("Test")
                 .startTime(start)
                 .endTime(end)
+                .departmentId(targetRoom.getDepartment().getId())
                 .room(targetRoom)
                 .creator(admin)
                 .host(secretary)

@@ -58,11 +58,11 @@ public class MeetingModeController {
     /**
      * POST /api/v1/meetings/{id}/mode
      * Switch meeting mode between FREE_MODE and MEETING_MODE.
-     * Only the Host (or ADMIN) may switch modes.
+     * Only the Host may switch modes.
      * Requirements: 21.1–21.10
      */
     @PostMapping("/{id}/mode")
-    @Operation(summary = "Switch meeting mode (Host/ADMIN only)",
+    @Operation(summary = "Switch meeting mode (Host only)",
             description = "Switch between FREE_MODE and MEETING_MODE. "
                     + "Switching to FREE_MODE finalizes any active audio chunk, "
                     + "revokes speaking permission, and expires raise-hand requests "
@@ -157,11 +157,11 @@ public class MeetingModeController {
     /**
      * GET /api/v1/meetings/{id}/raise-hand
      * Get all pending raise-hand requests in chronological order.
-     * Only the Host (or ADMIN) may view the queue.
+     * Only the Host may view the queue.
      * Requirements: 22.9
      */
     @GetMapping("/{id}/raise-hand")
-    @Operation(summary = "List pending raise-hand requests (Host/ADMIN only)",
+    @Operation(summary = "List pending raise-hand requests (Host only)",
             description = "Returns all pending raise-hand requests in chronological order.")
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "List of pending requests"),
@@ -187,7 +187,7 @@ public class MeetingModeController {
      * Requirements: 22.4, 22.5, 22.8
      */
     @PostMapping("/{id}/speaking-permission/{userId}")
-    @Operation(summary = "Grant speaking permission (Host/ADMIN only)",
+    @Operation(summary = "Grant speaking permission (Host only)",
             description = "Grant speaking permission to a participant. "
                     + "Any existing permission is revoked first. "
                     + "Uses SELECT FOR UPDATE to prevent concurrent grants.")
@@ -214,7 +214,7 @@ public class MeetingModeController {
      * Requirements: 22.6
      */
     @DeleteMapping("/{id}/speaking-permission")
-    @Operation(summary = "Revoke speaking permission (Host/ADMIN only)",
+    @Operation(summary = "Revoke speaking permission (Host only)",
             description = "Revoke the current speaking permission. "
                     + "Broadcasts SPEAKING_PERMISSION_REVOKED to all participants.")
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
