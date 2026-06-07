@@ -7,7 +7,12 @@
 import api from './api'
 import useAuthStore from '../store/authStore'
 import type { ApiResponse } from '../types/api'
-import type { Minutes, MinutesFormat, MinutesVersion } from '../types/minutes'
+import type {
+  Minutes,
+  MinutesConfirmationResponse,
+  MinutesFormat,
+  MinutesVersion,
+} from '../types/minutes'
 
 // ─── Get minutes info ─────────────────────────────────────────────────────────
 
@@ -24,12 +29,14 @@ export async function getMinutes(meetingId: number): Promise<ApiResponse<Minutes
 // ─── Host confirm ─────────────────────────────────────────────────────────────
 
 /**
- * Host confirms the draft minutes with a digital stamp.
+ * Host confirms the draft minutes with a digital signature.
  * POST /api/v1/meetings/{id}/minutes/confirm
  * Requirements: 25.4
  */
-export async function confirmMinutes(meetingId: number): Promise<ApiResponse<Minutes>> {
-  const response = await api.post<ApiResponse<Minutes>>(
+export async function confirmMinutes(
+  meetingId: number,
+): Promise<ApiResponse<MinutesConfirmationResponse>> {
+  const response = await api.post<ApiResponse<MinutesConfirmationResponse>>(
     `/meetings/${meetingId}/minutes/confirm`,
   )
   return response.data

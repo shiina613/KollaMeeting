@@ -1,78 +1,49 @@
 package com.example.kolla.repositories;
 
 import com.example.kolla.models.ParticipantSession;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
-
+import com.example.kolla.runtime.RuntimeMeetingStateStore;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 
-/**
- * Spring Data JPA repository for {@link ParticipantSession} entities.
- * Requirements: 5.3–5.5
- */
-@Repository
-public interface ParticipantSessionRepository extends JpaRepository<ParticipantSession, Long> {
+@Component
+@RequiredArgsConstructor
+public class ParticipantSessionRepository {
+    private final RuntimeMeetingStateStore store;
 
-    /**
-     * Find the active session for a user in a meeting.
-     */
-    @Query("""
-            SELECT ps FROM ParticipantSession ps
-            WHERE ps.meeting.id = :meetingId
-              AND ps.user.id = :userId
-              AND ps.isConnected = true
-            ORDER BY ps.joinedAt DESC
-            """)
-    Optional<ParticipantSession> findActiveSession(@Param("meetingId") Long meetingId,
-                                                    @Param("userId") Long userId);
+    public ParticipantSession save(ParticipantSession session) {
+        return store.saveSession(session);
+    }
 
-    /**
-     * Find a session by its WebSocket session ID.
-     */
-    Optional<ParticipantSession> findBySessionId(String sessionId);
+    public Optional<ParticipantSession> findActiveSession(Long meetingId, Long userId) {
+        return store.findActiveSession(meetingId, userId);
+    }
 
-    /**
-     * Find all connected sessions for a meeting.
-     */
-    List<ParticipantSession> findByMeetingIdAndIsConnectedTrue(Long meetingId);
+    public Optional<ParticipantSession> findBySessionId(String sessionId) {
+        return store.findSessionBySessionId(sessionId);
+    }
 
-    /**
-     * Find sessions whose last heartbeat is older than the given threshold
-     * and are still marked as connected — these are stale/disconnected sessions.
-     * Requirements: 5.3
-     */
-    @Query("""
-            SELECT ps FROM ParticipantSession ps
-            WHERE ps.isConnected = true
-              AND ps.lastHeartbeatAt < :threshold
-            """)
-    List<ParticipantSession> findStaleConnectedSessions(@Param("threshold") LocalDateTime threshold);
+    public List<ParticipantSession> findByMeetingIdAndIsConnectedTrue(Long meetingId) {
+        return store.findStaleConnectedSessions(LocalDateTime.MAX).stream()
+                .filter(session -> session.getMeeting() != null
+                        && meetingId.equals(session.getMeeting().getId()))
+                .toList();
+    }
 
-    /**
-     * Check whether a specific user is currently connected to a meeting.
-     */
-    @Query("""
-            SELECT COUNT(ps) > 0 FROM ParticipantSession ps
-            WHERE ps.meeting.id = :meetingId
-              AND ps.user.id = :userId
-              AND ps.isConnected = true
-            """)
-    boolean isUserConnected(@Param("meetingId") Long meetingId, @Param("userId") Long userId);
+    public List<ParticipantSession> findStaleConnectedSessions(LocalDateTime threshold) {
+        return store.findStaleConnectedSessions(threshold);
+    }
 
-    /**
-     * Mark all sessions for a meeting as disconnected (used when meeting ends).
-     */
-    @Modifying
-    @Query("""
-            UPDATE ParticipantSession ps
-            SET ps.isConnected = false
-            WHERE ps.meeting.id = :meetingId
-              AND ps.isConnected = true
-            """)
-    void disconnectAllInMeeting(@Param("meetingId") Long meetingId);
+    public boolean isUserConnected(Long meetingId, Long userId) {
+        return store.isUserConnected(meetingId, userId);
+    }
+
+    public void disconnectAllInMeeting(Long meetingId) {
+        findByMeetingIdAndIsConnectedTrue(meetingId).forEach(session -> {
+            session.setConnected(false);
+            store.saveSession(session);
+        });
+    }
 }

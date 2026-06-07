@@ -43,7 +43,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Binary WebSocket handler that receives raw PCM audio frames from the frontend,
  * accumulates them into a per-session buffer, converts to WAV 16 kHz mono, saves
- * to {@code /app/storage/audio_chunks/{meetingId}/{speakerTurnId}/}, and creates
+ * to {@code /app/storage/meetings/{meetingId}/transcript/audio_chunks/{speakerTurnId}/}, and creates
  * a {@link TranscriptionJob} record.
  *
  * <h3>Protocol</h3>
@@ -405,10 +405,12 @@ public class AudioStreamHandler extends AbstractWebSocketHandler {
     private String saveWavFile(byte[] pcmData, SessionMeta meta, int seqNum, String jobId)
             throws IOException {
 
-        // Build directory: /app/storage/audio_chunks/{meetingId}/{speakerTurnId}/
+        // Build directory: /app/storage/meetings/{meetingId}/transcript/audio_chunks/{speakerTurnId}/
         Path dir = Paths.get(storageProperties.getBasePath())
-                .resolve(storageProperties.getAudioChunksDir())
+                .resolve("meetings")
                 .resolve(String.valueOf(meta.meetingId))
+                .resolve("transcript")
+                .resolve("audio_chunks")
                 .resolve(meta.speakerTurnId);
         Files.createDirectories(dir);
 

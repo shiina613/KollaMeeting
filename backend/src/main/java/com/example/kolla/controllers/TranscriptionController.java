@@ -34,7 +34,7 @@ import java.util.List;
  *
  * <h3>Callback authentication</h3>
  * The callback endpoint is secured with an internal API key passed in the
- * {@code X-Callback-Api-Key} header. This prevents external callers from
+ * {@code X-Internal-Api-Key} header. This prevents external callers from
  * injecting fake transcription results.
  *
  * Requirements: 8.12, 8.13
@@ -73,12 +73,12 @@ public class TranscriptionController {
     @Operation(
             summary = "Receive transcription result from ASR service (internal)",
             description = "Called by ASR service after completing inference on an audio chunk. "
-                    + "Requires X-Callback-Api-Key header. "
+                    + "Requires X-Internal-Api-Key header. "
                     + "Idempotent: duplicate calls for the same jobId return 200 without side effects.")
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Transcription segment processed"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid request body"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Invalid or missing X-Callback-Api-Key")
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Invalid or missing X-Internal-Api-Key")
     })
     public ResponseEntity<ApiResponse<TranscriptionSegmentResponse>> receiveCallback(
             @RequestHeader(value = "X-Internal-Api-Key", required = false) String apiKey,

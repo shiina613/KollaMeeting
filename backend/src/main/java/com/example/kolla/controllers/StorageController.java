@@ -49,7 +49,7 @@ public class StorageController {
 
     /**
      * POST /api/v1/storage/bulk-delete
-     * Bulk delete recordings and/or documents. Logs the operation to storage_log.
+     * Bulk delete recordings and/or documents. Logs the operation to file-based audit state.
      * Requirements: 6.7
      */
     @PostMapping("/bulk-delete")

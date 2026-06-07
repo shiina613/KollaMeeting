@@ -18,9 +18,9 @@ class DocxMinutesRendererTest {
     @Test
     void renderLines_createsValidDocxPackageWithEscapedVietnameseText() throws Exception {
         byte[] docx = DocxMinutesRenderer.renderLines(List.of(
-                "MEETING MINUTES - DRAFT",
+                "BIÊN BẢN CUỘC HỌP - BẢN NHÁP",
                 "",
-                "Meeting: Họp nghiệm thu",
+                "Cuộc họp: Họp nghiệm thu",
                 "[Nguyễn Văn A]",
                 "Nội dung <quan trọng> & đúng dấu tiếng Việt"
         ));

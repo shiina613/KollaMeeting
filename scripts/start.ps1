@@ -48,7 +48,7 @@ function Check-DockerRunning {
         $launched = $false
         foreach ($path in $dockerDesktopPaths) {
             if (Test-Path $path) {
-                Start-Process -FilePath $path
+                Start-Process -FilePath $path -WindowStyle Hidden
                 $launched = $true
                 Write-Host "    Docker Desktop dang khoi dong tu: $path"
                 break
@@ -85,6 +85,93 @@ function Wait-DockerDaemon {
 
     Write-Host "[ERROR] Docker daemon khong san sang sau 60s. Hay kiem tra Docker Desktop."
     exit 1
+}
+
+# =============================================================================
+# Ensure-EnvFile - Tao/cap nhat .env va secret demo can thiet
+# =============================================================================
+function New-RandomBase64 {
+    param([Parameter(Mandatory = $true)][int]$ByteCount)
+    $bytes = New-Object byte[] $ByteCount
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $rng.GetBytes($bytes)
+    } finally {
+        $rng.Dispose()
+    }
+    return [Convert]::ToBase64String($bytes)
+}
+
+function New-RandomHex {
+    param([Parameter(Mandatory = $true)][int]$ByteCount)
+    $bytes = New-Object byte[] $ByteCount
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $rng.GetBytes($bytes)
+    } finally {
+        $rng.Dispose()
+    }
+    return ([BitConverter]::ToString($bytes) -replace '-', '').ToLowerInvariant()
+}
+
+function Get-EnvValue {
+    param([Parameter(Mandatory = $true)][string]$Key)
+    if (-not (Test-Path ".env")) { return $null }
+    $content = [System.IO.File]::ReadAllText((Resolve-Path ".env").Path, [System.Text.UTF8Encoding]::new($false))
+    $match = [regex]::Match($content, "(?m)^$([regex]::Escape($Key))=(.*)$")
+    if ($match.Success) { return $match.Groups[1].Value.Trim() }
+    return $null
+}
+
+function Set-EnvValue {
+    param(
+        [Parameter(Mandatory = $true)][string]$Key,
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Value
+    )
+    $envPath = (Resolve-Path ".env").Path
+    $content = [System.IO.File]::ReadAllText($envPath, [System.Text.UTF8Encoding]::new($false))
+    $line = "$Key=$Value"
+    if ($content -match "(?m)^$([regex]::Escape($Key))=") {
+        $content = $content -replace "(?m)^$([regex]::Escape($Key))=.*", $line
+    } else {
+        $content = $content.TrimEnd() + [Environment]::NewLine + $line + [Environment]::NewLine
+    }
+    [System.IO.File]::WriteAllText($envPath, $content, [System.Text.UTF8Encoding]::new($false))
+}
+
+function Ensure-EnvFile {
+    if (-not (Test-Path ".env")) {
+        Write-Host "[*] .env chua co, tao tu .env.example..."
+        Copy-Item ".env.example" ".env"
+        Write-Host "[OK] Da tao .env."
+    }
+
+    $defaultJwt = "Y2hhbmdlbWUtc3VwZXItc2VjcmV0LWtleS1hdC1sZWFzdC0zMi1jaGFycw=="
+    $jwtSecret = Get-EnvValue -Key "JWT_SECRET"
+    if ([string]::IsNullOrWhiteSpace($jwtSecret) -or $jwtSecret -eq $defaultJwt) {
+        Set-EnvValue -Key "JWT_SECRET" -Value (New-RandomBase64 -ByteCount 32)
+        Write-Host "[OK] JWT_SECRET da duoc sinh tu dong."
+    }
+
+    $callbackKey = Get-EnvValue -Key "ASR_CALLBACK_API_KEY"
+    if ([string]::IsNullOrWhiteSpace($callbackKey) -or $callbackKey -eq "internal-callback-key-change-me") {
+        Set-EnvValue -Key "ASR_CALLBACK_API_KEY" -Value (New-RandomHex -ByteCount 24)
+        Write-Host "[OK] ASR_CALLBACK_API_KEY da duoc sinh tu dong."
+    }
+
+    Set-EnvValue -Key "DIGITAL_SIGNATURE_ENABLED" -Value "true"
+    Set-EnvValue -Key "DIGITAL_SIGNATURE_KEYSTORE_PATH" -Value "/app/keys/signing.p12"
+    Set-EnvValue -Key "DIGITAL_SIGNATURE_KEYSTORE_PASSWORD" -Value "kolla-signing-dev"
+    Set-EnvValue -Key "DIGITAL_SIGNATURE_KEYSTORE_TYPE" -Value "PKCS12"
+
+    if (-not (Test-Path "keys\signing.p12")) {
+        Write-Host "[*] Tao keystore ky so demo..."
+        & ".\scripts\generate-signing-keystore.ps1"
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "[ERROR] Khong the tao keys\signing.p12."
+            exit 1
+        }
+    }
 }
 
 # =============================================================================
@@ -158,7 +245,7 @@ function Update-EnvFile {
 
     $envFile = ".env"
     if (-not (Test-Path $envFile)) {
-        Write-Host "[ERROR] .env khong tim thay. Chay: Copy-Item .env.example .env"
+        Write-Host "[ERROR] .env khong tim thay sau buoc tao tu dong."
         exit 1
     }
 
@@ -252,6 +339,7 @@ function Print-Success {
 function Main {
     Check-DockerRunning
     Wait-DockerDaemon
+    Ensure-EnvFile
     Start-Services
 
     $tunnelUrl = Get-TunnelUrl

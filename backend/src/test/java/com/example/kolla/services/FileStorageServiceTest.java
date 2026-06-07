@@ -192,14 +192,14 @@ class FileStorageServiceTest {
     class StoreFile {
 
         @Test
-        @DisplayName("Stores file and returns relative path under type/meetingId/")
+        @DisplayName("Stores file and returns relative path under meetings/meetingId/type/")
         void storeFile_returnsRelativePath() throws IOException {
             MockMultipartFile file = new MockMultipartFile(
                     "file", "report.pdf", "application/pdf", "PDF content".getBytes());
 
             Path relative = service.storeFile(file, FileType.DOCUMENT, 42L, "doc");
 
-            assertThat(relative.toString()).startsWith("documents" + FileSystems.getDefault().getSeparator() + "42");
+            assertThat(relative.toString()).startsWith(Path.of("meetings", "42", "documents").toString());
             assertThat(tempDir.resolve(relative)).exists();
         }
 
@@ -236,7 +236,7 @@ class FileStorageServiceTest {
 
             Path relative = service.storeFile(file, FileType.RECORDING, 99L, "rec");
 
-            Path dir = tempDir.resolve("recordings").resolve("99");
+            Path dir = tempDir.resolve(Path.of("meetings", "99", "recordings"));
             assertThat(dir).isDirectory();
         }
 
@@ -300,7 +300,7 @@ class FileStorageServiceTest {
             service.storeBytes("first version".getBytes(), FileType.MINUTES, 1L, "draft.pdf");
             service.storeBytes("second version".getBytes(), FileType.MINUTES, 1L, "draft.pdf");
 
-            Path relative = Path.of("minutes", "1", "draft.pdf");
+            Path relative = Path.of("meetings", "1", "minutes", "draft.pdf");
             byte[] stored = Files.readAllBytes(tempDir.resolve(relative));
 
             assertThat(new String(stored)).isEqualTo("second version");
@@ -613,7 +613,7 @@ class FileStorageServiceTest {
             executor.awaitTermination(30, TimeUnit.SECONDS);
 
             // File must exist
-            Path target = tempDir.resolve("minutes").resolve("1").resolve("overwrite_target.pdf");
+            Path target = tempDir.resolve(Path.of("meetings", "1", "minutes", "overwrite_target.pdf"));
             assertThat(target).exists();
 
             // File size must be exactly 0 (all writes failed) or exactly 256 (a write succeeded)

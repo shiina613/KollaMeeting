@@ -21,9 +21,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Implementation of {@link StorageManagementService}.
@@ -79,6 +81,7 @@ public class StorageManagementServiceImpl implements StorageManagementService {
 
         int deletedRecordings = 0;
         long totalSizeBytes = 0L;
+        Set<Long> affectedMeetingIds = new LinkedHashSet<>();
 
         // Process recordings
         for (Long id : recordingIds) {
@@ -89,6 +92,9 @@ public class StorageManagementServiceImpl implements StorageManagementService {
             }
             Recording recording = opt.get();
             long size = recording.getFileSize() != null ? recording.getFileSize() : 0L;
+            if (recording.getMeeting() != null && recording.getMeeting().getId() != null) {
+                affectedMeetingIds.add(recording.getMeeting().getId());
+            }
 
             log.debug("Deleting recording ID={} path={} size={} bytes", id, recording.getFilePath(), size);
             fileStorageService.deleteFile(recording.getFilePath());
@@ -109,6 +115,9 @@ public class StorageManagementServiceImpl implements StorageManagementService {
             }
             Document document = opt.get();
             long size = document.getFileSize() != null ? document.getFileSize() : 0L;
+            if (document.getMeeting() != null && document.getMeeting().getId() != null) {
+                affectedMeetingIds.add(document.getMeeting().getId());
+            }
 
             log.debug("Deleting document ID={} path={} size={} bytes", id, document.getFilePath(), size);
             fileStorageService.deleteFile(document.getFilePath());
@@ -124,6 +133,7 @@ public class StorageManagementServiceImpl implements StorageManagementService {
         StorageLog storageLog = StorageLog.builder()
                 .adminUser(adminUser)
                 .operation(StorageOperationType.BULK_DELETE)
+                .meetingIds(List.copyOf(affectedMeetingIds))
                 .fileCount(totalDeleted)
                 .totalSizeBytes(totalSizeBytes)
                 .description(request.getDescription())

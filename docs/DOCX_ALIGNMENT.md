@@ -38,9 +38,9 @@ Bang/cot chinh da duoc can theo ten trong DOCX. Java entity van giu field idioma
 | `meeting` | `Id`, `MeetingCode`, `DepartmentId`, `Room_id`, `Name`, `StartTime`, `Endtime`, `Status` | `Meeting.java`, `V1__initial_schema.sql` |
 | `member` | `Id`, `User_id`, `Meeting_id`, `MeetingRole` | `Member.java`, `V1__initial_schema.sql` |
 | `document` | `Id`, `Meeting_id`, `User_id`, `Name`, `Content` | `Document.java`, `V1__initial_schema.sql` |
-| `meeting_message` | `Id`, `Member_id`, `Content`, `CreateTime` | `MeetingMessage.java`, `V7__align_thesis_schema.sql` |
+| `meeting_message` | `Id`, `Member_id`, `Content`, `CreateTime` | `MeetingMessage.java`, `V1__initial_schema.sql` |
 
-Mo rong khong mau thuan DOCX: cac bang/cot runtime nhu `minutes`, `recording`, `transcription_job`, `participant_session`, `host_user_id`, `secretary_user_id`, `mode`, `transcription_priority` la chi tiet trien khai de van hanh nghiep vu Word, khong thay the cac bang/cot Word.
+Ranh gioi schema: database vat ly chi co 7 bang DOCX. Du lieu van hanh nhu bien ban, ghi am, transcript, notification runtime va audit log duoc luu ngoai database trong `storage/meetings/<meeting_id>/...`, Redis hoac in-memory state.
 
 ## Luong nghiep vu chinh
 
@@ -80,6 +80,6 @@ Codebase chi duoc coi la can xong khi:
 
 - Schema/API/UI/README/script khong ke cau chuyen khac DOCX 3.8.
 - Cac mo rong duoc giai thich la chi tiet trien khai, khong phu dinh Word.
-- Khong track DOCX goc, model weights, WAV demo, Playwright report, secrets.
+- Khong track DOCX goc, model weights, WAV demo, Playwright report, `.env`, private keys va runtime storage.
 - Backend/frontend tests va build pass.
 - `git status --short` sach sau commit.

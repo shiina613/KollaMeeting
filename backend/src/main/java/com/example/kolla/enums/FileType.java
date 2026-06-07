@@ -13,8 +13,8 @@ public enum FileType {
     /** Documents uploaded by participants. Sub-dir: documents */
     DOCUMENT("documents"),
 
-    /** Raw audio chunks used for transcription. Sub-dir: audio_chunks */
-    AUDIO_CHUNK("audio_chunks"),
+    /** Raw audio chunks used for transcription. Sub-dir: transcript/audio_chunks */
+    AUDIO_CHUNK("transcript/audio_chunks"),
 
     /** Generated meeting minutes (PDF/DOCX). Sub-dir: minutes */
     MINUTES("minutes");

@@ -3,6 +3,7 @@ import MockAdapter from 'axios-mock-adapter'
 import api from '../api'
 import useAuthStore from '../../store/authStore'
 import {
+  confirmMinutes,
   downloadMinutesFile,
   getMinutesDownloadFilename,
   getMinutesDownloadUrl,
@@ -40,6 +41,39 @@ afterEach(() => {
 })
 
 describe('minutesService downloads', () => {
+  it('returns the signed PDF payload after Host confirmation', async () => {
+    mockAxios.onPost('/meetings/42/minutes/confirm').reply(200, {
+      success: true,
+      message: 'Minutes confirmed successfully',
+      data: {
+        minutes: {
+          id: 7,
+          meetingId: 42,
+          status: 'HOST_CONFIRMED',
+          draftAvailable: true,
+          confirmedAvailable: true,
+          secretaryAvailable: false,
+          draftDocxAvailable: true,
+          secretaryDocxAvailable: false,
+          createdAt: '2026-06-05T09:00:00',
+          updatedAt: '2026-06-05T09:05:00',
+        },
+        signedPdfFileName: 'bien-ban-xac-nhan-42.pdf',
+        signedPdfContentType: 'application/pdf',
+        signedPdfBase64: 'JVBERi0=',
+        signedPdfSha256: 'a'.repeat(64),
+      },
+    })
+
+    const response = await confirmMinutes(42)
+
+    expect(response.data.minutes.status).toBe('HOST_CONFIRMED')
+    expect(response.data.signedPdfFileName).toBe('bien-ban-xac-nhan-42.pdf')
+    expect(response.data.signedPdfContentType).toBe('application/pdf')
+    expect(response.data.signedPdfBase64).toBe('JVBERi0=')
+    expect(response.data.signedPdfSha256).toHaveLength(64)
+  })
+
   it('builds authenticated inline PDF URLs with an explicit format', () => {
     useAuthStore.getState().login(mockToken, mockUser)
 

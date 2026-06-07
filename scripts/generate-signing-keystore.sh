@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Creates secrets/signing.p12 for local PDF digital signature testing.
+# Creates keys/signing.p12 for local PDF digital signature testing.
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SECRETS_DIR="$REPO_ROOT/secrets"
-P12="$SECRETS_DIR/signing.p12"
+KEYS_DIR="$REPO_ROOT/keys"
+P12="$KEYS_DIR/signing.p12"
 PASSWORD="kolla-signing-dev"
 
-mkdir -p "$SECRETS_DIR"
+mkdir -p "$KEYS_DIR"
 if [[ -f "$P12" ]]; then
   echo "Keystore already exists: $P12"
   exit 0
@@ -28,4 +28,5 @@ keytool -genkeypair \
 
 echo "Created $P12"
 echo "DIGITAL_SIGNATURE_ENABLED=true"
+echo "DIGITAL_SIGNATURE_KEYSTORE_PATH=/app/keys/signing.p12"
 echo "DIGITAL_SIGNATURE_KEYSTORE_PASSWORD=$PASSWORD"

@@ -1,7 +1,7 @@
 # Signs a minimal PDF with the dev keystore and verifies PKCS#7 bytes exist.
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$keystore = Join-Path $repoRoot "secrets\signing.p12"
+$keystore = Join-Path $repoRoot "keys\signing.p12"
 $password = "kolla-signing-dev"
 $outDir = Join-Path $repoRoot "target\signature-verify"
 $signedPdf = Join-Path $outDir "signed-minutes-test.pdf"

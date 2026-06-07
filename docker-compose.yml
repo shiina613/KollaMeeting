@@ -106,7 +106,7 @@ services:
       JAAS_PRIVATE_KEY: ${JAAS_PRIVATE_KEY:-}
       # PDF digital signature (minutes confirm) — see docs/digital-signature.md
       DIGITAL_SIGNATURE_ENABLED: ${DIGITAL_SIGNATURE_ENABLED:-false}
-      DIGITAL_SIGNATURE_KEYSTORE_PATH: ${DIGITAL_SIGNATURE_KEYSTORE_PATH:-/app/secrets/signing.p12}
+      DIGITAL_SIGNATURE_KEYSTORE_PATH: ${DIGITAL_SIGNATURE_KEYSTORE_PATH:-/app/keys/signing.p12}
       DIGITAL_SIGNATURE_KEYSTORE_PASSWORD: ${DIGITAL_SIGNATURE_KEYSTORE_PASSWORD:-}
       DIGITAL_SIGNATURE_KEYSTORE_TYPE: ${DIGITAL_SIGNATURE_KEYSTORE_TYPE:-PKCS12}
       DIGITAL_SIGNATURE_KEY_ALIAS: ${DIGITAL_SIGNATURE_KEY_ALIAS:-}
@@ -115,7 +115,7 @@ services:
       JAVA_OPTS: "-Duser.timezone=Asia/Ho_Chi_Minh"
     volumes:
       - app-storage:/app/storage
-      - ./secrets:/app/secrets:ro
+      - ./keys:/app/keys:ro
     depends_on:
       mysql:
         condition: service_healthy

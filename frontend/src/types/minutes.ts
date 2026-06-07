@@ -35,6 +35,14 @@ export interface Minutes {
   secretaryEditedAt?: string
 }
 
+export interface MinutesConfirmationResponse {
+  minutes: Minutes
+  signedPdfFileName: string
+  signedPdfContentType: string
+  signedPdfBase64: string
+  signedPdfSha256: string
+}
+
 // ─── Request bodies ───────────────────────────────────────────────────────────
 
 export interface EditMinutesRequest {

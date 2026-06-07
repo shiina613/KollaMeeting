@@ -14,8 +14,10 @@ import com.example.kolla.repositories.MeetingRepository;
 import com.example.kolla.repositories.MinutesRepository;
 import com.example.kolla.repositories.MemberRepository;
 import com.example.kolla.repositories.TranscriptionSegmentRepository;
+import com.example.kolla.responses.MinutesConfirmationResponse;
 import com.example.kolla.services.impl.MinutesServiceImpl;
 import com.example.kolla.websocket.MeetingEventPublisher;
+import org.springframework.core.io.ByteArrayResource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,9 +30,12 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.Base64;
+import java.util.HexFormat;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.io.ByteArrayInputStream;
@@ -150,10 +155,135 @@ class MinutesServiceImplDocxTest {
                 eq("draft_77.docx"));
         String docxXml = unzipTextEntries(docxBytesCaptor.getValue()).get("word/document.xml");
         assertThat(docxXml)
+                .contains("BIÊN BẢN CUỘC HỌP - BẢN NHÁP")
+                .contains("Cuộc họp: Họp nghiệm thu")
+                .contains("Bắt đầu: 05/06/2026 09:00")
+                .contains("Kết thúc: 05/06/2026 10:00")
+                .contains("Chủ tọa: Chủ tọa")
                 .contains("09:01")
                 .contains("Chủ tọa")
-                .contains("HOST")
+                .contains("Chủ tọa cuộc họp")
                 .contains("Nội dung thứ nhất");
+    }
+
+    @Test
+    void compileDraftMinutes_doesNotRepeatHeaderForConsecutiveSegmentsFromSameSpeaker() throws Exception {
+        User host = User.builder()
+                .id(10L)
+                .username("host")
+                .fullName("Host User")
+                .email("host@example.com")
+                .role(Role.SECRETARY)
+                .isActive(true)
+                .build();
+        User speaker = User.builder()
+                .id(20L)
+                .username("speaker")
+                .fullName("Nguyen Quang Tung")
+                .email("speaker@example.com")
+                .role(Role.USER)
+                .isActive(true)
+                .build();
+        Meeting meeting = Meeting.builder()
+                .id(124L)
+                .title("Hop tong ket")
+                .host(host)
+                .creator(host)
+                .activatedAt(LocalDateTime.of(2026, 6, 5, 9, 0))
+                .endedAt(LocalDateTime.of(2026, 6, 5, 10, 0))
+                .build();
+
+        when(minutesRepository.existsByMeetingId(124L)).thenReturn(false);
+        when(transcriptionSegmentRepository.findByMeetingIdOrderedForMinutes(124L))
+                .thenReturn(List.of(
+                        segment(1L, "turn-1", 1, 20L, "Nguyen Quang Tung", "Noi dung thu nhat"),
+                        segment(2L, "turn-1", 2, 20L, "Nguyen Quang Tung", "Noi dung thu hai")));
+        when(memberRepository.findByMeetingId(124L))
+                .thenReturn(List.of(Member.builder()
+                        .id(502L)
+                        .meeting(meeting)
+                        .user(speaker)
+                        .meetingRole(MeetingRole.HOST)
+                        .build()));
+        when(minutesRepository.save(any(Minutes.class))).thenAnswer(invocation -> {
+            Minutes minutes = invocation.getArgument(0);
+            if (minutes.getId() == null) {
+                minutes.setId(78L);
+            }
+            return minutes;
+        });
+        when(fileStorageService.storeBytes(any(byte[].class), eq(FileType.MINUTES), eq(124L), eq("draft_78.pdf")))
+                .thenReturn(Path.of("minutes/124/draft_78.pdf"));
+        when(fileStorageService.storeBytes(any(byte[].class), eq(FileType.MINUTES), eq(124L), eq("draft_78.docx")))
+                .thenReturn(Path.of("minutes/124/draft_78.docx"));
+
+        service.compileDraftMinutes(meeting);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<byte[]> docxBytesCaptor = ArgumentCaptor.forClass(byte[].class);
+        verify(fileStorageService).storeBytes(
+                docxBytesCaptor.capture(),
+                eq(FileType.MINUTES),
+                eq(124L),
+                eq("draft_78.docx"));
+        String docxXml = unzipTextEntries(docxBytesCaptor.getValue()).get("word/document.xml");
+
+        assertThat(docxXml)
+                .contains("Noi dung thu nhat")
+                .contains("Noi dung thu hai");
+        assertThat(countOccurrences(docxXml, "Nguyen Quang Tung")).isEqualTo(1);
+    }
+
+    @Test
+    void confirmMinutes_returnsSignedPdfPayloadAndSha256() throws Exception {
+        User host = User.builder()
+                .id(10L)
+                .username("host")
+                .fullName("Chủ tọa")
+                .email("host@example.com")
+                .role(Role.SECRETARY)
+                .isActive(true)
+                .build();
+        Meeting meeting = Meeting.builder()
+                .id(123L)
+                .title("Họp nghiệm thu")
+                .host(host)
+                .creator(host)
+                .build();
+        Minutes minutes = Minutes.builder()
+                .id(77L)
+                .meeting(meeting)
+                .status(com.example.kolla.enums.MinutesStatus.DRAFT)
+                .draftPdfPath("minutes/123/draft_77.pdf")
+                .build();
+        byte[] draftBytes = "draft-pdf".getBytes(StandardCharsets.UTF_8);
+        byte[] signedBytes = "%PDF-signed".getBytes(StandardCharsets.UTF_8);
+
+        when(meetingRepository.findById(123L)).thenReturn(Optional.of(meeting));
+        when(minutesRepository.findByMeetingId(123L)).thenReturn(Optional.of(minutes));
+        when(fileStorageService.loadFileAsResource("minutes/123/draft_77.pdf"))
+                .thenReturn(new ByteArrayResource(draftBytes));
+        when(pdfDigitalSignatureService.signPdf(draftBytes, "Chủ tọa"))
+                .thenReturn(signedBytes);
+        when(pdfDigitalSignatureService.signerCertificateSubject()).thenReturn("CN=Test Signer");
+        when(fileStorageService.storeBytes(
+                signedBytes,
+                FileType.MINUTES,
+                123L,
+                "confirmed_77.pdf"))
+                .thenReturn(Path.of("minutes/123/confirmed_77.pdf"));
+        when(minutesRepository.save(any(Minutes.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        MinutesConfirmationResponse response = service.confirmMinutes(123L, host, "jwt-token");
+
+        assertThat(response.getMinutes().getStatus())
+                .isEqualTo(com.example.kolla.enums.MinutesStatus.HOST_CONFIRMED);
+        assertThat(response.getSignedPdfFileName()).isEqualTo("bien-ban-xac-nhan-123.pdf");
+        assertThat(response.getSignedPdfContentType()).isEqualTo("application/pdf");
+        assertThat(response.getSignedPdfBase64())
+                .isEqualTo(Base64.getEncoder().encodeToString(signedBytes));
+        assertThat(response.getSignedPdfSha256()).isEqualTo(sha256(signedBytes));
+        verify(eventPublisher).publishMinutesConfirmed(123L, 77L);
     }
 
     private TranscriptionSegment segment(
@@ -162,12 +292,22 @@ class MinutesServiceImplDocxTest {
             int sequence,
             String speakerName,
             String text) {
+        return segment(id, turnId, sequence, 10L, speakerName, text);
+    }
+
+    private TranscriptionSegment segment(
+            Long id,
+            String turnId,
+            int sequence,
+            Long speakerId,
+            String speakerName,
+            String text) {
         TranscriptionSegment segment = new TranscriptionSegment();
         segment.setId(id);
         segment.setJobId("job-" + id);
         segment.setSpeakerTurnId(turnId);
         segment.setSequenceNumber(sequence);
-        segment.setSpeakerId(10L);
+        segment.setSpeakerId(speakerId);
         segment.setSpeakerName(speakerName);
         segment.setText(text);
         segment.setSegmentStartTime(LocalDateTime.of(2026, 6, 5, 9, sequence));
@@ -187,5 +327,20 @@ class MinutesServiceImplDocxTest {
             }
         }
         return entries;
+    }
+
+    private String sha256(byte[] data) throws Exception {
+        return HexFormat.of().formatHex(
+                java.security.MessageDigest.getInstance("SHA-256").digest(data));
+    }
+
+    private int countOccurrences(String text, String needle) {
+        int count = 0;
+        int fromIndex = 0;
+        while ((fromIndex = text.indexOf(needle, fromIndex)) >= 0) {
+            count++;
+            fromIndex += needle.length();
+        }
+        return count;
     }
 }

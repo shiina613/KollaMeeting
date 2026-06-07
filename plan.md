@@ -1,110 +1,86 @@
-# Kế hoạch căn chỉnh KollaMeeting theo DOCX 3.8 và làm sạch repo
+# Kế hoạch sửa codebase khớp DOCX 3.8 và dọn file thừa
 
 ## Tóm tắt
 
-DOCX 3.8 là tài liệu chuẩn cao nhất. Codebase, schema, README, API, UI, test, script demo và tài liệu repo phải thống nhất với bản Word đã nộp.
+Mục tiêu là làm codebase khớp bản Word đã nộp, ưu tiên thiết kế **7 bảng MySQL** trong DOCX. Dữ liệu runtime không tạo thêm bảng trong database; lưu bằng file dưới `storage/meetings/<meeting_id>/...`, Redis hoặc RAM.
 
-Điều kiện hoàn thành không chỉ là build pass. Điều kiện hoàn thành là: codebase và Word không còn xung đột rõ ràng; nếu LLM, giám khảo hoặc phản biện đọc repo để đối chiếu với Word thì không tìm được điểm hợp lý để trừ vì sai mô tả, sai kiến trúc, sai schema, sai luồng nghiệp vụ hoặc sai triển khai demo.
+Hiện trạng đã kiểm:
+
+- Backend alignment tests: pass.
+- Frontend tests/build: pass.
+- `git diff --check`: pass.
+- `docker compose config --quiet`: pass.
+- Worktree đang có nhiều file modified/untracked cần phân loại trước commit.
+- Có file thừa hoặc cần phân loại: DOCX gốc, `scratch/search_meeting_roles.py`, `review.md` rỗng, cùng một số file hỗ trợ chưa rõ nên commit hay bỏ.
+
+## Thay đổi chính
+
+### Schema/API theo Word
+
+- Giữ đúng 7 bảng: `user`, `department`, `room`, `meeting`, `member`, `document`, `meeting_message`.
+- Siết `DepartmentCode`, `RoomCode`, `user.Department_id`, `meeting.DepartmentId`, `meeting.Room_id` thành required.
+- Đổi `document.Content` sang `TEXT`; vẫn lưu relative file path để download file thật.
+- Không tạo bảng runtime mới.
+
+### Runtime storage
+
+- Lưu transcript, ASR job, minutes, recordings, attendance, audit dưới `storage/meetings/<meeting_id>/...`.
+- Persist attendance ra file thay vì chỉ RAM.
+- Giữ notification, speaking permission và raise hand queue trong RAM hoặc Redis vì đây là realtime state, không thuộc 7 bảng Word.
+
+### Quyền nghiệp vụ
+
+- Upload tài liệu cuộc họp chỉ cho thư ký, phù hợp với Word.
+- Create/update/delete meeting giữ Secretary-only khi meeting chưa diễn ra.
+- Start/end meeting giữ theo mô tả thực nghiệm: host hoặc secretary được kết thúc; phần activate/comment/API text phải thống nhất với code thật.
+
+### Dọn warning và tài liệu
+
+- Thêm `@Builder.Default` cho DTO đang warning.
+- Đổi helper/comment sai tên như `isHostOrAdmin` nếu thực tế không cho Admin bypass.
+- Cập nhật README, DOCX alignment và database docs theo hướng 7 bảng + runtime file.
+
+## Dọn dẹp file
+
+- Không commit DOCX gốc đã nộp; đưa vào ignored/untracked cleanup.
+- Xóa hoặc bỏ khỏi commit các file tạm:
+  - `scratch/search_meeting_roles.py`
+  - `review.md` nếu vẫn rỗng
+  - artifact test/build nếu xuất hiện sau verification
+- Phân loại file untracked trước khi commit:
+  - Giữ nếu là code/test cần thiết: `RuntimeMeetingStateStore.java`, `SubmittedSchemaContractTest.java`, `MinutesConfirmationResponse.java`, `frontend/eslint.config.js`.
+  - Giữ `database.md` chỉ nếu đây là tài liệu chính thức; nếu chỉ là ghi chú tạm thì bỏ khỏi commit.
+- Trước commit cuối, `git status --short` chỉ còn file thay đổi có chủ đích, không có DOCX, scratch, empty report, secrets hoặc build output.
+- Sau khi hoàn thành toàn bộ plan: dọn dẹp tất cả file thừa, kiểm tra lại `git status`, commit code với message rõ ràng, rồi push lên GitHub.
+
+## Test plan
+
+### Backend
+
+- Chạy `cd backend; .\mvnw.cmd test`.
+- Thêm hoặc đảm bảo test schema contract cho đúng 7 bảng và required constraints.
+- Test upload tài liệu: secretary pass; member/admin/non-assigned user fail.
+- Test attendance file persistence qua reload store.
+
+### Frontend
+
+- Chạy `cd frontend; npm run test`.
+- Chạy `cd frontend; npm run build`.
+- Đảm bảo form admin/user/department/room hiển thị required fields đúng schema Word.
+
+### Repo checks
+
+- Chạy `git diff --check`.
+- Chạy `docker compose config --quiet`.
+- Chạy `git status --short --untracked-files=all`.
 
 ## Điều kiện hoàn thành
 
-- Không còn mâu thuẫn giữa DOCX và repo về actor, vai trò cuộc họp, schema DB, luồng tạo/sửa/xóa meeting, Jitsi/JaaS/WebRTC, Docker/Cloudflare/Nginx, ASR, biên bản DOCX/PDF/audio và ký số PDF.
-- README, `.env.example`, `docker-compose.yml`, scripts, code comments quan trọng và test name không kể câu chuyện khác với Word.
-- Có `docs/DOCX_ALIGNMENT.md` map rõ phần DOCX, code path, endpoint/API, bảng/cột DB, test chứng minh và phần mở rộng không mâu thuẫn.
-- `git status --short` sạch sau commit.
-- Không track artifact demo/test/model nặng: DOCX gốc, model weights, WAV mẫu, Playwright report, test results, secrets.
-- Backend test, frontend test, frontend build và cấu hình demo Docker đều pass.
-
-## Thay đổi chính cần giữ đúng
-
-- Làm sạch repo trước: ignore artifact, model weights, report, video, screenshot, runtime files và chuẩn hóa line ending.
-- Schema DB vật lý khớp tên trong DOCX; code Java/TypeScript vẫn được dùng property idiomatic nếu JPA/API mapping rõ.
-- Backend enforce đúng nghiệp vụ DOCX: thư ký tạo/sửa/xóa meeting chưa diễn ra; host là user active bất kỳ; secretary phải có role `SECRETARY`.
-- Meeting creation tự thêm host và secretary vào `member` với `MeetingRole`.
-- Meeting messages được lưu DB và broadcast STOMP `MEETING_MESSAGE_CREATED`.
-- End meeting tạo transcript, DOCX, PDF ký số hoặc có thể ký, và audio tổng hợp.
-- Frontend label/form/download/meeting room khớp ngôn ngữ và luồng trong Word.
-- README ghi rõ demo deployment bằng Docker Compose + Nginx + Cloudflare Quick Tunnel + một script start.
-
-## Triển khai Docker/demo
-
-Toàn bộ thành phần thuộc KollaMeeting deploy bằng Docker Compose:
-
-- `frontend`
-- `backend`
-- `mysql`
-- `redis`
-- `asr-service`
-- `nginx`
-- `cloudflared`
-
-Không self-host Jitsi trong Docker stack demo.
-
-- Video meeting dùng `meet.jit.si` hoặc JaaS bên ngoài.
-- Frontend nhúng Jitsi bằng iframe/Jitsi External API.
-- Backend không xử lý SDP/ICE/media WebRTC.
-- Backend chỉ xử lý nghiệp vụ, STOMP control events và `/ws/audio` cho ASR.
-
-Demo chính thức dùng một lệnh:
-
-```powershell
-.\scripts\start.ps1
-```
-
-hoặc:
-
-```bash
-./scripts/start.sh
-```
-
-Quick Tunnel là chế độ demo/nghiệm thu ngắn hạn 2-3 ngày, mỗi ngày chạy một lần. URL sẽ đổi sau mỗi lần chạy script. Vận hành lâu dài mới cần Named Tunnel/domain cố định. Script phải in ra URL truy cập cuối cùng sau khi start.
-
-## Kiểm thử bắt buộc
-
-```powershell
-git diff --check
-cd backend
-.\mvnw.cmd test
-cd ..\frontend
-npm run test
-npm run build
-cd ..
-docker compose config
-```
-
-Kiểm thử migration:
-
-- Fresh Flyway trên MySQL mới.
-- Chạy `backend/src/main/resources/db/migration/check_migration_integrity.sql`.
-
-Demo smoke:
-
-1. Chạy `.\scripts\start.ps1`.
-2. Mở Quick Tunnel URL được in ra.
-3. Đăng nhập thư ký.
-4. Tạo meeting, chọn host active bất kỳ và secretary role `SECRETARY`.
-5. Gán role thành viên trong meeting.
-6. Vào Jitsi, bật meeting mode.
-7. Gửi audio qua `/ws/audio`, nhận transcript.
-8. Kết thúc meeting.
-9. Tải DOCX/PDF/audio.
-
-## Bảng chấp nhận theo Word
-
-| Nhóm | Done khi |
-|---|---|
-| Actor/role | Admin, thư ký, nhân viên và `MeetingRole` khớp Word; host không bị ép role secretary/admin |
-| DB | Bảng/cột vật lý chính dùng tên Word: `EmployeeCode`, `MeetingCode`, `DepartmentId`, `Room_id`, `MeetingRole`, `CreateTime`, ... |
-| Meeting CRUD | Secretary tạo/sửa/xóa meeting `SCHEDULED`; không sửa/xóa meeting `ACTIVE`/`ENDED` |
-| Jitsi/WebRTC | Repo ghi rõ Jitsi/JaaS ngoài xử lý media; backend không là signaling server SDP/ICE |
-| ASR | `/ws/audio` chỉ nhận PCM khi `MEETING_MODE`, queue Redis, ASR FastAPI PhoWhisper mặc định |
-| Minutes | Kết thúc meeting tạo transcript, DOCX/PDF; host confirm ký PDF; secretary publish final DOCX/PDF |
-| Deploy | Docker Compose chạy toàn bộ stack KollaMeeting; Quick Tunnel demo; Named Tunnel chỉ là vận hành lâu dài |
-| Repo hygiene | Không track artifact nặng/local; status sạch sau commit |
-
-## Giả định
-
-- DOCX 3.8 có quyền ưu tiên cao hơn code hiện tại.
-- Quick Tunnel không mâu thuẫn với Word nếu repo ghi rõ đây là chế độ demo ngắn hạn.
-- “Deploy tất cả lên Docker” nghĩa là deploy toàn bộ KollaMeeting stack bằng Docker; Jitsi media dùng dịch vụ ngoài vì self-host Jitsi qua Cloudflare Tunnel không phù hợp kỹ thuật.
-- Mọi mở rộng không có trong Word chỉ được giữ nếu không làm sai hoặc phủ định nội dung Word.
+- Code chạy theo đúng bản Word đã nộp ở các luồng chính: login, quản lý phòng ban/phòng họp/người dùng, tạo/sửa/xóa meeting, thêm tài liệu, họp Jitsi, `MEETING_MODE`, ASR, xuất DOCX/PDF và ký số PDF.
+- Database sạch sau reset chỉ có đúng 7 bảng Word; không có runtime tables.
+- Runtime data nằm đúng dưới `storage/meetings/<meeting_id>/...`, Redis hoặc RAM.
+- Không còn claim sai trong README/docs/comments/OpenAPI về schema, quyền hoặc storage.
+- Tất cả test/build/check ở Test plan pass.
+- Worktree cuối sạch hoặc chỉ còn thay đổi có chủ đích đã sẵn sàng commit.
+- Không commit DOCX gốc, `.env`, keys, model weights, scratch file, report rỗng hoặc build/test output.
+- Sau cleanup cuối cùng, code đã được commit và push thành công lên remote GitHub hiện tại.

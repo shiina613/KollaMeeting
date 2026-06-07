@@ -1,6 +1,7 @@
 package com.example.kolla.services.impl;
 
 import com.example.kolla.enums.FileType;
+import com.example.kolla.enums.MeetingRole;
 import com.example.kolla.enums.MinutesStatus;
 import com.example.kolla.enums.Role;
 import com.example.kolla.exceptions.BadRequestException;
@@ -16,6 +17,7 @@ import com.example.kolla.repositories.MeetingRepository;
 import com.example.kolla.repositories.MinutesRepository;
 import com.example.kolla.repositories.MemberRepository;
 import com.example.kolla.repositories.TranscriptionSegmentRepository;
+import com.example.kolla.responses.MinutesConfirmationResponse;
 import com.example.kolla.responses.MinutesResponse;
 import com.example.kolla.services.FileStorageService;
 import com.example.kolla.services.MeetingService;
@@ -33,19 +35,9 @@ import com.itextpdf.kernel.pdf.PdfWriter;
 import com.itextpdf.layout.element.Paragraph;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.pdfbox.Loader;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.pdmodel.PDPage;
-import org.apache.pdfbox.pdmodel.PDPageContentStream;
-import org.apache.pdfbox.pdmodel.common.PDRectangle;
-import org.apache.pdfbox.pdmodel.font.PDFont;
-import org.apache.pdfbox.pdmodel.font.PDType0Font;
-import org.apache.pdfbox.pdmodel.font.PDType1Font;
-import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
 import org.springframework.core.io.Resource;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -62,6 +54,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
@@ -71,8 +64,8 @@ import java.util.stream.Collectors;
 /**
  * MinutesService implementation.
  *
- * <p>PDF/DOCX rendering uses PDFBox and Apache POI; PDF signing uses iText signatures.
- * HTML-to-text extraction for Secretary edits uses jsoup.
+ * <p>PDF rendering uses iText layout; DOCX rendering uses the internal OOXML renderer.
+ * PDF signing uses iText signatures. HTML-to-text extraction for Secretary edits uses jsoup.
  *
  * Requirements: 25.1–25.7
  */
@@ -86,8 +79,6 @@ public class MinutesServiceImpl implements MinutesService {
     private static final float FONT_SIZE_TITLE = 16f;
     private static final float FONT_SIZE_HEADING = 12f;
     private static final float FONT_SIZE_BODY = 10f;
-    private static final float LINE_HEIGHT_BODY = 14f;
-    private static final float LINE_HEIGHT_HEADING = 18f;
 
     private final MinutesRepository minutesRepository;
     private final MeetingRepository meetingRepository;
@@ -212,7 +203,7 @@ public class MinutesServiceImpl implements MinutesService {
      */
     @Override
     @Transactional
-    public MinutesResponse confirmMinutes(Long meetingId, User requester, String jwtToken)
+    public MinutesConfirmationResponse confirmMinutes(Long meetingId, User requester, String jwtToken)
             throws IOException {
 
         Meeting meeting = findMeetingOrThrow(meetingId);
@@ -277,14 +268,20 @@ public class MinutesServiceImpl implements MinutesService {
         // Broadcast MINUTES_CONFIRMED
         eventPublisher.publishMinutesConfirmed(meetingId, saved.getId());
 
-        return MinutesResponse.from(saved);
+        return MinutesConfirmationResponse.builder()
+                .minutes(MinutesResponse.from(saved))
+                .signedPdfFileName("bien-ban-xac-nhan-" + meetingId + ".pdf")
+                .signedPdfContentType("application/pdf")
+                .signedPdfBase64(Base64.getEncoder().encodeToString(confirmedPdfBytes))
+                .signedPdfSha256(confirmationHash)
+                .build();
     }
 
     // ── editMinutes ───────────────────────────────────────────────────────────
 
     /**
      * Secretary edits and publishes the minutes.
-     * Renders HTML → PDF via PDFBox + jsoup.
+     * Renders HTML to PDF via iText after jsoup text extraction.
      * Requirements: 25.5
      */
     @Override
@@ -464,7 +461,7 @@ public class MinutesServiceImpl implements MinutesService {
             PdfFont fontRegular = loadITextFont("/fonts/Roboto-Regular.ttf", false);
 
             for (String line : lines) {
-                boolean isTitle = line.startsWith("MEETING MINUTES");
+                boolean isTitle = line.startsWith("BIÊN BẢN");
                 boolean isSpeaker = line.startsWith("[") && line.contains("]");
                 boolean isSeparator = line.startsWith("─") || line.startsWith("â”€");
                 if (isSeparator) {
@@ -513,31 +510,31 @@ public class MinutesServiceImpl implements MinutesService {
         List<String> lines = new ArrayList<>();
 
         // Title block
-        lines.add("MEETING MINUTES — DRAFT");
+        lines.add("BIÊN BẢN CUỘC HỌP - BẢN NHÁP");
         lines.add("");
-        lines.add("Meeting: " + meeting.getTitle());
+        lines.add("Cuộc họp: " + meeting.getTitle());
         if (meeting.getActivatedAt() != null) {
-            lines.add("Date: " + meeting.getActivatedAt()
+            lines.add("Bắt đầu: " + meeting.getActivatedAt()
                     .atZone(ZONE_VN)
                     .format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")));
         }
         if (meeting.getEndedAt() != null) {
-            lines.add("Ended: " + meeting.getEndedAt()
+            lines.add("Kết thúc: " + meeting.getEndedAt()
                     .atZone(ZONE_VN)
                     .format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")));
         }
         if (meeting.getHost() != null) {
-            lines.add("Host: " + meeting.getHost().getFullName());
+            lines.add("Chủ tọa: " + meeting.getHost().getFullName());
         }
         if (meeting.getSecretary() != null) {
-            lines.add("Secretary: " + meeting.getSecretary().getFullName());
+            lines.add("Thư ký: " + meeting.getSecretary().getFullName());
         }
         lines.add("");
         lines.add("─".repeat(60));
         lines.add("");
 
         if (segments.isEmpty()) {
-            lines.add("[No transcription available for this meeting]");
+            lines.add("[Chưa có nội dung nhận dạng giọng nói cho cuộc họp này]");
             return lines;
         }
 
@@ -548,30 +545,62 @@ public class MinutesServiceImpl implements MinutesService {
                         member -> member,
                         (left, right) -> left));
 
+        String currentSpeakerKey = null;
+        boolean hasSpeakerGroup = false;
         for (TranscriptionSegment seg : segments) {
             Member member = memberByUserId.get(seg.getSpeakerId());
             String meetingRole = member != null && member.getMeetingRole() != null
-                    ? member.getMeetingRole().name()
-                    : "MEMBER";
-            String time = seg.getSegmentStartTime() != null
-                    ? seg.getSegmentStartTime()
-                            .atZone(ZONE_VN)
-                            .format(DateTimeFormatter.ofPattern("HH:mm"))
-                    : "--:--";
-            String department = null;
-            if (member != null && member.getUser() != null) {
-                department = member.getUser().getDegree();
+                    ? meetingRoleLabel(member.getMeetingRole())
+                    : "Thành viên";
+            String speakerKey = speakerIdentity(seg);
+            if (!speakerKey.equals(currentSpeakerKey)) {
+                if (hasSpeakerGroup) {
+                    lines.add("");
+                }
+                String time = seg.getSegmentStartTime() != null
+                        ? seg.getSegmentStartTime()
+                                .atZone(ZONE_VN)
+                                .format(DateTimeFormatter.ofPattern("HH:mm"))
+                        : "--:--";
+                String degree = null;
+                if (member != null && member.getUser() != null) {
+                    degree = member.getUser().getDegree();
+                }
+                String speakerHeader = "[" + time + "] Người nói: " + seg.getSpeakerName()
+                        + " | Vai trò: " + meetingRole;
+                if (degree != null && !degree.isBlank()) {
+                    speakerHeader += " | Chức danh: " + degree;
+                }
+                lines.add(speakerHeader);
+                currentSpeakerKey = speakerKey;
+                hasSpeakerGroup = true;
             }
-            String speakerHeader = "[" + time + "] " + seg.getSpeakerName() + " (" + meetingRole + ")";
-            if (department != null && !department.isBlank()) {
-                speakerHeader += " - " + department;
-            }
-            lines.add(speakerHeader);
             wrapAndAdd(lines, seg.getText().trim(), 80);
+        }
+
+        if (hasSpeakerGroup) {
             lines.add("");
         }
 
         return lines;
+    }
+
+    private String speakerIdentity(TranscriptionSegment segment) {
+        if (segment.getSpeakerId() != null) {
+            return "id:" + segment.getSpeakerId();
+        }
+        return "name:" + String.valueOf(segment.getSpeakerName());
+    }
+
+    private String meetingRoleLabel(MeetingRole role) {
+        return switch (role) {
+            case HOST -> "Chủ tọa cuộc họp";
+            case SECRETARY -> "Thư ký cuộc họp";
+            case REVIEWER -> "Người phản biện";
+            case COMMITTEE_MEMBER -> "Ủy viên";
+            case GUEST -> "Khách mời";
+            case MEMBER -> "Thành viên";
+        };
     }
 
     /**
@@ -595,80 +624,30 @@ public class MinutesServiceImpl implements MinutesService {
         }
     }
 
-    /**
-     * Render a list of text lines into a PDDocument, creating new pages as needed.
-     */
-    private void renderLinesToDocument(PDDocument doc,
-                                        List<String> lines,
-                                        PDFont fontBold,
-                                        PDFont fontRegular) throws IOException {
-
-        PDPage page = new PDPage(PDRectangle.A4);
-        doc.addPage(page);
-
-        float pageHeight = page.getMediaBox().getHeight();
-        float pageWidth = page.getMediaBox().getWidth();
-        float usableWidth = pageWidth - 2 * MARGIN;
-        float yPos = pageHeight - MARGIN;
-
-        PDPageContentStream cs = new PDPageContentStream(doc, page);
-
-        for (String line : lines) {
-            boolean isTitle = line.startsWith("MEETING MINUTES");
-            boolean isSpeaker = line.startsWith("[") && line.endsWith("]");
-            boolean isSeparator = line.startsWith("─");
-
-            float fontSize = isTitle ? FONT_SIZE_TITLE
-                    : isSpeaker ? FONT_SIZE_HEADING
-                    : FONT_SIZE_BODY;
-            float lineHeight = (isTitle || isSpeaker) ? LINE_HEIGHT_HEADING : LINE_HEIGHT_BODY;
-            PDFont font = (isTitle || isSpeaker) ? fontBold : fontRegular;
-
-            // Check if we need a new page
-            if (yPos - lineHeight < MARGIN) {
-                cs.close();
-                page = new PDPage(PDRectangle.A4);
-                doc.addPage(page);
-                yPos = page.getMediaBox().getHeight() - MARGIN;
-                cs = new PDPageContentStream(doc, page);
-            }
-
-            if (!line.isBlank() && !isSeparator) {
-                cs.beginText();
-                cs.setFont(font, fontSize);
-                cs.newLineAtOffset(MARGIN, yPos);
-                cs.showText(line);
-                cs.endText();
-            }
-
-            yPos -= lineHeight;
-        }
-
-        cs.close();
-    }
-
-    /**
-     * Render HTML content to a PDF using jsoup for text extraction + PDFBox for rendering.
-     * Requirements: 25.5
-     */
-    private byte[] renderHtmlToPdf(Meeting meeting, String contentHtml) throws IOException {
-        return renderLinesToPdf(buildSecretaryLines(meeting, contentHtml));
-    }
-
     private List<String> buildSecretaryLines(Meeting meeting, String contentHtml) {
         // Parse HTML with jsoup and extract structured text
         Document htmlDoc = Jsoup.parse(contentHtml);
         List<String> lines = new ArrayList<>();
 
         // Header
-        lines.add("MEETING MINUTES — FINAL");
+        lines.add("BIÊN BẢN CUỘC HỌP - BẢN CHÍNH THỨC");
         lines.add("");
-        lines.add("Meeting: " + meeting.getTitle());
+        lines.add("Cuộc họp: " + meeting.getTitle());
+        if (meeting.getActivatedAt() != null) {
+            lines.add("Bắt đầu: " + meeting.getActivatedAt()
+                    .atZone(ZONE_VN)
+                    .format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")));
+        }
+        if (meeting.getEndedAt() != null) {
+            lines.add("Kết thúc: " + meeting.getEndedAt()
+                    .atZone(ZONE_VN)
+                    .format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")));
+        }
         if (meeting.getHost() != null) {
-            lines.add("Host: " + meeting.getHost().getFullName());
+            lines.add("Chủ tọa: " + meeting.getHost().getFullName());
         }
         if (meeting.getSecretary() != null) {
-            lines.add("Secretary: " + meeting.getSecretary().getFullName());
+            lines.add("Thư ký: " + meeting.getSecretary().getFullName());
         }
         lines.add("");
         lines.add("─".repeat(60));
@@ -725,20 +704,6 @@ public class MinutesServiceImpl implements MinutesService {
                     }
                 }
             }
-        }
-    }
-
-    /**
-     * Load a TrueType font from the classpath.
-     * Uses PDType0Font which supports full Unicode including Vietnamese characters.
-     */
-    private PDFont loadFont(PDDocument doc, String classpathPath) throws IOException {
-        try (InputStream fontStream = getClass().getResourceAsStream(classpathPath)) {
-            if (fontStream == null) {
-                log.warn("Font not found at classpath:{}, falling back to Helvetica", classpathPath);
-                return new PDType1Font(Standard14Fonts.FontName.HELVETICA);
-            }
-            return PDType0Font.load(doc, fontStream);
         }
     }
 

@@ -18,7 +18,7 @@ public class EditMinutesRequest {
 
     /**
      * Rich-text HTML content produced by the Secretary's editor (TipTap / Quill).
-     * Will be rendered to PDF via PDFBox + jsoup.
+     * Will be rendered to PDF via iText after jsoup text extraction.
      */
     @NotBlank(message = "contentHtml must not be blank")
     private String contentHtml;

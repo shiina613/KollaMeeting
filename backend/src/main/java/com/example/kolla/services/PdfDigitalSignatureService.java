@@ -2,10 +2,18 @@ package com.example.kolla.services;
 
 import com.example.kolla.config.DigitalSignatureProperties;
 import com.example.kolla.exceptions.BadRequestException;
+import com.itextpdf.io.font.constants.StandardFonts;
+import com.itextpdf.kernel.geom.Rectangle;
+import com.itextpdf.kernel.font.PdfFont;
+import com.itextpdf.kernel.font.PdfFontFactory;
+import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfReader;
 import com.itextpdf.kernel.pdf.PdfName;
 import com.itextpdf.kernel.pdf.PdfString;
 import com.itextpdf.kernel.pdf.StampingProperties;
+import com.itextpdf.kernel.pdf.PdfWriter;
+import com.itextpdf.kernel.pdf.canvas.PdfCanvas;
+import com.itextpdf.kernel.pdf.extgstate.PdfExtGState;
 import com.itextpdf.signatures.BouncyCastleDigest;
 import com.itextpdf.signatures.DigestAlgorithms;
 import com.itextpdf.signatures.IExternalDigest;
@@ -34,9 +42,13 @@ import java.security.UnrecoverableKeyException;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.text.Normalizer;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Signs meeting-minutes PDFs with a PAdES/CAdES detached signature (ETSI.CAdES.detached).
@@ -48,6 +60,15 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class PdfDigitalSignatureService {
+
+    private static final DateTimeFormatter WATERMARK_TIME_FORMAT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT);
+    private static final float WATERMARK_MARGIN_RIGHT = 48f;
+    private static final float WATERMARK_MARGIN_TOP = 42f;
+    private static final float WATERMARK_NAME_FONT_SIZE = 11f;
+    private static final float WATERMARK_TIME_FONT_SIZE = 10f;
+    private static final float WATERMARK_LINE_GAP = 15f;
+    private static final float WATERMARK_OPACITY = 0.18f;
 
     private final DigitalSignatureProperties properties;
 
@@ -95,8 +116,9 @@ public class PdfDigitalSignatureService {
         String signerName = signerDisplay != null && !signerDisplay.isBlank()
                 ? signerDisplay
                 : material.signerSubject();
+        byte[] watermarkedPdf = addSignatureWatermark(pdfBytes, signerName);
 
-        try (ByteArrayInputStream pdfIn = new ByteArrayInputStream(pdfBytes);
+        try (ByteArrayInputStream pdfIn = new ByteArrayInputStream(watermarkedPdf);
              ByteArrayOutputStream signedOut = new ByteArrayOutputStream();
              PdfReader reader = new PdfReader(pdfIn)) {
 
@@ -111,7 +133,7 @@ public class PdfDigitalSignatureService {
                     .setReason(properties.getReason())
                     .setLocation(properties.getLocation())
                     .setSignatureCreator("KollaMeeting")
-                    .setLayer2Text("Signed by " + signerName);
+                    .setLayer2Text("");
 
             try {
                 IExternalDigest digest = new BouncyCastleDigest();
@@ -134,6 +156,60 @@ public class PdfDigitalSignatureService {
             }
             return signedOut.toByteArray();
         }
+    }
+
+    private static byte[] addSignatureWatermark(byte[] pdfBytes, String signerName) throws IOException {
+        try (ByteArrayInputStream pdfIn = new ByteArrayInputStream(pdfBytes);
+             ByteArrayOutputStream watermarkedOut = new ByteArrayOutputStream();
+             PdfReader reader = new PdfReader(pdfIn);
+             PdfWriter writer = new PdfWriter(watermarkedOut);
+             PdfDocument document = new PdfDocument(reader, writer)) {
+
+            PdfFont font = PdfFontFactory.createFont(StandardFonts.HELVETICA);
+            Rectangle pageSize = document.getFirstPage().getPageSize();
+            float rightX = pageSize.getRight() - WATERMARK_MARGIN_RIGHT;
+            float firstLineY = pageSize.getBottom() + WATERMARK_MARGIN_TOP + WATERMARK_LINE_GAP;
+
+            PdfCanvas canvas = new PdfCanvas(
+                    document.getFirstPage().newContentStreamBefore(),
+                    document.getFirstPage().getResources(),
+                    document);
+            canvas.saveState();
+            canvas.setExtGState(new PdfExtGState().setFillOpacity(WATERMARK_OPACITY));
+            showRightAlignedText(canvas, font, "Sign By: " + toAsciiName(signerName),
+                    WATERMARK_NAME_FONT_SIZE, rightX, firstLineY);
+            showRightAlignedText(canvas, font, LocalDateTime.now().format(WATERMARK_TIME_FORMAT),
+                    WATERMARK_TIME_FONT_SIZE, rightX, firstLineY - WATERMARK_LINE_GAP);
+            canvas.restoreState();
+
+            document.close();
+            return watermarkedOut.toByteArray();
+        }
+    }
+
+    private static void showRightAlignedText(
+            PdfCanvas canvas,
+            PdfFont font,
+            String text,
+            float fontSize,
+            float rightX,
+            float y) {
+
+        float x = rightX - font.getWidth(text, fontSize);
+        canvas.beginText()
+                .setFontAndSize(font, fontSize)
+                .moveText(x, y)
+                .showText(text)
+                .endText();
+    }
+
+    private static String toAsciiName(String value) {
+        return Normalizer.normalize(value, Normalizer.Form.NFD)
+                .replace("Đ", "D")
+                .replace("đ", "d")
+                .replaceAll("\\p{M}+", "")
+                .replaceAll("[^\\p{ASCII}]", "")
+                .trim();
     }
 
     /** Subject DN of the signing certificate (for audit logs / API). */
