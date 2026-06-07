@@ -1,0 +1,11 @@
+{
+  "source_model": "vinai/PhoWhisper-medium",
+  "quantization": "int8_float16",
+  "output_dir": "C:\\Users\\quang\\OneDrive\\Desktop\\evaluation\\phowhisper_quantization\\models\\vinai_PhoWhisper-medium-ct2-int8_float16",
+  "copy_files": [
+    "tokenizer.json",
+    "preprocessor_config.json"
+  ],
+  "created_at": "2026-06-03T16:52:20",
+  "converter": "ctranslate2.converters.transformers"
+}

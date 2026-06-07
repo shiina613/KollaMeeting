@@ -1,20 +1,9 @@
 # Environment and secrets
-.env
 *.env.local
 *.env.*.local
 .admin_token.tmp
-secrets/*
-!secrets/.gitignore
-keys/*.p12
-keys/*.pfx
-keys/*.jks
-keys/*.key
-keys/*.pem
 
 # Submitted/reference documents kept local
-style.md
-*.pk
-*.pub
 
 # Local extraction, demo and scratch outputs
 .docx_output.txt
@@ -60,9 +49,6 @@ asr-service/*.egg-info/
 asr-service/dist/
 asr-service/.pytest_cache/
 asr-service/.hypothesis/
-asr-service/models/*
-!asr-service/models/.gitkeep
-asr-service/data/*.wav
 vinai_PhoWhisper-medium-ct2-int8_float16/
 
 # Docker/local deployment
