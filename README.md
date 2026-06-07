@@ -48,24 +48,26 @@ Không self-host Jitsi trong Docker stack demo. Jitsi self-host cần UDP media 
 
 ## Chạy demo bằng một lệnh
 
-Không cần chạy bước chuẩn bị riêng: script tự tạo `.env` từ `.env.example` nếu thiếu, sinh secret demo cần thiết và tạo keystore ký số local nếu chưa có.
+Trước khi chạy lần đầu, copy `.env.example` sang `.env`. GitHub có thể chặn push `.env`, nên repo chỉ track `.env.example`; hai file nên giống nhau ở trạng thái nộp.
 
 Windows PowerShell:
 
 ```powershell
+Copy-Item .env.example .env -Force
 .\scripts\start.ps1
 ```
 
 WSL2/Linux:
 
 ```bash
+cp .env.example .env
 ./scripts/start.sh
 ```
 
 Script có nhiệm vụ:
 
 1. Kiểm tra Docker đang chạy.
-2. Tạo/cập nhật `.env`, secret demo và `keys/signing.p12` nếu thiếu.
+2. Đọc/cập nhật `.env`, sinh secret demo hoặc `keys/signing.p12` nếu thiếu.
 3. Build/start backend, mysql, redis, asr-service, nginx và cloudflared.
 4. Lấy Quick Tunnel URL từ log `cloudflared`.
 5. Cập nhật URL browser cần dùng trong `.env`.
@@ -88,10 +90,10 @@ http://localhost:8000/health
 
 ### 1. Chuẩn bị
 
-Cần Docker Desktop đang chạy. Nếu máy không có GPU NVIDIA hoặc chưa có model PhoWhisper local, tạo `.env` trước và đổi ASR sang CPU/Gipformer để demo dễ hơn:
+Cần Docker Desktop đang chạy. Copy `.env.example` sang `.env` trước khi chạy. Nếu máy không có GPU NVIDIA hoặc chưa muốn dùng model PhoWhisper local, đổi ASR sang CPU/Gipformer để demo nhẹ hơn:
 
 ```powershell
-if (!(Test-Path .env)) { Copy-Item .env.example .env }
+Copy-Item .env.example .env -Force
 notepad .env
 ```
 
@@ -343,7 +345,7 @@ KollaMeeting/
   nginx/          reverse proxy
   scripts/        one-command demo startup scripts
   storage/        runtime files under storage/meetings/<meeting_id>/, ignored by git
-  keys/           local PDF signing keystore/private keys, ignored by git
+  keys/           local PDF signing keystore/private keys for thesis snapshot
   docs/           repo alignment documents
   docker-compose.yml
   .env.example
@@ -352,10 +354,11 @@ KollaMeeting/
 
 ## Repo hygiene
 
-Không commit:
+Repo snapshot nộp đồ án có track DOCX gốc, key ký PDF demo, WAV demo và model PhoWhisper quantized local. File `.env` không track vì GitHub có thể chặn; dùng `.env.example` làm bản nộp và copy sang `.env` khi chạy.
 
-- DOCX gốc đã nộp.
-- Model weights trong `asr-service/models/`.
-- WAV demo/test trong `asr-service/data/`.
+Vẫn không commit:
+
+- `frontend/node_modules/`, `backend/target/`, `frontend/dist/`.
 - `frontend/playwright-report/`, `frontend/test-results/`.
-- `keys/*.p12`, `keys/*.pfx`, `keys/*.jks`, `keys/*.key`, `keys/*.pem`, `.env`, runtime storage và benchmark artifacts.
+- Cache test như `.pytest_cache/`, `.hypothesis/`, `__pycache__/`.
+- Runtime storage sinh khi chạy app.
