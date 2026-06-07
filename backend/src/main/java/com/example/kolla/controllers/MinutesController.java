@@ -4,6 +4,7 @@ import com.example.kolla.dto.EditMinutesRequest;
 import com.example.kolla.exceptions.BadRequestException;
 import com.example.kolla.models.User;
 import com.example.kolla.responses.ApiResponse;
+import com.example.kolla.responses.MinutesConfirmationResponse;
 import com.example.kolla.responses.MinutesResponse;
 import com.example.kolla.services.MinutesService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -85,15 +86,16 @@ public class MinutesController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Meeting not found")
     })
-    public ResponseEntity<ApiResponse<MinutesResponse>> confirmMinutes(
+    public ResponseEntity<ApiResponse<MinutesConfirmationResponse>> confirmMinutes(
             @Parameter(description = "Meeting ID") @PathVariable Long meetingId,
             @AuthenticationPrincipal User currentUser,
             HttpServletRequest httpRequest) throws IOException {
 
-        // Extract raw JWT token from Authorization header for the confirmation hash
+        // Preserve the raw JWT parameter for backward-compatible service signature.
         String jwtToken = extractJwtToken(httpRequest);
 
-        MinutesResponse response = minutesService.confirmMinutes(meetingId, currentUser, jwtToken);
+        MinutesConfirmationResponse response =
+                minutesService.confirmMinutes(meetingId, currentUser, jwtToken);
         return ResponseEntity.ok(
                 ApiResponse.success("Minutes confirmed successfully", response));
     }

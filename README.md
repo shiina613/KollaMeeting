@@ -48,11 +48,7 @@ Không self-host Jitsi trong Docker stack demo. Jitsi self-host cần UDP media 
 
 ## Chạy demo bằng một lệnh
 
-Chuẩn bị `.env`:
-
-```bash
-cp .env.example .env
-```
+Không cần chạy bước chuẩn bị riêng: script tự tạo `.env` từ `.env.example` nếu thiếu, sinh secret demo cần thiết và tạo keystore ký số local nếu chưa có.
 
 Windows PowerShell:
 
@@ -69,11 +65,12 @@ WSL2/Linux:
 Script có nhiệm vụ:
 
 1. Kiểm tra Docker đang chạy.
-2. Build/start backend, mysql, redis, asr-service, nginx và cloudflared.
-3. Lấy Quick Tunnel URL từ log `cloudflared`.
-4. Cập nhật URL browser cần dùng trong `.env`.
-5. Rebuild/start frontend để Vite bake đúng URL mới.
-6. In URL cuối cùng dạng `https://xxx.trycloudflare.com`.
+2. Tạo/cập nhật `.env`, secret demo và `keys/signing.p12` nếu thiếu.
+3. Build/start backend, mysql, redis, asr-service, nginx và cloudflared.
+4. Lấy Quick Tunnel URL từ log `cloudflared`.
+5. Cập nhật URL browser cần dùng trong `.env`.
+6. Rebuild/start frontend để Vite bake đúng URL mới.
+7. In URL cuối cùng dạng `https://xxx.trycloudflare.com`.
 
 Quick Tunnel là chế độ demo/nghiệm thu ngắn hạn 2-3 ngày, mỗi ngày chạy một lần. URL sẽ đổi sau mỗi lần chạy script. Vận hành lâu dài cần Cloudflare Named Tunnel/domain cố định qua `CLOUDFLARE_TUNNEL_TOKEN`.
 
@@ -167,7 +164,19 @@ Fresh Flyway schema dùng tên cột vật lý khớp DOCX cho các bảng chín
 - `document`: `Meeting_id`, `User_id`, `Name`, `Content`.
 - `meeting_message`: `Member_id`, `Content`, `CreateTime`.
 
-Các cột runtime như `mode`, `transcription_priority`, `host_user_id`, `secretary_user_id`, `draft_docx_path`, `confirmed_pdf_path` là phần triển khai bổ sung để hệ thống chạy thật, không thay thế schema Word.
+Database sạch sau reset chỉ có đúng 7 bảng Word ở trên. Dữ liệu vận hành như biên bản, ghi âm, transcript, trạng thái ASR, notification runtime và audit log không tạo bảng riêng trong database; chúng được lưu trong `storage/meetings/<meeting_id>/...`, Redis hoặc in-memory state.
+
+## File runtime local
+
+Sau khi chạy hệ thống, file sinh ra theo từng cuộc họp nằm dưới:
+
+- Biên bản: `storage/meetings/<meeting_id>/minutes/`
+- Ghi âm: `storage/meetings/<meeting_id>/recordings/`
+- Transcript và audio chunk ASR: `storage/meetings/<meeting_id>/transcript/`
+- Tài liệu upload: `storage/meetings/<meeting_id>/documents/`
+- Audit file runtime: `storage/meetings/<meeting_id>/audit/`
+
+Keystore ký PDF nằm trong `keys/` là cấu hình bảo mật local, không phải dữ liệu nghiệp vụ và không thuộc database.
 
 ## Kiểm thử
 
@@ -185,6 +194,14 @@ cd ..
 docker compose config
 ```
 
+Nếu máy đang có database test cũ từ các migration trước, reset volume MySQL rồi chạy lại startup script để Flyway tạo schema sạch đúng 7 bảng Word:
+
+```powershell
+docker compose down
+docker volume rm kollameeting_mysql-data
+.\scripts\start.ps1
+```
+
 Kiểm tra migration MySQL:
 
 ```powershell
@@ -200,7 +217,8 @@ KollaMeeting/
   asr-service/    FastAPI ASR service
   nginx/          reverse proxy
   scripts/        one-command demo startup scripts
-  secrets/        local keystore/secrets, ignored by git
+  storage/        runtime files under storage/meetings/<meeting_id>/, ignored by git
+  keys/           local PDF signing keystore/private keys, ignored by git
   docs/           repo alignment documents
   docker-compose.yml
   .env.example
@@ -215,4 +233,4 @@ Không commit:
 - Model weights trong `asr-service/models/`.
 - WAV demo/test trong `asr-service/data/`.
 - `frontend/playwright-report/`, `frontend/test-results/`.
-- `secrets/*`, `.env`, runtime storage và benchmark artifacts.
+- `keys/*.p12`, `keys/*.pfx`, `keys/*.jks`, `keys/*.key`, `keys/*.pem`, `.env`, runtime storage và benchmark artifacts.

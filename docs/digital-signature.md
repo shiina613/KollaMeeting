@@ -6,21 +6,21 @@ Biên bản PDF được ký ở bước host/chủ trì xác nhận:
 POST /api/v1/meetings/{meetingId}/minutes/confirm
 ```
 
-Code dùng iText signatures và BouncyCastle để nhúng chữ ký PDF dạng detached CAdES/PAdES-compatible. PDF/DOCX được render trước đó bằng PDFBox/Apache POI.
+Code dùng iText signatures và BouncyCastle để nhúng chữ ký PDF dạng detached CAdES/PAdES-compatible. PDF được render bằng iText layout; DOCX được render bằng OOXML nội bộ. Chữ ký có vùng hiển thị ở cuối trang đầu tiên của PDF.
 
 ## Biến môi trường
 
 ```dotenv
 DIGITAL_SIGNATURE_ENABLED=true
-DIGITAL_SIGNATURE_KEYSTORE_PATH=/app/secrets/signing.p12
-DIGITAL_SIGNATURE_KEYSTORE_PASSWORD=change-me
+DIGITAL_SIGNATURE_KEYSTORE_PATH=/app/keys/signing.p12
+DIGITAL_SIGNATURE_KEYSTORE_PASSWORD=kolla-signing-dev
 DIGITAL_SIGNATURE_KEYSTORE_TYPE=PKCS12
 DIGITAL_SIGNATURE_KEY_ALIAS=
 DIGITAL_SIGNATURE_REASON=Xác nhận biên bản cuộc họp
 DIGITAL_SIGNATURE_LOCATION=KollaMeeting
 ```
 
-`secrets/` bị ignore khỏi git. Với Docker Compose, thư mục local `./secrets` được mount read-only vào `/app/secrets`.
+`keys/` chỉ dùng cho keystore local và bị ignore khỏi git với các đuôi khóa riêng tư. Với Docker Compose, thư mục local `./keys` được mount read-only vào `/app/keys`.
 
 ## Tạo keystore demo
 

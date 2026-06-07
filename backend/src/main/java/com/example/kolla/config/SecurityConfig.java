@@ -107,7 +107,7 @@ public class SecurityConfig {
                     .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
                     .requestMatchers(HttpMethod.POST, "/auth/refresh").permitAll()
                     .requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
-                    // Internal callback — secured by X-Callback-Api-Key header, not JWT
+                    // Internal callback — secured by X-Internal-Api-Key header, not JWT
                     .requestMatchers(HttpMethod.POST, "/transcription/callback").permitAll()
                     .requestMatchers(HttpMethod.GET, "/api-docs/**").permitAll()
                     .requestMatchers(HttpMethod.GET, "/api-docs").permitAll()

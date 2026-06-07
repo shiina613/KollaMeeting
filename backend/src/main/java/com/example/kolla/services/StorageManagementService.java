@@ -20,7 +20,7 @@ public interface StorageManagementService {
 
     /**
      * Bulk delete recordings and/or documents.
-     * Logs the operation to storage_log.
+     * Logs the operation to file-based audit state.
      *
      * @param request   the bulk delete request containing IDs to delete
      * @param adminUser the admin user performing the deletion

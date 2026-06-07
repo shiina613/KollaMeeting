@@ -24,7 +24,7 @@ import java.util.stream.Stream;
 
 /**
  * Local-filesystem implementation of {@link FileStorageService}.
- * Files are stored under: {basePath}/{type}/{meetingId}/
+ * Files are stored under: {basePath}/meetings/{meetingId}/{type}/
  * Concurrent writes are protected with {@link FileLock}.
  * Requirements: 6.1–6.7
  */
@@ -45,7 +45,7 @@ public class FileStorageServiceImpl implements FileStorageService {
 
         validateFile(file, type);
 
-        Path dir = resolveTypeDir(type).resolve(String.valueOf(meetingId));
+        Path dir = resolveMeetingTypeDir(type, meetingId);
         Files.createDirectories(dir);
 
         String sanitizedOriginal = sanitizeFilename(file.getOriginalFilename());
@@ -65,7 +65,7 @@ public class FileStorageServiceImpl implements FileStorageService {
     public Path storeBytes(byte[] content, FileType type, Long meetingId, String fileName)
             throws IOException {
 
-        Path dir = resolveTypeDir(type).resolve(String.valueOf(meetingId));
+        Path dir = resolveMeetingTypeDir(type, meetingId);
         Files.createDirectories(dir);
 
         String sanitizedName = sanitizeFilename(fileName);
@@ -130,8 +130,7 @@ public class FileStorageServiceImpl implements FileStorageService {
     public Map<FileType, Long> getStorageStats() {
         Map<FileType, Long> stats = new EnumMap<>(FileType.class);
         for (FileType type : FileType.values()) {
-            Path dir = resolveTypeDir(type);
-            stats.put(type, sumDirectorySize(dir));
+            stats.put(type, sumTypeAcrossMeetings(type));
         }
         return stats;
     }
@@ -202,9 +201,29 @@ public class FileStorageServiceImpl implements FileStorageService {
         return Paths.get(properties.getBasePath());
     }
 
-    /** Resolve the top-level directory for a given {@link FileType}. */
-    private Path resolveTypeDir(FileType type) {
-        return basePath().resolve(type.getDirName());
+    /** Resolve the per-meeting directory for a given {@link FileType}. */
+    private Path resolveMeetingTypeDir(FileType type, Long meetingId) {
+        return basePath()
+                .resolve("meetings")
+                .resolve(String.valueOf(meetingId))
+                .resolve(type.getDirName());
+    }
+
+    private long sumTypeAcrossMeetings(FileType type) {
+        Path meetingsDir = basePath().resolve("meetings");
+        if (!Files.exists(meetingsDir)) {
+            return 0L;
+        }
+        try (Stream<Path> meetings = Files.list(meetingsDir)) {
+            return meetings
+                    .filter(Files::isDirectory)
+                    .map(meeting -> meeting.resolve(type.getDirName()))
+                    .mapToLong(this::sumDirectorySize)
+                    .sum();
+        } catch (IOException e) {
+            log.error("Failed to calculate storage stats for type: {}", type, e);
+            return 0L;
+        }
     }
 
     /**

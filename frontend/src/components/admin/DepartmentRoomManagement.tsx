@@ -72,7 +72,7 @@ function DepartmentFormModal({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-label-md text-on-surface-variant mb-1">
-              Ma phong ban <span className="text-error">*</span>
+              Mã phòng ban <span className="text-error">*</span>
             </label>
             <input
               type="text"
@@ -427,7 +427,7 @@ export default function DepartmentRoomManagement() {
               <table className="w-full text-body-sm">
                 <thead>
                   <tr className="border-b border-outline-variant bg-surface-container-low">
-                    <th className="text-left px-4 py-3 text-label-md text-on-surface-variant font-semibold">Ma phong ban</th>
+                    <th className="text-left px-4 py-3 text-label-md text-on-surface-variant font-semibold">Mã phòng ban</th>
                     <th className="text-left px-4 py-3 text-label-md text-on-surface-variant font-semibold">Tên phòng ban</th>
                     <th className="text-left px-4 py-3 text-label-md text-on-surface-variant font-semibold hidden md:table-cell">Mô tả</th>
                     <th className="px-4 py-3" aria-label="Hành động" />

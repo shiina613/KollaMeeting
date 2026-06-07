@@ -1,14 +1,14 @@
-# Creates secrets/signing.p12 for local PDF digital signature testing.
+# Creates keys/signing.p12 for local PDF digital signature testing.
 # Password: kolla-signing-dev (change in production)
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$secretsDir = Join-Path $repoRoot "secrets"
-$p12Path = Join-Path $secretsDir "signing.p12"
+$keysDir = Join-Path $repoRoot "keys"
+$p12Path = Join-Path $keysDir "signing.p12"
 $password = "kolla-signing-dev"
 
-if (-not (Test-Path $secretsDir)) {
-    New-Item -ItemType Directory -Path $secretsDir | Out-Null
+if (-not (Test-Path $keysDir)) {
+    New-Item -ItemType Directory -Path $keysDir | Out-Null
 }
 
 if (Test-Path $p12Path) {
@@ -36,5 +36,5 @@ if (-not $keytool) {
 Write-Host "Created $p12Path"
 Write-Host "Set in .env:"
 Write-Host "  DIGITAL_SIGNATURE_ENABLED=true"
-Write-Host "  DIGITAL_SIGNATURE_KEYSTORE_PATH=/app/secrets/signing.p12"
+Write-Host "  DIGITAL_SIGNATURE_KEYSTORE_PATH=/app/keys/signing.p12"
 Write-Host "  DIGITAL_SIGNATURE_KEYSTORE_PASSWORD=$password"

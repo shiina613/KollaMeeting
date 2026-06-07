@@ -1,13 +1,16 @@
 package com.example.kolla.repositories;
 
 import com.example.kolla.models.StorageLog;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
+import com.example.kolla.runtime.RuntimeMeetingStateStore;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 
-/**
- * Repository for StorageLog entities.
- * Requirements: 6.7
- */
-@Repository
-public interface StorageLogRepository extends JpaRepository<StorageLog, Long> {
+@Component
+@RequiredArgsConstructor
+public class StorageLogRepository {
+    private final RuntimeMeetingStateStore store;
+
+    public StorageLog save(StorageLog storageLog) {
+        return store.saveStorageLog(storageLog);
+    }
 }

@@ -44,6 +44,8 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate           # Flyway owns schema; Hibernate only validates
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
     show-sql: false
     properties:
       hibernate:

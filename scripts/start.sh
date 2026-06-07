@@ -19,6 +19,75 @@ check_docker() {
     echo "[OK] Docker daemon is ready."
 }
 
+set_env_value() {
+    local key="$1"
+    local value="$2"
+    if grep -qE "^${key}=" .env; then
+        local escaped
+        escaped="$(printf "%s" "$value" | sed -e 's/[\/&]/\\&/g')"
+        sed -i.bak "s|^${key}=.*|${key}=${escaped}|" .env
+    else
+        printf "\n%s=%s\n" "$key" "$value" >> .env
+    fi
+    rm -f .env.bak
+}
+
+get_env_value() {
+    local key="$1"
+    grep -E "^${key}=" .env 2>/dev/null | tail -1 | cut -d= -f2- || true
+}
+
+random_base64() {
+    local bytes="$1"
+    if command -v openssl >/dev/null 2>&1; then
+        openssl rand -base64 "$bytes"
+    else
+        head -c "$bytes" /dev/urandom | base64 | tr -d '\n'
+    fi
+}
+
+random_hex() {
+    local bytes="$1"
+    if command -v openssl >/dev/null 2>&1; then
+        openssl rand -hex "$bytes"
+    else
+        od -An -tx1 -N "$bytes" /dev/urandom | tr -d ' \n'
+    fi
+}
+
+ensure_env_file() {
+    if [ ! -f ".env" ]; then
+        echo "[*] .env not found; creating it from .env.example..."
+        cp .env.example .env
+        echo "[OK] .env created."
+    fi
+
+    local default_jwt="Y2hhbmdlbWUtc3VwZXItc2VjcmV0LWtleS1hdC1sZWFzdC0zMi1jaGFycw=="
+    local jwt_secret
+    jwt_secret="$(get_env_value JWT_SECRET)"
+    if [ -z "$jwt_secret" ] || [ "$jwt_secret" = "$default_jwt" ]; then
+        set_env_value JWT_SECRET "$(random_base64 32)"
+        echo "[OK] JWT_SECRET generated."
+    fi
+
+    local callback_key
+    callback_key="$(get_env_value ASR_CALLBACK_API_KEY)"
+    if [ -z "$callback_key" ] || [ "$callback_key" = "internal-callback-key-change-me" ]; then
+        set_env_value ASR_CALLBACK_API_KEY "$(random_hex 24)"
+        echo "[OK] ASR_CALLBACK_API_KEY generated."
+    fi
+
+    set_env_value DIGITAL_SIGNATURE_ENABLED "true"
+    set_env_value DIGITAL_SIGNATURE_KEYSTORE_PATH "/app/keys/signing.p12"
+    set_env_value DIGITAL_SIGNATURE_KEYSTORE_PASSWORD "kolla-signing-dev"
+    set_env_value DIGITAL_SIGNATURE_KEYSTORE_TYPE "PKCS12"
+
+    if [ ! -f "keys/signing.p12" ]; then
+        echo "[*] Creating demo signing keystore..."
+        ./scripts/generate-signing-keystore.sh
+    fi
+}
+
 start_services() {
     echo "[*] Building backend image..."
     docker compose build backend
@@ -59,7 +128,7 @@ update_env_file() {
     local tunnel_url="$1"
 
     if [ ! -f ".env" ]; then
-        echo "[ERROR] .env not found. Run: cp .env.example .env"
+        echo "[ERROR] .env not found after automatic creation step."
         exit 1
     fi
 
@@ -112,6 +181,7 @@ print_success() {
 
 main() {
     check_docker
+    ensure_env_file
     start_services
     local tunnel_url
     tunnel_url="$(get_tunnel_url)"

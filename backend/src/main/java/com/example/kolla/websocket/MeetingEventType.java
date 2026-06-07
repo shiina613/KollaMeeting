@@ -79,7 +79,7 @@ public enum MeetingEventType {
     /** Draft minutes have been generated and are ready for Host review. */
     MINUTES_READY,
 
-    /** Host confirmed the minutes (digital stamp applied). */
+    /** Host confirmed the minutes (digital signature applied). */
     MINUTES_CONFIRMED,
 
     /** Secretary confirmed/edited the minutes — minutes published. */

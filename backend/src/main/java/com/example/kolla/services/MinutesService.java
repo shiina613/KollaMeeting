@@ -2,6 +2,7 @@ package com.example.kolla.services;
 
 import com.example.kolla.models.Meeting;
 import com.example.kolla.models.User;
+import com.example.kolla.responses.MinutesConfirmationResponse;
 import com.example.kolla.responses.MinutesResponse;
 import org.springframework.core.io.Resource;
 
@@ -55,7 +56,7 @@ public interface MinutesService {
      * @param jwtToken    reserved (session binding); not used in the signature itself
      * @throws IOException if PDF generation or file storage fails
      */
-    MinutesResponse confirmMinutes(Long meetingId, User requester, String jwtToken)
+    MinutesConfirmationResponse confirmMinutes(Long meetingId, User requester, String jwtToken)
             throws IOException;
 
     /**

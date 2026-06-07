@@ -2,45 +2,40 @@ package com.example.kolla.repositories;
 
 import com.example.kolla.enums.TranscriptionJobStatus;
 import com.example.kolla.models.TranscriptionJob;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
-
+import com.example.kolla.runtime.RuntimeMeetingStateStore;
 import java.util.List;
+import java.util.Optional;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 
-/**
- * Repository for {@link TranscriptionJob}.
- * Requirements: 8.7, 8.10, 8.11
- */
-@Repository
-public interface TranscriptionJobRepository extends JpaRepository<TranscriptionJob, String> {
+@Component
+@RequiredArgsConstructor
+public class TranscriptionJobRepository {
+    private final RuntimeMeetingStateStore store;
 
-    /**
-     * Find all jobs with a given status (used for recovery: PENDING → re-queue).
-     * Requirements: 8.7
-     */
-    List<TranscriptionJob> findByStatus(TranscriptionJobStatus status);
+    public TranscriptionJob save(TranscriptionJob job) {
+        return store.saveTranscriptionJob(job);
+    }
 
-    /**
-     * Find all PENDING jobs for a specific meeting (used for recovery).
-     * Requirements: 8.7
-     */
-    @Query("SELECT j FROM TranscriptionJob j WHERE j.meeting.id = :meetingId AND j.status = :status")
-    List<TranscriptionJob> findByMeetingIdAndStatus(
-            @Param("meetingId") Long meetingId,
-            @Param("status") TranscriptionJobStatus status);
+    public Optional<TranscriptionJob> findById(String jobId) {
+        return store.findTranscriptionJob(jobId);
+    }
 
-    /**
-     * Count jobs by meeting and status.
-     */
-    long countByMeeting_IdAndStatus(Long meetingId, TranscriptionJobStatus status);
+    public List<TranscriptionJob> findByStatus(TranscriptionJobStatus status) {
+        return store.findTranscriptionJobsByStatus(status);
+    }
 
-    /**
-     * Find all jobs for a meeting ordered chronologically (same order as meeting minutes).
-     * Jobs without a matching segment (PENDING/FAILED) are included.
-     */
-    @Query("SELECT j FROM TranscriptionJob j WHERE j.meeting.id = :meetingId "
-            + "ORDER BY j.createdAt ASC, j.sequenceNumber ASC")
-    List<TranscriptionJob> findByMeetingIdOrdered(@Param("meetingId") Long meetingId);
+    public List<TranscriptionJob> findByMeetingIdAndStatus(Long meetingId, TranscriptionJobStatus status) {
+        return store.findTranscriptionJobsByMeetingId(meetingId).stream()
+                .filter(job -> job.getStatus() == status)
+                .toList();
+    }
+
+    public long countByMeeting_IdAndStatus(Long meetingId, TranscriptionJobStatus status) {
+        return findByMeetingIdAndStatus(meetingId, status).size();
+    }
+
+    public List<TranscriptionJob> findByMeetingIdOrdered(Long meetingId) {
+        return store.findTranscriptionJobsByMeetingId(meetingId);
+    }
 }

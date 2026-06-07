@@ -9,6 +9,8 @@ import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.interactive.digitalsignature.PDSignature;
+import org.apache.pdfbox.pdmodel.interactive.form.PDSignatureField;
+import org.apache.pdfbox.text.PDFTextStripper;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -79,6 +81,27 @@ class PdfDigitalSignatureServiceTest {
             assertThat(sig.getName()).contains("Nguyen Van A");
             assertThat(sig.getContents()).isNotNull();
             assertThat(sig.getContents().length).isGreaterThan(100);
+            PDSignatureField field = (PDSignatureField) doc.getDocumentCatalog()
+                    .getAcroForm()
+                    .getField("KollaMeetingSignature");
+            assertThat(field).isNotNull();
+        }
+    }
+
+    @Test
+    void signPdf_addsFaintBottomRightSignatureWatermark() throws IOException {
+        byte[] signed = service.signPdf(minimalPdfBytesInternal(), "Nguyễn Quang Tùng");
+
+        try (PDDocument doc = Loader.loadPDF(signed)) {
+            PDFTextStripper stripper = new PDFTextStripper();
+            stripper.setStartPage(1);
+            stripper.setEndPage(1);
+
+            String firstPageText = stripper.getText(doc);
+
+            assertThat(firstPageText).contains("Sign By: Nguyen Quang Tung");
+            assertThat(firstPageText).containsPattern("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}");
+            assertThat(firstPageText).doesNotContain("Ký bởi");
         }
     }
 

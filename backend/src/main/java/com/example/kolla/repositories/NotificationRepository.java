@@ -1,29 +1,35 @@
 package com.example.kolla.repositories;
 
 import com.example.kolla.models.Notification;
+import com.example.kolla.runtime.RuntimeMeetingStateStore;
+import java.util.Optional;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
+import org.springframework.stereotype.Component;
 
-/**
- * Spring Data JPA repository for Notification entities.
- * Requirements: 10.5–10.7
- */
-@Repository
-public interface NotificationRepository extends JpaRepository<Notification, Long> {
+@Component
+@RequiredArgsConstructor
+public class NotificationRepository {
+    private final RuntimeMeetingStateStore store;
 
-    /** Paginated list of notifications for a user, newest first. */
-    Page<Notification> findByUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);
+    public Page<Notification> findByUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable) {
+        return store.findNotificationsByUserId(userId, pageable);
+    }
 
-    /** Count unread notifications for a user. */
-    long countByUserIdAndIsReadFalse(Long userId);
+    public long countByUserIdAndIsReadFalse(Long userId) {
+        return store.countUnreadNotifications(userId);
+    }
 
-    /** Mark all unread notifications for a user as read. */
-    @Modifying
-    @Query("UPDATE Notification n SET n.isRead = true WHERE n.user.id = :userId AND n.isRead = false")
-    int markAllReadByUserId(@Param("userId") Long userId);
+    public Optional<Notification> findById(Long notificationId) {
+        return store.findNotificationById(notificationId);
+    }
+
+    public Notification save(Notification notification) {
+        return store.saveNotification(notification);
+    }
+
+    public int markAllReadByUserId(Long userId) {
+        return store.markAllNotificationsRead(userId);
+    }
 }

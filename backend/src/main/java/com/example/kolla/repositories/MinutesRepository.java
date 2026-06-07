@@ -1,45 +1,31 @@
 package com.example.kolla.repositories;
 
-import com.example.kolla.enums.MinutesStatus;
 import com.example.kolla.models.Minutes;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
-
+import com.example.kolla.runtime.RuntimeMeetingStateStore;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 
-/**
- * Repository for {@link Minutes}.
- * Requirements: 25.1–25.7
- */
-@Repository
-public interface MinutesRepository extends JpaRepository<Minutes, Long> {
+@Component
+@RequiredArgsConstructor
+public class MinutesRepository {
+    private final RuntimeMeetingStateStore store;
 
-    /**
-     * Find the minutes record for a specific meeting.
-     * Returns empty if no minutes have been generated yet.
-     */
-    Optional<Minutes> findByMeetingId(Long meetingId);
+    public Optional<Minutes> findByMeetingId(Long meetingId) {
+        return store.findMinutesByMeetingId(meetingId);
+    }
 
-    /**
-     * Check whether minutes already exist for a meeting.
-     */
-    boolean existsByMeetingId(Long meetingId);
+    public boolean existsByMeetingId(Long meetingId) {
+        return store.minutesExists(meetingId);
+    }
 
-    /**
-     * Find all DRAFT minutes where the meeting ended more than {@code cutoff} ago
-     * and no reminder has been sent yet.
-     * Used by the 24-hour reminder scheduler.
-     * Requirements: 25.7
-     */
-    @Query("""
-            SELECT m FROM Minutes m
-            WHERE m.status = com.example.kolla.enums.MinutesStatus.DRAFT
-              AND m.reminderSentAt IS NULL
-              AND m.createdAt <= :cutoff
-            """)
-    List<Minutes> findDraftMinutesNeedingReminder(@Param("cutoff") LocalDateTime cutoff);
+    public Minutes save(Minutes minutes) {
+        return store.saveMinutes(minutes);
+    }
+
+    public List<Minutes> findDraftMinutesNeedingReminder(LocalDateTime cutoff) {
+        return store.findDraftMinutesNeedingReminder(cutoff);
+    }
 }

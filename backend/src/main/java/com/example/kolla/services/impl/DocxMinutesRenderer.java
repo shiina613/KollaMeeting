@@ -114,7 +114,8 @@ public final class DocxMinutesRenderer {
             return "    <w:p><w:pPr><w:spacing w:after=\"120\"/></w:pPr></w:p>\n";
         }
 
-        boolean bold = line.startsWith("MEETING MINUTES") || (line.startsWith("[") && line.endsWith("]"));
+        boolean bold = line.startsWith("BIÊN BẢN")
+                || (line.startsWith("[") && line.contains("]"));
         String runProperties = bold ? "<w:rPr><w:b/></w:rPr>" : "";
         return """
                     <w:p>

@@ -14,18 +14,18 @@ import java.nio.file.Paths;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Uses the repo dev keystore at {@code secrets/signing.p12} when present.
+ * Uses the repo dev keystore at {@code keys/signing.p12} when present.
  */
 class PdfDigitalSignatureDevKeystoreTest {
 
     private static boolean devKeystoreExists() {
-        return Files.isRegularFile(Paths.get("..", "secrets", "signing.p12"));
+        return Files.isRegularFile(Paths.get("..", "keys", "signing.p12"));
     }
 
     @Test
     @EnabledIf("com.example.kolla.services.PdfDigitalSignatureDevKeystoreTest#devKeystoreExists")
     void signWithDevKeystore_producesVerifiablePdf() throws Exception {
-        Path keystore = Paths.get("..", "secrets", "signing.p12").toAbsolutePath().normalize();
+        Path keystore = Paths.get("..", "keys", "signing.p12").toAbsolutePath().normalize();
         Path outPdf = Paths.get("target", "dev-signed-minutes.pdf").toAbsolutePath();
         Files.createDirectories(outPdf.getParent());
 

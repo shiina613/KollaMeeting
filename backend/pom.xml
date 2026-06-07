@@ -124,11 +124,12 @@
             <version>${springdoc.version}</version>
         </dependency>
 
-        <!-- Apache PDFBox 3.x — PDF generation for Minutes (Requirement 25.1–25.5) -->
+        <!-- Apache PDFBox 3.x — PDF signature inspection in tests -->
         <dependency>
             <groupId>org.apache.pdfbox</groupId>
             <artifactId>pdfbox</artifactId>
             <version>3.0.2</version>
+            <scope>test</scope>
         </dependency>
 
         <dependency>
