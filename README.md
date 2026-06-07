@@ -84,6 +84,130 @@ http://localhost:8080/api/v1
 http://localhost:8000/health
 ```
 
+## Dùng thử nhanh
+
+### 1. Chuẩn bị
+
+Cần Docker Desktop đang chạy. Nếu máy không có GPU NVIDIA hoặc chưa có model PhoWhisper local, tạo `.env` trước và đổi ASR sang CPU/Gipformer để demo dễ hơn:
+
+```powershell
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
+notepad .env
+```
+
+Trong `.env`, dùng các giá trị này nếu muốn chạy CPU:
+
+```env
+ASR_BACKEND=gipformer
+DEVICE=cpu
+```
+
+Nếu đã có GPU và model local tại `asr-service/models/phowhisper-medium-ct2-int8_float16/`, có thể giữ mặc định `ASR_BACKEND=phowhisper` và `DEVICE=cuda`.
+
+### 2. Khởi động hệ thống
+
+Chạy từ thư mục gốc repo:
+
+```powershell
+.\scripts\start.ps1
+```
+
+Script sẽ build/start MySQL, Redis, backend, ASR service, nginx, frontend và cloudflared. Khi xong, terminal in ra URL dạng:
+
+```text
+>>> Kolla dang chay tai: https://<random>.trycloudflare.com
+```
+
+Mở URL đó để dùng thử từ trình duyệt. Nếu chỉ thử trên máy local, mở:
+
+```text
+http://localhost:8888
+```
+
+### 3. Đăng nhập demo
+
+Tài khoản seed mặc định:
+
+```text
+EmployeeCode: admin
+Password: admin
+Role: ADMIN
+```
+
+Sau khi đăng nhập, vào trang quản trị để kiểm tra dữ liệu seed:
+
+- Phòng ban: `BGD` / `Ban Giam doc`
+- Phòng họp: `ROOM-MAIN` / `Phong hop chinh`
+
+### 4. Tạo dữ liệu demo
+
+Trong trang quản trị, tạo tối thiểu 2 người dùng:
+
+- Một user role `SECRETARY`, ví dụ `sec01`.
+- Một user role `USER`, ví dụ `host01` hoặc `member01`.
+
+Gán cả hai vào phòng ban `BGD`. Mật khẩu có thể đặt tạm như `12345678` cho demo nội bộ.
+
+### 5. Tạo và bắt đầu cuộc họp
+
+Đăng xuất admin, đăng nhập bằng tài khoản `SECRETARY` vừa tạo, rồi:
+
+1. Vào danh sách cuộc họp.
+2. Tạo cuộc họp mới.
+3. Chọn phòng ban `BGD`, phòng họp `ROOM-MAIN`, thời gian bắt đầu/kết thúc.
+4. Lưu cuộc họp.
+5. Vào chi tiết cuộc họp, thêm thành viên:
+   - `sec01` với `MeetingRole.SECRETARY`.
+   - `host01` với `MeetingRole.HOST` hoặc user khác với `MeetingRole.MEMBER`.
+6. Bấm bắt đầu cuộc họp trong vòng 30 phút trước `StartTime`.
+
+Sau khi meeting `ACTIVE`, vào phòng họp để kiểm tra Jitsi, chat, raise hand, mode/priority controls và điểm danh runtime.
+
+### 6. Thử tài liệu, ghi âm, biên bản
+
+Trong cuộc họp:
+
+- User có `MeetingRole.SECRETARY` upload tài liệu ở phần tài liệu cuộc họp.
+- User thường không thấy hoặc không được phép upload tài liệu.
+- `HOST` hoặc `SECRETARY` có thể đổi chế độ họp và bật/tắt ưu tiên cao.
+- Kết thúc cuộc họp để backend tạo transcript/minutes/runtime files.
+- Vào phần biên bản để xem/sửa/xác nhận, sau đó tải DOCX/PDF nếu dữ liệu đã sẵn sàng.
+
+File runtime nằm trong Docker volume `app-storage`, mount vào backend tại `/app/storage`. Xem nhanh bằng:
+
+```powershell
+docker exec -it kolla-backend sh -lc "find /app/storage -maxdepth 4 -type f | head -50"
+```
+
+### 7. Kiểm tra trạng thái và dừng hệ thống
+
+Kiểm tra container:
+
+```powershell
+docker compose ps
+```
+
+Xem log backend hoặc ASR:
+
+```powershell
+docker logs kolla-backend --tail 100
+docker logs kolla-asr-service --tail 100
+```
+
+Dừng hệ thống, giữ dữ liệu:
+
+```powershell
+docker compose down
+```
+
+Reset sạch database demo về 7 bảng Word và seed mặc định:
+
+```powershell
+docker compose down
+docker volume rm kollameeting_mysql-data
+.\scripts\start.ps1
+```
+
 ## ASR model
 
 Model PhoWhisper CT2 local đặt tại:
