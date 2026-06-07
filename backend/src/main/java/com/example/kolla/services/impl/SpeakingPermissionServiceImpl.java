@@ -67,7 +67,7 @@ public class SpeakingPermissionServiceImpl implements SpeakingPermissionService 
         Meeting meeting = findMeetingOrThrow(meetingId);
 
         // Only the Host may grant permission (TASK-001 — ADMIN authority removed; Requirement 22.4)
-        if (!meetingLifecycleService.isHostOrAdmin(meeting, granter)) {
+        if (!meetingLifecycleService.hasHostAuthority(meeting, granter)) {
             throw new ForbiddenException(
                     "Only the Host may grant speaking permission");
         }
@@ -144,7 +144,7 @@ public class SpeakingPermissionServiceImpl implements SpeakingPermissionService 
         Meeting meeting = findMeetingOrThrow(meetingId);
 
         // Only the Host may revoke (TASK-001 — ADMIN authority removed; Requirement 22.6)
-        if (!meetingLifecycleService.isHostOrAdmin(meeting, revoker)) {
+        if (!meetingLifecycleService.hasHostAuthority(meeting, revoker)) {
             throw new ForbiddenException(
                     "Only the Host may revoke speaking permission");
         }

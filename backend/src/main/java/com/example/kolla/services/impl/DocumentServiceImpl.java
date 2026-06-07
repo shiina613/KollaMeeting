@@ -28,7 +28,7 @@ import java.util.List;
 
 /**
  * DocumentService implementation.
- * Requirements: 9.1–9.7
+ * Requirements: 9.1â€“9.7
  */
 @Slf4j
 @Service
@@ -41,7 +41,7 @@ public class DocumentServiceImpl implements DocumentService {
     private final FileStorageService fileStorageService;
     private final Clock clock;
 
-    // ── Upload Document ───────────────────────────────────────────────────────
+    // â”€â”€ Upload Document â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     @Override
     @Transactional
@@ -50,13 +50,13 @@ public class DocumentServiceImpl implements DocumentService {
 
         Meeting meeting = findMeetingOrThrow(meetingId);
 
-        // Any member (or ADMIN) may upload (Requirement 9.1)
-        checkMembership(meetingId, currentUser);
+        // Submitted Word flow assigns document upload to the meeting secretary.
+        checkAssignedSecretary(meeting, currentUser);
 
         // Validate file type and size (Requirement 9.2, 9.3)
         fileStorageService.validateFile(file, FileType.DOCUMENT);
 
-        // Store file and get relative path (Requirement 9.7 — FileLock handles concurrency)
+        // Store file and get relative path (Requirement 9.7 â€” FileLock handles concurrency)
         Path storedPath = fileStorageService.storeFile(file, FileType.DOCUMENT, meetingId, "doc");
 
         Document document = Document.builder()
@@ -76,7 +76,7 @@ public class DocumentServiceImpl implements DocumentService {
         return DocumentResponse.from(saved);
     }
 
-    // ── List Documents ────────────────────────────────────────────────────────
+    // â”€â”€ List Documents â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     @Override
     @Transactional(readOnly = true)
@@ -86,13 +86,13 @@ public class DocumentServiceImpl implements DocumentService {
         // Members only (Requirement 9.4)
         checkMembership(meetingId, currentUser);
 
-        return documentRepository.findByMeetingIdOrderByUploadedAtDesc(meetingId)
+        return documentRepository.findByMeetingIdOrderByIdDesc(meetingId)
                 .stream()
                 .map(DocumentResponse::from)
                 .toList();
     }
 
-    // ── Get Document by ID ────────────────────────────────────────────────────
+    // â”€â”€ Get Document by ID â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     @Override
     @Transactional(readOnly = true)
@@ -105,7 +105,7 @@ public class DocumentServiceImpl implements DocumentService {
         return DocumentResponse.from(document);
     }
 
-    // ── Download Document ─────────────────────────────────────────────────────
+    // â”€â”€ Download Document â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     @Override
     @Transactional(readOnly = true)
@@ -118,7 +118,7 @@ public class DocumentServiceImpl implements DocumentService {
         return fileStorageService.loadFileAsResource(document.getFilePath());
     }
 
-    // ── Delete Document ───────────────────────────────────────────────────────
+    // â”€â”€ Delete Document â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     @Override
     @Transactional
@@ -138,7 +138,7 @@ public class DocumentServiceImpl implements DocumentService {
                 documentId, document.getFileName(), currentUser.getUsername());
     }
 
-    // ── Private helpers ───────────────────────────────────────────────────────
+    // â”€â”€ Private helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private Meeting findMeetingOrThrow(Long meetingId) {
         return meetingRepository.findById(meetingId)
@@ -165,6 +165,16 @@ public class DocumentServiceImpl implements DocumentService {
         if (!meetingService.isMember(meetingId, currentUser.getId())) {
             throw new ForbiddenException(
                     "You are not a member of meeting id: " + meetingId);
+        }
+    }
+
+    private void checkAssignedSecretary(Meeting meeting, User currentUser) {
+        if (currentUser.getRole() != Role.SECRETARY) {
+            throw new ForbiddenException("Only SECRETARY may upload documents");
+        }
+        User secretary = meeting.getSecretary();
+        if (secretary == null || !secretary.getId().equals(currentUser.getId())) {
+            throw new ForbiddenException("Only the assigned meeting SECRETARY may upload documents");
         }
     }
 }

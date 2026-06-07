@@ -120,9 +120,9 @@ public class RaiseHandServiceImpl implements RaiseHandService {
     public List<RaiseHandRequestResponse> listPendingRequests(Long meetingId, User requester) {
         Meeting meeting = findMeetingOrThrow(meetingId);
 
-        if (!meetingLifecycleService.isHostOrAdmin(meeting, requester)) {
+        if (!meetingLifecycleService.hasHostAuthority(meeting, requester)) {
             throw new ForbiddenException(
-                    "Only the Host or an ADMIN may view the raise-hand queue");
+                    "Only the Host may view the raise-hand queue");
         }
 
         return raiseHandQueueService.listPendingOrdered(meetingId).stream()

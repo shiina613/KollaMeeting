@@ -41,6 +41,7 @@ public class CreateUserRequest {
     @NotNull(message = "Role is required")
     private Role role;
 
+    @NotNull(message = "Department ID is required")
     private Long departmentId;
 
     private LocalDate dob;

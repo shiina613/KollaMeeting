@@ -366,6 +366,13 @@ export default function MeetingFormPage() {
       return
     }
 
+    const selectedRoom = rooms.find((room) => room.id === values.roomId)
+    const departmentId = selectedRoom?.department?.id ?? selectedRoom?.departmentId
+    if (!departmentId) {
+      setErrors({ general: 'PhÃ²ng há»p chÆ°a gáº¯n phÃ²ng ban.' })
+      return
+    }
+
     setLoading(true)
     setConflictError(null)
 
@@ -376,6 +383,7 @@ export default function MeetingFormPage() {
         startTime: localToIso(values.startTime),
         endTime: localToIso(values.endTime),
         roomId: values.roomId as number,
+        departmentId,
         hostUserId: values.hostUserId as number,
         secretaryUserId: values.secretaryUserId as number,
         transcriptionPriority: values.transcriptionPriority,

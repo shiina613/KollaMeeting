@@ -9,6 +9,7 @@ import com.example.kolla.exceptions.BadRequestException;
 import com.example.kolla.exceptions.ForbiddenException;
 import com.example.kolla.models.Meeting;
 import com.example.kolla.models.Member;
+import com.example.kolla.models.Room;
 import com.example.kolla.models.User;
 import com.example.kolla.repositories.DepartmentRepository;
 import com.example.kolla.repositories.MeetingRepository;
@@ -37,6 +38,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.atLeastOnce;
 
 @ExtendWith(MockitoExtension.class)
 class MeetingThesisAlignmentTest {
@@ -77,13 +79,17 @@ class MeetingThesisAlignmentTest {
                 .title("Họp nghiệm thu")
                 .startTime(LocalDateTime.now().plusDays(1))
                 .endTime(LocalDateTime.now().plusDays(1).plusHours(2))
+                .roomId(9L)
+                .departmentId(8L)
                 .hostUserId(employeeHost.getId())
                 .secretaryUserId(secretary.getId())
                 .build();
 
         when(userRepository.findById(employeeHost.getId())).thenReturn(Optional.of(employeeHost));
         when(userRepository.findById(secretary.getId())).thenReturn(Optional.of(secretary));
-        when(meetingRepository.existsByCode(any())).thenReturn(false);
+        when(entityManager.find(Room.class, 9L, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE))
+                .thenReturn(Room.builder().id(9L).build());
+        when(departmentRepository.existsById(8L)).thenReturn(true);
         when(meetingRepository.save(any(Meeting.class))).thenAnswer(invocation -> {
             Meeting meeting = invocation.getArgument(0);
             meeting.setId(100L);
@@ -102,6 +108,72 @@ class MeetingThesisAlignmentTest {
                 .containsExactlyInAnyOrder(
                         org.assertj.core.groups.Tuple.tuple(secretary.getId(), MeetingRole.SECRETARY),
                         org.assertj.core.groups.Tuple.tuple(employeeHost.getId(), MeetingRole.HOST));
+    }
+
+    @Test
+    void createMeeting_requiresRoomId() {
+        CreateMeetingRequest request = CreateMeetingRequest.builder()
+                .title("Hop nghiem thu")
+                .startTime(LocalDateTime.now().plusDays(1))
+                .endTime(LocalDateTime.now().plusDays(1).plusHours(2))
+                .departmentId(8L)
+                .hostUserId(employeeHost.getId())
+                .secretaryUserId(secretary.getId())
+                .build();
+
+        assertThatThrownBy(() -> service.createMeeting(request, secretary))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Room ID is required");
+    }
+
+    @Test
+    void createMeeting_requiresDepartmentId() {
+        CreateMeetingRequest request = CreateMeetingRequest.builder()
+                .title("Hop nghiem thu")
+                .startTime(LocalDateTime.now().plusDays(1))
+                .endTime(LocalDateTime.now().plusDays(1).plusHours(2))
+                .roomId(9L)
+                .hostUserId(employeeHost.getId())
+                .secretaryUserId(secretary.getId())
+                .build();
+
+        assertThatThrownBy(() -> service.createMeeting(request, secretary))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Department ID is required");
+    }
+
+    @Test
+    void createMeeting_generatesMeetingCodeFromPersistedId() {
+        CreateMeetingRequest request = CreateMeetingRequest.builder()
+                .title("Hop nghiem thu")
+                .startTime(LocalDateTime.now().plusDays(1))
+                .endTime(LocalDateTime.now().plusDays(1).plusHours(2))
+                .roomId(9L)
+                .departmentId(8L)
+                .hostUserId(employeeHost.getId())
+                .secretaryUserId(secretary.getId())
+                .build();
+
+        when(userRepository.findById(employeeHost.getId())).thenReturn(Optional.of(employeeHost));
+        when(userRepository.findById(secretary.getId())).thenReturn(Optional.of(secretary));
+        when(entityManager.find(Room.class, 9L, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE))
+                .thenReturn(Room.builder().id(9L).build());
+        when(departmentRepository.existsById(8L)).thenReturn(true);
+        when(memberRepository.save(any(Member.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(meetingRepository.save(any(Meeting.class))).thenAnswer(invocation -> {
+            Meeting meeting = invocation.getArgument(0);
+            if (meeting.getId() == null) {
+                meeting.setId(42L);
+            }
+            return meeting;
+        });
+
+        service.createMeeting(request, secretary);
+
+        ArgumentCaptor<Meeting> meetingCaptor = ArgumentCaptor.forClass(Meeting.class);
+        verify(meetingRepository, atLeastOnce()).save(meetingCaptor.capture());
+        assertThat(meetingCaptor.getAllValues().get(meetingCaptor.getAllValues().size() - 1).getCode())
+                .isEqualTo("MTG-000042");
     }
 
     @Test

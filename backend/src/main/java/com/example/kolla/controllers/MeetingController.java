@@ -65,7 +65,6 @@ public class MeetingController {
     public ResponseEntity<ApiResponse<Page<MeetingResponse>>> listMeetings(
             @RequestParam(required = false) MeetingStatus status,
             @RequestParam(required = false) Long roomId,
-            @RequestParam(required = false) Long creatorId,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startFrom,
             @RequestParam(required = false)
@@ -74,7 +73,7 @@ public class MeetingController {
             @AuthenticationPrincipal User currentUser) {
 
         Page<MeetingResponse> page = meetingService.listMeetings(
-                status, roomId, creatorId, startFrom, startTo, pageable, currentUser);
+                status, roomId, startFrom, startTo, pageable, currentUser);
         return ResponseEntity.ok(ApiResponse.success(page));
     }
 
@@ -258,11 +257,11 @@ public class MeetingController {
 
     /**
      * POST /api/v1/meetings/{id}/activate
-     * Transition meeting from SCHEDULED → ACTIVE. Host or ADMIN only.
+     * Transition meeting from SCHEDULED to ACTIVE. Host or assigned Secretary only.
      * Requirements: 3.10
      */
     @PostMapping("/{id}/activate")
-    @Operation(summary = "Activate a meeting (Host/ADMIN only)")
+    @Operation(summary = "Activate a meeting (Host/Secretary only)")
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Meeting activated"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Meeting not in SCHEDULED state"),

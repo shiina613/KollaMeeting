@@ -299,6 +299,7 @@ describe('MeetingFormPage — calls createMeeting on valid submit', () => {
     const callArgs = vi.mocked(meetingService.createMeeting).mock.calls[0][0]
     expect(callArgs.title).toBe('Test Meeting')
     expect(callArgs.roomId).toBe(1)
+    expect(callArgs.departmentId).toBe(1)
     expect(callArgs.hostUserId).toBe(10)
     expect(callArgs.secretaryUserId).toBe(11)
     // startTime and endTime should be ISO strings

@@ -174,6 +174,7 @@ Sau khi chạy hệ thống, file sinh ra theo từng cuộc họp nằm dưới
 - Ghi âm: `storage/meetings/<meeting_id>/recordings/`
 - Transcript và audio chunk ASR: `storage/meetings/<meeting_id>/transcript/`
 - Tài liệu upload: `storage/meetings/<meeting_id>/documents/`
+- Lịch sử điểm danh: `storage/meetings/<meeting_id>/attendance/`
 - Audit file runtime: `storage/meetings/<meeting_id>/audit/`
 
 Keystore ký PDF nằm trong `keys/` là cấu hình bảo mật local, không phải dữ liệu nghiệp vụ và không thuộc database.

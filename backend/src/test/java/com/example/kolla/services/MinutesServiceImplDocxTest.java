@@ -3,6 +3,7 @@ package com.example.kolla.services;
 import com.example.kolla.enums.FileType;
 import com.example.kolla.enums.MeetingRole;
 import com.example.kolla.enums.Role;
+import com.example.kolla.exceptions.ForbiddenException;
 import com.example.kolla.models.Document;
 import com.example.kolla.models.Meeting;
 import com.example.kolla.models.Member;
@@ -42,6 +43,7 @@ import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
@@ -284,6 +286,36 @@ class MinutesServiceImplDocxTest {
                 .isEqualTo(Base64.getEncoder().encodeToString(signedBytes));
         assertThat(response.getSignedPdfSha256()).isEqualTo(sha256(signedBytes));
         verify(eventPublisher).publishMinutesConfirmed(123L, 77L);
+    }
+
+    @Test
+    void confirmMinutes_rejectsAdminWhoIsNotMeetingHost() {
+        User host = User.builder()
+                .id(10L)
+                .username("host")
+                .fullName("Host")
+                .role(Role.SECRETARY)
+                .isActive(true)
+                .build();
+        User admin = User.builder()
+                .id(11L)
+                .username("admin")
+                .fullName("Admin")
+                .role(Role.ADMIN)
+                .isActive(true)
+                .build();
+        Meeting meeting = Meeting.builder()
+                .id(123L)
+                .title("Hop")
+                .host(host)
+                .creator(host)
+                .build();
+
+        when(meetingRepository.findById(123L)).thenReturn(Optional.of(meeting));
+
+        assertThatThrownBy(() -> service.confirmMinutes(123L, admin, "jwt-token"))
+                .isInstanceOf(ForbiddenException.class)
+                .hasMessageContaining("Only the meeting Host may confirm the minutes");
     }
 
     private TranscriptionSegment segment(

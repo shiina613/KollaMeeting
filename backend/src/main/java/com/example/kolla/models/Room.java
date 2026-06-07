@@ -5,9 +5,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
 
@@ -21,7 +18,6 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@EntityListeners(AuditingEntityListener.class)
 public class Room {
 
     @Id
@@ -31,21 +27,18 @@ public class Room {
     @Column(name = "RoomName", nullable = false)
     private String name;
 
-    @Column(name = "RoomCode", unique = true, length = 100)
+    @Column(name = "RoomCode", nullable = false, length = 100)
     private String roomCode;
 
-    @Column(name = "capacity")
+    @Transient
     private Integer capacity;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "Department_id", nullable = false)
+    @Transient
     private Department department;
 
-    @CreatedDate
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Transient
     private LocalDateTime createdAt;
 
-    @LastModifiedDate
-    @Column(name = "updated_at", nullable = false)
+    @Transient
     private LocalDateTime updatedAt;
 }

@@ -6,9 +6,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -29,7 +26,6 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@EntityListeners(AuditingEntityListener.class)
 public class User implements UserDetails {
 
     @Id
@@ -79,18 +75,17 @@ public class User implements UserDetails {
     @Column(name = "Role", nullable = false)
     private Role role;
 
-    @Column(name = "Department_id")
+    @Column(name = "Department_id", nullable = false)
     private Long departmentId;
 
-    @Column(name = "is_active", nullable = false)
-    private boolean isActive;
+    @Transient
+    @Builder.Default
+    private boolean isActive = true;
 
-    @CreatedDate
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Transient
     private LocalDateTime createdAt;
 
-    @LastModifiedDate
-    @Column(name = "updated_at", nullable = false)
+    @Transient
     private LocalDateTime updatedAt;
 
     // ── UserDetails implementation ──────────────────────────────────────────

@@ -75,6 +75,7 @@ class MeetingLifecycleIntegrationTest {
                 .passwordHash("$2a$12$hashed")
                 .fullName("Lifecycle Admin")
                 .role(Role.ADMIN)
+                .departmentId(1L)
                 .isActive(true)
                 .build());
 
@@ -84,15 +85,18 @@ class MeetingLifecycleIntegrationTest {
                 .passwordHash("$2a$12$hashed")
                 .fullName("Lifecycle Secretary")
                 .role(Role.SECRETARY)
+                .departmentId(1L)
                 .isActive(true)
                 .build());
 
         Department dept = departmentRepository.save(Department.builder()
+                .departmentCode("DEPT-LIFECYCLE-" + System.nanoTime())
                 .name("Lifecycle Dept " + System.nanoTime())
                 .description("Test")
                 .build());
 
         room = roomRepository.save(Room.builder()
+                .roomCode("ROOM-LIFECYCLE-" + System.nanoTime())
                 .name("Lifecycle Room " + System.nanoTime())
                 .capacity(10)
                 .department(dept)
@@ -288,6 +292,7 @@ class MeetingLifecycleIntegrationTest {
                         .startTime(start)
                         .endTime(end)
                         .roomId(room.getId())
+                        .departmentId(room.getDepartment().getId())
                         .hostUserId(secretary.getId())
                         .secretaryUserId(secretary.getId())
                         .build(),

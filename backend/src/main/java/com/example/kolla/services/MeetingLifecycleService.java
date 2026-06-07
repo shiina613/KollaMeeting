@@ -58,5 +58,5 @@ public interface MeetingLifecycleService {
      * NOTE: ADMIN role no longer confers host authority (TASK-001).
      * Requirements: 3.10, 21.7
      */
-    boolean isHostOrAdmin(Meeting meeting, User user);
+    boolean hasHostAuthority(Meeting meeting, User user);
 }

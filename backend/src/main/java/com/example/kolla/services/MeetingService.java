@@ -38,7 +38,6 @@ public interface MeetingService {
      */
     Page<MeetingResponse> listMeetings(MeetingStatus status,
                                        Long roomId,
-                                       Long creatorId,
                                        LocalDateTime startFrom,
                                        LocalDateTime startTo,
                                        Pageable pageable,

@@ -34,9 +34,9 @@ public interface MeetingModeService {
      *
      * @param meetingId the meeting to switch
      * @param targetMode the desired mode
-     * @param requester the user requesting the switch (must be Host or ADMIN)
+     * @param requester the user requesting the switch (must be Host)
      * @return updated MeetingResponse with new mode
-     * @throws com.example.kolla.exceptions.ForbiddenException if requester is not Host/ADMIN
+     * @throws com.example.kolla.exceptions.ForbiddenException if requester is not Host
      * @throws com.example.kolla.exceptions.BadRequestException if meeting is not ACTIVE or
      *         already in the requested mode
      * Requirements: 21.1–21.10

@@ -5,8 +5,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
 
@@ -20,7 +18,6 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@EntityListeners(AuditingEntityListener.class)
 public class Document {
 
     @Id
@@ -34,20 +31,20 @@ public class Document {
     @Column(name = "Name", nullable = false, length = 500)
     private String fileName;
 
-    @Column(name = "file_size")
+    @Transient
     private Long fileSize;
 
-    @Column(name = "file_type", length = 100)
+    @Transient
     private String fileType;
 
-    @Column(name = "Content", nullable = false, length = 1000)
+    @Column(name = "Content", nullable = false, columnDefinition = "TEXT")
     private String filePath;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "User_id", nullable = false)
     private User uploadedBy;
 
-    @CreatedDate
-    @Column(name = "uploaded_at", nullable = false, updatable = false)
+    @Transient
     private LocalDateTime uploadedAt;
+
 }

@@ -17,8 +17,6 @@ import java.util.List;
 @Repository
 public interface RoomRepository extends JpaRepository<Room, Long> {
 
-    List<Room> findByDepartmentId(Long departmentId);
-
     boolean existsByRoomCode(String roomCode);
 
     /**
