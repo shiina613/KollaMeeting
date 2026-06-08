@@ -76,12 +76,12 @@ const STATUS_CLASSES: Record<MeetingStatus, string> = {
 }
 
 const MEETING_ROLE_LABELS: Record<MeetingRole, string> = {
-  HOST: 'Chu tri',
-  SECRETARY: 'Thu ky',
-  REVIEWER: 'Phan bien',
-  COMMITTEE_MEMBER: 'Uy vien',
-  GUEST: 'Khach moi',
-  MEMBER: 'Thanh vien',
+  HOST: 'Chủ trì',
+  SECRETARY: 'Thư ký',
+  REVIEWER: 'Phản biện',
+  COMMITTEE_MEMBER: 'Ủy viên',
+  GUEST: 'Khách mời',
+  MEMBER: 'Thành viên',
 }
 function StatusBadge({ status }: { status: MeetingStatus }) {
   return (
@@ -236,6 +236,7 @@ export default function MeetingDetailPage() {
   const [allUsers, setAllUsers] = useState<MeetingUser[]>([])
   const [allUsersLoading, setAllUsersLoading] = useState(false)
   const [pickerFilter, setPickerFilter] = useState('')
+  const [memberRole, setMemberRole] = useState<MeetingRole>('MEMBER')
   const [memberActionLoading, setMemberActionLoading] = useState<number | null>(null)
 
   // Document upload
@@ -284,9 +285,8 @@ export default function MeetingDetailPage() {
     }
   }, [activeTab, meetingId, meeting?.status])
 
-  const isHostOrSecretary = user?.role === 'SECRETARY'
-    || meeting?.hostId === user?.id
-    || meeting?.secretaryId === user?.id
+  const isAssignedSecretary = user?.role === 'SECRETARY' && meeting?.secretaryId === user?.id
+  const isHostOrSecretary = isAssignedSecretary || meeting?.hostId === user?.id
   const isSecretary = user?.role === 'SECRETARY'
   const canEdit = user?.role === 'SECRETARY' && meeting?.status === 'SCHEDULED'
 
@@ -317,7 +317,7 @@ export default function MeetingDetailPage() {
         await removeMeetingMember(meetingId, u.id)
         setMembers((prev) => prev.filter((m) => m.userId !== u.id))
       } else {
-        await addMeetingMember(meetingId, u.id)
+        await addMeetingMember(meetingId, u.id, memberRole)
         const res = await listMeetingMembers(meetingId)
         setMembers(res.data ?? [])
       }
@@ -646,14 +646,29 @@ export default function MeetingDetailPage() {
                 {/* Picker panel */}
                 {showMemberPicker && (
                   <div className="mt-3 border border-outline-variant rounded-xl overflow-hidden">
-                    {/* Filter input */}
-                    <div className="px-3 py-2 border-b border-outline-variant bg-surface-container-low">
+                    <div className="px-3 py-3 border-b border-outline-variant bg-surface-container-low space-y-3">
+                      <div>
+                        <label htmlFor="detail-member-role" className="block text-label-md text-on-surface-variant mb-1">
+                          Vai trò khi thêm
+                        </label>
+                        <select
+                          id="detail-member-role"
+                          value={memberRole}
+                          onChange={(e) => setMemberRole(e.target.value as MeetingRole)}
+                          className="w-full border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary"
+                        >
+                          <option value="MEMBER">{MEETING_ROLE_LABELS.MEMBER}</option>
+                          <option value="COMMITTEE_MEMBER">{MEETING_ROLE_LABELS.COMMITTEE_MEMBER}</option>
+                          <option value="REVIEWER">{MEETING_ROLE_LABELS.REVIEWER}</option>
+                          <option value="GUEST">{MEETING_ROLE_LABELS.GUEST}</option>
+                        </select>
+                      </div>
                       <input
                         type="text"
                         value={pickerFilter}
                         onChange={(e) => setPickerFilter(e.target.value)}
                         placeholder="Lọc theo tên hoặc username..."
-                        className="w-full bg-transparent text-body-sm text-on-surface placeholder:text-on-surface-variant focus:outline-none"
+                        className="w-full border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface bg-surface placeholder:text-on-surface-variant focus:outline-none focus:ring-2 focus:ring-primary"
                         autoFocus
                       />
                     </div>
@@ -818,7 +833,7 @@ export default function MeetingDetailPage() {
         {activeTab === 'documents' && (
           <Section title={`Tài liệu (${documents.length})`} icon="description">
             {/* Upload button — any member can upload */}
-            <div className="mb-4">
+            {isAssignedSecretary && <div className="mb-4">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -838,7 +853,7 @@ export default function MeetingDetailPage() {
                 }
                 Tải lên tài liệu
               </button>
-            </div>
+            </div>}
 
             {documents.length === 0 ? (
               <p className="text-body-sm text-on-surface-variant text-center py-4">Chưa có tài liệu nào</p>
@@ -864,7 +879,7 @@ export default function MeetingDetailPage() {
                       <span className="material-symbols-outlined text-[18px]">download</span>
                     </button>
                     {/* Delete — SECRETARY only */}
-                    {isSecretary && (
+                    {isAssignedSecretary && (
                       <button
                         type="button"
                         onClick={() => handleDeleteDocument(doc.id)}

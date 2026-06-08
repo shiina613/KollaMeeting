@@ -369,7 +369,7 @@ export default function MeetingFormPage() {
     const selectedRoom = rooms.find((room) => room.id === values.roomId)
     const departmentId = selectedRoom?.department?.id ?? selectedRoom?.departmentId
     if (!departmentId) {
-      setErrors({ general: 'PhÃ²ng há»p chÆ°a gáº¯n phÃ²ng ban.' })
+      setErrors({ general: 'Phòng họp chưa gắn phòng ban.' })
       return
     }
 
