@@ -1,17 +1,16 @@
 /**
- * AdminPage — admin panel with tabs for user management, storage, and departments/rooms.
+ * AdminPage — admin panel with tabs for user management and departments/rooms.
  * Protected: ADMIN only.
  * Requirements: 12.4
  */
 
 import { useState } from 'react'
 import UserManagement from '../components/admin/UserManagement'
-import StorageDashboard from '../components/admin/StorageDashboard'
 import DepartmentRoomManagement from '../components/admin/DepartmentRoomManagement'
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 
-type TabId = 'users' | 'storage' | 'departments'
+type TabId = 'users' | 'departments'
 
 interface Tab {
   id: TabId
@@ -21,7 +20,6 @@ interface Tab {
 
 const TABS: Tab[] = [
   { id: 'users', label: 'Quản lý người dùng', icon: 'group' },
-  { id: 'storage', label: 'Lưu trữ', icon: 'storage' },
   { id: 'departments', label: 'Phòng ban & Phòng họp', icon: 'corporate_fare' },
 ]
 
@@ -36,7 +34,7 @@ export default function AdminPage() {
       <div>
         <h1 className="text-h3 font-semibold text-on-surface">Quản trị hệ thống</h1>
         <p className="text-body-sm text-on-surface-variant mt-1">
-          Quản lý người dùng, lưu trữ và cơ sở hạ tầng
+          Quản lý người dùng, phòng ban và phòng họp
         </p>
       </div>
 
@@ -79,16 +77,6 @@ export default function AdminPage() {
         data-testid="tab-panel-users"
       >
         {activeTab === 'users' && <UserManagement />}
-      </div>
-
-      <div
-        id="tab-panel-storage"
-        role="tabpanel"
-        aria-labelledby="tab-storage"
-        hidden={activeTab !== 'storage'}
-        data-testid="tab-panel-storage"
-      >
-        {activeTab === 'storage' && <StorageDashboard />}
       </div>
 
       <div

@@ -123,14 +123,9 @@ public class DocumentServiceImpl implements DocumentService {
     @Override
     @Transactional
     public void deleteDocument(Long documentId, User currentUser) {
-        // SECRETARY only (Requirement 9.6)
-        if (currentUser.getRole() != Role.SECRETARY) {
-            throw new ForbiddenException("Only SECRETARY may delete documents");
-        }
-
         Document document = findDocumentOrThrow(documentId);
+        checkAssignedSecretaryForDelete(document.getMeeting(), currentUser);
 
-        // Delete file from filesystem
         fileStorageService.deleteFile(document.getFilePath());
 
         documentRepository.delete(document);
@@ -154,14 +149,9 @@ public class DocumentServiceImpl implements DocumentService {
 
     /**
      * Checks that the current user is a member of the meeting.
-     * ADMIN and SECRETARY users bypass the membership check.
      * Throws ForbiddenException if not a member.
      */
     private void checkMembership(Long meetingId, User currentUser) {
-        if (currentUser.getRole() == Role.ADMIN
-                || currentUser.getRole() == Role.SECRETARY) {
-            return; // ADMIN and SECRETARY can access all documents
-        }
         if (!meetingService.isMember(meetingId, currentUser.getId())) {
             throw new ForbiddenException(
                     "You are not a member of meeting id: " + meetingId);
@@ -175,6 +165,16 @@ public class DocumentServiceImpl implements DocumentService {
         User secretary = meeting.getSecretary();
         if (secretary == null || !secretary.getId().equals(currentUser.getId())) {
             throw new ForbiddenException("Only the assigned meeting SECRETARY may upload documents");
+        }
+    }
+
+    private void checkAssignedSecretaryForDelete(Meeting meeting, User currentUser) {
+        if (currentUser.getRole() != Role.SECRETARY) {
+            throw new ForbiddenException("Only SECRETARY may delete documents");
+        }
+        User secretary = meeting.getSecretary();
+        if (secretary == null || !secretary.getId().equals(currentUser.getId())) {
+            throw new ForbiddenException("Only the assigned meeting SECRETARY may delete documents");
         }
     }
 }

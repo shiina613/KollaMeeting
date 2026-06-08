@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
-    "lint": "eslint . --max-warnings 0"
+    "lint": "eslint . --max-warnings 0",
+    "check:mojibake": "node scripts/check-mojibake.mjs"
   },
   "dependencies": {
     "@stomp/stompjs": "^7.0.0",

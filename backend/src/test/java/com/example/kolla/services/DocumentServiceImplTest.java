@@ -22,6 +22,7 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -120,6 +121,81 @@ class DocumentServiceImplTest {
 
         verify(fileStorageService, never()).validateFile(any(), eq(FileType.DOCUMENT));
         verify(documentRepository, never()).save(any());
+    }
+
+    @Test
+    void listDocumentsRejectsSecretaryWhoIsNotMeetingMember() {
+        User otherSecretary = user(23L, Role.SECRETARY);
+        when(meetingRepository.findById(10L)).thenReturn(Optional.of(meeting));
+        when(meetingService.isMember(10L, 23L)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.listDocuments(10L, otherSecretary))
+                .isInstanceOf(ForbiddenException.class)
+                .hasMessageContaining("You are not a member of meeting id: 10");
+    }
+
+    @Test
+    void listDocumentsAllowsMeetingMember() {
+        User member = user(21L, Role.USER);
+        when(meetingRepository.findById(10L)).thenReturn(Optional.of(meeting));
+        when(meetingService.isMember(10L, 21L)).thenReturn(true);
+        when(documentRepository.findByMeetingIdOrderByIdDesc(10L)).thenReturn(List.of());
+
+        assertThat(service.listDocuments(10L, member)).isEmpty();
+    }
+
+    @Test
+    void downloadDocumentRejectsAdminWhoIsNotMeetingMember() {
+        User admin = user(22L, Role.ADMIN);
+        Document document = Document.builder()
+                .id(99L)
+                .meeting(meeting)
+                .filePath("documents/10/a.pdf")
+                .build();
+        when(documentRepository.findById(99L)).thenReturn(Optional.of(document));
+        when(meetingService.isMember(10L, 22L)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.downloadDocument(99L, admin))
+                .isInstanceOf(ForbiddenException.class)
+                .hasMessageContaining("You are not a member of meeting id: 10");
+    }
+
+    @Test
+    void deleteDocumentRejectsSecretaryNotAssignedToMeeting() {
+        User assignedSecretary = user(20L, Role.SECRETARY);
+        User otherSecretary = user(23L, Role.SECRETARY);
+        meeting.setSecretary(assignedSecretary);
+        Document document = Document.builder()
+                .id(99L)
+                .meeting(meeting)
+                .filePath("documents/10/a.pdf")
+                .build();
+        when(documentRepository.findById(99L)).thenReturn(Optional.of(document));
+
+        assertThatThrownBy(() -> service.deleteDocument(99L, otherSecretary))
+                .isInstanceOf(ForbiddenException.class)
+                .hasMessageContaining("Only the assigned meeting SECRETARY may delete documents");
+
+        verify(fileStorageService, never()).deleteFile(any());
+        verify(documentRepository, never()).delete(any());
+    }
+
+    @Test
+    void deleteDocumentAllowsAssignedSecretary() {
+        User assignedSecretary = user(20L, Role.SECRETARY);
+        meeting.setSecretary(assignedSecretary);
+        Document document = Document.builder()
+                .id(99L)
+                .meeting(meeting)
+                .fileName("a.pdf")
+                .filePath("documents/10/a.pdf")
+                .build();
+        when(documentRepository.findById(99L)).thenReturn(Optional.of(document));
+
+        service.deleteDocument(99L, assignedSecretary);
+
+        verify(fileStorageService).deleteFile("documents/10/a.pdf");
+        verify(documentRepository).delete(document);
     }
 
     private static User user(Long id, Role role) {
