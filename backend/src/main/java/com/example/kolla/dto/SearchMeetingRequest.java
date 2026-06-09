@@ -18,7 +18,7 @@ import java.time.LocalDate;
 @AllArgsConstructor
 public class SearchMeetingRequest {
 
-    /** Free-text keyword to match against meeting title or description. */
+    /** Free-text keyword to match against meeting title or transcription text. */
     private String keyword;
 
     /** Filter meetings starting on or after this date (inclusive). */

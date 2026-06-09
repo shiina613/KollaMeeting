@@ -42,7 +42,7 @@ public class SearchController {
     /**
      * GET /api/v1/search/meetings
      * Search meetings with optional filters. Requires JWT authentication.
-     * Filters: keyword (title/description), startDate, endDate, roomId, departmentId, creatorId.
+     * Filters: keyword (meeting title or transcription text), startDate, endDate, roomId, departmentId, creatorId.
      * Requirements: 13.1–13.3
      */
     @GetMapping("/meetings")
@@ -52,7 +52,7 @@ public class SearchController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized")
     })
     public ResponseEntity<ApiResponse<Page<MeetingSearchResult>>> searchMeetings(
-            @Parameter(description = "Search keyword (title/description)") @RequestParam(required = false) String keyword,
+            @Parameter(description = "Search keyword (meeting title or transcription text)") @RequestParam(required = false) String keyword,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false)
