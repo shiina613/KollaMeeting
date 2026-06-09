@@ -31,14 +31,14 @@ const ROLE_CLASSES: Record<string, string> = {
 }
 
 const PROFILE_FIELD_DEFS = [
-  { key: 'dob', label: 'Ngay sinh', type: 'date' },
-  { key: 'phoneNumber', label: 'So dien thoai', type: 'text' },
-  { key: 'degree', label: 'Hoc vi', type: 'text' },
+  { key: 'dob', label: 'Ngày sinh', type: 'date' },
+  { key: 'phoneNumber', label: 'Số điện thoại', type: 'text' },
+  { key: 'degree', label: 'Học vị', type: 'text' },
   { key: 'identification', label: 'CCCD/CMND', type: 'text' },
-  { key: 'address', label: 'Dia chi', type: 'text' },
-  { key: 'bankName', label: 'Ngan hang', type: 'text' },
-  { key: 'bankNumber', label: 'So tai khoan', type: 'text' },
-  { key: 'img', label: 'Anh dai dien', type: 'text' },
+  { key: 'address', label: 'Địa chỉ', type: 'text' },
+  { key: 'bankName', label: 'Ngân hàng', type: 'text' },
+  { key: 'bankNumber', label: 'Số tài khoản', type: 'text' },
+  { key: 'img', label: 'Ảnh đại diện', type: 'text' },
 ] as const
 
 function RoleBadge({ role }: { role: string }) {
@@ -109,7 +109,7 @@ function CreateUserModal({ onClose, onSuccess }: CreateUserModalProps) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-label-md text-on-surface-variant mb-1">
-              Ma nhan vien <span className="text-error">*</span>
+              Mã nhân viên <span className="text-error">*</span>
             </label>
             <input
               type="text"
@@ -293,7 +293,7 @@ function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) {
         )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-label-md text-on-surface-variant mb-1">Ma nhan vien</label>
+            <label className="block text-label-md text-on-surface-variant mb-1">Mã nhân viên</label>
             <input
               type="text"
               value={form.employeeCode ?? ''}

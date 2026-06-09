@@ -29,12 +29,12 @@ export interface TranscriptionPanelProps {
 }
 
 const MEETING_ROLE_LABELS: Record<MeetingRole, string> = {
-  HOST: 'Chu tri',
-  SECRETARY: 'Thu ky',
-  REVIEWER: 'Phan bien',
-  COMMITTEE_MEMBER: 'Uy vien',
-  GUEST: 'Khach moi',
-  MEMBER: 'Thanh vien',
+  HOST: 'Ch? tr?',
+  SECRETARY: 'Th? k?',
+  REVIEWER: 'Ph?n bi?n',
+  COMMITTEE_MEMBER: '?y vi?n',
+  GUEST: 'Kh?ch m?i',
+  MEMBER: 'Th?nh vi?n',
 }
 
 // ─── Speaker block (consecutive segments from the same speaker turn) ──────────

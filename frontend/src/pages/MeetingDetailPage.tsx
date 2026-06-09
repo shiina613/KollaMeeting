@@ -381,7 +381,7 @@ export default function MeetingDetailPage() {
       setMessageContent('')
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      setMessageError(msg ?? 'Khong the gui tin nhan.')
+      setMessageError(msg ?? 'Kh?ng th? g?i tin nh?n.')
     } finally {
       setMessageLoading(false)
     }
@@ -471,7 +471,7 @@ export default function MeetingDetailPage() {
   const tabs: { key: TabKey; label: string; icon: string; count?: number }[] = [
     { key: 'info', label: 'Thông tin', icon: 'info' },
     { key: 'members', label: 'Thành viên', icon: 'group', count: members.length },
-    { key: 'messages', label: 'Trao doi', icon: 'forum', count: messages.length },
+    { key: 'messages', label: 'Trao ??i', icon: 'forum', count: messages.length },
     { key: 'documents', label: 'Tài liệu', icon: 'description', count: documents.length },
     { key: 'recordings', label: 'Ghi âm', icon: 'mic', count: recordings.length || audioJobs.length },
     { key: 'attendance', label: 'Điểm danh', icon: 'fact_check', count: attendance.length },
@@ -776,10 +776,10 @@ export default function MeetingDetailPage() {
         )}
 
         {activeTab === 'messages' && (
-          <Section title={`Trao doi (${messages.length})`} icon="forum">
+          <Section title={`Trao ??i (${messages.length})`} icon="forum">
             <div className="space-y-4">
               {messages.length === 0 ? (
-                <p className="text-body-sm text-on-surface-variant text-center py-4">Chua co tin nhan nao</p>
+                <p className="text-body-sm text-on-surface-variant text-center py-4">Ch?a c? tin nh?n n?o</p>
               ) : (
                 <ul className="divide-y divide-outline-variant">
                   {messages.map((message) => (

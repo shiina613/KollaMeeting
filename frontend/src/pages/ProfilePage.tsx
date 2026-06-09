@@ -77,7 +77,7 @@ export default function ProfilePage() {
           img: current.img ?? '',
         })
       })
-      .catch(() => setProfileError('Khong the tai ho so nguoi dung.'))
+      .catch(() => setProfileError('Không thể tải hồ sơ người dùng.'))
       .finally(() => {
         if (mounted) setLoading(false)
       })
@@ -104,10 +104,10 @@ export default function ProfilePage() {
         email: form.email?.trim(),
       })
       setUser(res.data)
-      setProfileSuccess('Da cap nhat ho so.')
+      setProfileSuccess('Đã cập nhật hồ sơ.')
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      setProfileError(msg ?? 'Khong the cap nhat ho so.')
+      setProfileError(msg ?? 'Không thể cập nhật hồ sơ.')
     } finally {
       setSaving(false)
     }
@@ -118,20 +118,20 @@ export default function ProfilePage() {
     setPasswordError(null)
     setPasswordSuccess(null)
     if (passwordForm.newPassword !== confirmPassword) {
-      setPasswordError('Mat khau moi va xac nhan mat khau khong khop.')
+      setPasswordError('Mật khẩu mới và xác nhận mật khẩu không khớp.')
       return
     }
     setPasswordLoading(true)
     try {
       await changeOwnPassword(passwordForm)
-      setPasswordSuccess('Da doi mat khau. Vui long dang nhap lai.')
+      setPasswordSuccess('Đã đổi mật khẩu. Vui lòng đăng nhập lại.')
       setTimeout(() => {
         logout()
         navigate('/login', { replace: true })
       }, 1200)
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      setPasswordError(msg ?? 'Khong the doi mat khau.')
+      setPasswordError(msg ?? 'Không thể đổi mật khẩu.')
     } finally {
       setPasswordLoading(false)
     }
@@ -148,9 +148,9 @@ export default function ProfilePage() {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
-        <h1 className="text-h3 font-semibold text-on-surface">Ho so ca nhan</h1>
+        <h1 className="text-h3 font-semibold text-on-surface">Hồ sơ cá nhân</h1>
         <p className="text-body-sm text-on-surface-variant mt-1">
-          {user?.fullName ?? user?.username ?? 'Nguoi dung'}
+          {user?.fullName ?? user?.username ?? 'Người dùng'}
         </p>
       </div>
 
@@ -159,10 +159,10 @@ export default function ProfilePage() {
         className="bg-surface-container-lowest rounded-xl border border-outline-variant p-6 space-y-5"
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <ProfileInput label="Ma nhan vien" value={employeeCode} disabled />
-          <ProfileInput label="Phong ban" value={departmentName || 'Khong co phong ban'} disabled />
+          <ProfileInput label="Mã nhân viên" value={employeeCode} disabled />
+          <ProfileInput label="Phòng ban" value={departmentName || 'Không có phòng ban'} disabled />
           <ProfileInput
-            label="Ho va ten"
+            label="Họ và tên"
             value={form.fullName ?? ''}
             required
             onChange={(value) => updateField('fullName', value)}
@@ -175,18 +175,18 @@ export default function ProfilePage() {
             onChange={(value) => updateField('email', value)}
           />
           <ProfileInput
-            label="Ngay sinh"
+            label="Ngày sinh"
             value={form.dob ?? ''}
             type="date"
             onChange={(value) => updateField('dob', value)}
           />
           <ProfileInput
-            label="So dien thoai"
+            label="Số điện thoại"
             value={form.phoneNumber ?? ''}
             onChange={(value) => updateField('phoneNumber', value)}
           />
           <ProfileInput
-            label="Hoc vi"
+            label="Học vị"
             value={form.degree ?? ''}
             onChange={(value) => updateField('degree', value)}
           />
@@ -196,23 +196,23 @@ export default function ProfilePage() {
             onChange={(value) => updateField('identification', value)}
           />
           <ProfileInput
-            label="Ngan hang"
+            label="Ngân hàng"
             value={form.bankName ?? ''}
             onChange={(value) => updateField('bankName', value)}
           />
           <ProfileInput
-            label="So tai khoan"
+            label="Số tài khoản"
             value={form.bankNumber ?? ''}
             onChange={(value) => updateField('bankNumber', value)}
           />
           <ProfileInput
-            label="Anh dai dien"
+            label="Ảnh đại diện"
             value={form.img ?? ''}
             onChange={(value) => updateField('img', value)}
           />
           <div className="sm:col-span-2">
             <label className="block text-label-md text-on-surface-variant mb-1">
-              Dia chi
+              Địa chỉ
             </label>
             <textarea
               value={form.address ?? ''}
@@ -241,7 +241,7 @@ export default function ProfilePage() {
             className="inline-flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-xl text-button font-medium hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
             {saving && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-            Luu ho so
+            Lưu hồ sơ
           </button>
         </div>
       </form>
@@ -250,24 +250,24 @@ export default function ProfilePage() {
         onSubmit={handlePasswordSubmit}
         className="bg-surface-container-lowest rounded-xl border border-outline-variant p-6 space-y-4"
       >
-        <h2 className="text-body-md font-semibold text-on-surface">Doi mat khau</h2>
+        <h2 className="text-body-md font-semibold text-on-surface">Đổi mật khẩu</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <ProfileInput
-            label="Mat khau hien tai"
+            label="Mật khẩu hiện tại"
             value={passwordForm.currentPassword}
             type="password"
             required
             onChange={(value) => setPasswordForm((prev) => ({ ...prev, currentPassword: value }))}
           />
           <ProfileInput
-            label="Mat khau moi"
+            label="Mật khẩu mới"
             value={passwordForm.newPassword}
             type="password"
             required
             onChange={(value) => setPasswordForm((prev) => ({ ...prev, newPassword: value }))}
           />
           <ProfileInput
-            label="Xac nhan mat khau"
+            label="Xác nhận mật khẩu"
             value={confirmPassword}
             type="password"
             required
@@ -291,7 +291,7 @@ export default function ProfilePage() {
             className="inline-flex items-center gap-2 border border-outline-variant text-on-surface px-4 py-2 rounded-xl text-button font-medium hover:bg-surface-container disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
             {passwordLoading && <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />}
-            Doi mat khau
+            Đổi mật khẩu
           </button>
         </div>
       </form>
