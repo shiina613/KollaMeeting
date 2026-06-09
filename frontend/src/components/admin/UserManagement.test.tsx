@@ -24,11 +24,13 @@ vi.mock('../../services/userService', () => ({
   listUsers: vi.fn(),
   createUser: vi.fn(),
   updateUser: vi.fn(),
+  toggleUserActive: vi.fn(),
   deleteUser: vi.fn(),
   resetPassword: vi.fn(),
 }))
 
 import {
+  deleteUser,
   listUsers,
   resetPassword,
 } from '../../services/userService'
@@ -45,6 +47,65 @@ const makeUser = (
   fullName,
   email: `user${id}@example.com`,
   role,
+  isActive: true,
+})
+
+describe('UserManagement delete user flow', () => {
+  it('opens delete dialog from a block-icon action', async () => {
+    render(<UserManagement />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId(`delete-user-btn-${REGULAR_USER.id}`)).toBeInTheDocument()
+    })
+
+    const deleteButton = screen.getByTestId(`delete-user-btn-${REGULAR_USER.id}`)
+    expect(deleteButton).toHaveTextContent('block')
+
+    await userEvent.click(deleteButton)
+
+    expect(screen.getByTestId('delete-user-dialog')).toBeInTheDocument()
+    expect(screen.getByTestId('delete-user-dialog')).toHaveTextContent(REGULAR_USER.fullName)
+  })
+
+  it('calls deleteUser with selected user id and refreshes list', async () => {
+    vi.mocked(deleteUser).mockResolvedValue(undefined)
+
+    render(<UserManagement />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId(`delete-user-btn-${SECRETARY_USER.id}`)).toBeInTheDocument()
+    })
+
+    await userEvent.click(screen.getByTestId(`delete-user-btn-${SECRETARY_USER.id}`))
+    await userEvent.click(screen.getByTestId('delete-user-confirm-btn'))
+
+    await waitFor(() => {
+      expect(vi.mocked(deleteUser)).toHaveBeenCalledWith(SECRETARY_USER.id)
+    })
+    expect(vi.mocked(listUsers)).toHaveBeenCalledTimes(2)
+    expect(screen.queryByTestId('delete-user-dialog')).not.toBeInTheDocument()
+  })
+
+  it('shows an error when deleteUser fails', async () => {
+    vi.mocked(deleteUser).mockRejectedValue(new Error('Delete failed'))
+
+    render(<UserManagement />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId(`delete-user-btn-${ADMIN_USER.id}`)).toBeInTheDocument()
+    })
+
+    await userEvent.click(screen.getByTestId(`delete-user-btn-${ADMIN_USER.id}`))
+    await userEvent.click(screen.getByTestId('delete-user-confirm-btn'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('user-management-error')).toBeInTheDocument()
+    })
+    expect(screen.getByTestId('user-management-error')).toHaveTextContent(
+      'Không thể xóa người dùng. Vui lòng thử lại.',
+    )
+    expect(screen.queryByTestId('delete-user-dialog')).not.toBeInTheDocument()
+  })
 })
 
 const ADMIN_USER = makeUser(1, 'Nguyễn Văn Admin', 'ADMIN')

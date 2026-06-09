@@ -8,7 +8,7 @@ import {
   listUsers,
   createUser,
   updateUser,
-  toggleUserActive,
+  deleteUser,
   resetPassword,
 } from '../../services/userService'
 import { listDepartments } from '../../services/meetingService'
@@ -388,35 +388,28 @@ function EditUserModal({ user, onClose, onSuccess }: EditUserModalProps) {
   )
 }
 
-// ─── Toggle active confirmation dialog ───────────────────────────────────────
+// ─── Delete user confirmation dialog ─────────────────────────────────────────
 
-interface ToggleActiveDialogProps {
+interface DeleteUserDialogProps {
   user: MeetingUser
   onClose: () => void
   onConfirm: () => void
   loading: boolean
 }
 
-function ToggleActiveDialog({ user, onClose, onConfirm, loading }: ToggleActiveDialogProps) {
-  const isActive = user.isActive
+function DeleteUserDialog({ user, onClose, onConfirm, loading }: DeleteUserDialogProps) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      data-testid="toggle-active-dialog"
+      data-testid="delete-user-dialog"
       role="dialog"
       aria-modal="true"
-      aria-label={isActive ? 'Xác nhận vô hiệu hóa người dùng' : 'Xác nhận kích hoạt người dùng'}
+      aria-label="Xác nhận xóa người dùng"
     >
       <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-6 w-full max-w-sm shadow-xl">
-        <h2 className="text-h3 font-semibold text-on-surface mb-2">
-          {isActive ? 'Vô hiệu hóa người dùng' : 'Kích hoạt người dùng'}
-        </h2>
+        <h2 className="text-h3 font-semibold text-on-surface mb-2">Xóa người dùng</h2>
         <p className="text-body-sm text-on-surface-variant mb-6">
-          {isActive ? (
-            <>Bạn có chắc muốn vô hiệu hóa <strong>{user.fullName}</strong>? Người dùng sẽ không thể đăng nhập cho đến khi được kích hoạt lại.</>
-          ) : (
-            <>Bạn có chắc muốn kích hoạt lại <strong>{user.fullName}</strong>? Người dùng sẽ có thể đăng nhập trở lại.</>
-          )}
+          Bạn có chắc muốn xóa <strong>{user.fullName}</strong>? Tài khoản sẽ bị xóa khỏi danh sách quản trị.
         </p>
         <div className="flex justify-end gap-3">
           <button
@@ -431,11 +424,11 @@ function ToggleActiveDialog({ user, onClose, onConfirm, loading }: ToggleActiveD
             type="button"
             onClick={onConfirm}
             disabled={loading}
-            data-testid="toggle-active-confirm-btn"
-            className={`px-4 py-2 rounded-xl text-button font-medium text-white disabled:opacity-60 disabled:cursor-not-allowed transition-colors flex items-center gap-2 ${isActive ? 'bg-orange-500 hover:bg-orange-600' : 'bg-primary hover:bg-primary/90'}`}
+            data-testid="delete-user-confirm-btn"
+            className="px-4 py-2 rounded-xl text-button font-medium text-white bg-error hover:bg-error/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
           >
             {loading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-            {isActive ? 'Vô hiệu hóa' : 'Kích hoạt'}
+            Xóa
           </button>
         </div>
       </div>
@@ -564,8 +557,8 @@ export default function UserManagement() {
   // Modal state
   const [showCreate, setShowCreate] = useState(false)
   const [editUser, setEditUser] = useState<MeetingUser | null>(null)
-  const [toggleUser, setToggleUser] = useState<MeetingUser | null>(null)
-  const [toggleLoading, setToggleLoading] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<MeetingUser | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
   const [resetUser, setResetUser] = useState<MeetingUser | null>(null)
 
   const fetchUsers = useCallback(async () => {
@@ -597,18 +590,18 @@ export default function UserManagement() {
     fetchUsers()
   }, [fetchUsers])
 
-  const handleToggleConfirm = async () => {
-    if (!toggleUser) return
-    setToggleLoading(true)
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return
+    setDeleteLoading(true)
     try {
-      await toggleUserActive(toggleUser.id)
-      setToggleUser(null)
+      await deleteUser(deleteTarget.id)
+      setDeleteTarget(null)
       fetchUsers()
     } catch {
-      setError('Không thể thay đổi trạng thái người dùng. Vui lòng thử lại.')
-      setToggleUser(null)
+      setError('Không thể xóa người dùng. Vui lòng thử lại.')
+      setDeleteTarget(null)
     } finally {
-      setToggleLoading(false)
+      setDeleteLoading(false)
     }
   }
 
@@ -740,19 +733,13 @@ export default function UserManagement() {
                           <span className="material-symbols-outlined text-[18px]" aria-hidden="true">lock_reset</span>
                         </button>
                         <button
-                          onClick={() => setToggleUser(u)}
-                          data-testid={`toggle-active-btn-${u.id}`}
-                          aria-label={u.isActive ? `Vô hiệu hóa ${u.fullName}` : `Kích hoạt ${u.fullName}`}
-                          title={u.isActive ? 'Vô hiệu hóa' : 'Kích hoạt'}
-                          className={`p-1.5 rounded-lg transition-colors ${
-                            u.isActive
-                              ? 'bg-orange-50 text-orange-600 hover:bg-orange-100'
-                              : 'bg-green-50 text-green-600 hover:bg-green-100'
-                          }`}
+                          onClick={() => setDeleteTarget(u)}
+                          data-testid={`delete-user-btn-${u.id}`}
+                          aria-label={`Xóa ${u.fullName}`}
+                          title="Xóa"
+                          className="p-1.5 rounded-lg transition-colors bg-error-container text-error hover:bg-error/10"
                         >
-                          <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
-                            {u.isActive ? 'block' : 'check_circle'}
-                          </span>
+                          <span className="material-symbols-outlined text-[18px]" aria-hidden="true">block</span>
                         </button>
                       </div>
                     </td>
@@ -849,12 +836,12 @@ export default function UserManagement() {
           onSuccess={() => { setEditUser(null); fetchUsers() }}
         />
       )}
-      {toggleUser && (
-        <ToggleActiveDialog
-          user={toggleUser}
-          onClose={() => setToggleUser(null)}
-          onConfirm={handleToggleConfirm}
-          loading={toggleLoading}
+      {deleteTarget && (
+        <DeleteUserDialog
+          user={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={handleDeleteConfirm}
+          loading={deleteLoading}
         />
       )}
       {resetUser && (
