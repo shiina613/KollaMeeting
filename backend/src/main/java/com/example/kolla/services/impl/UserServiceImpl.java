@@ -11,6 +11,8 @@ import com.example.kolla.exceptions.ResourceNotFoundException;
 import com.example.kolla.models.Department;
 import com.example.kolla.models.User;
 import com.example.kolla.repositories.DepartmentRepository;
+import com.example.kolla.repositories.DocumentRepository;
+import com.example.kolla.repositories.MemberRepository;
 import com.example.kolla.repositories.UserRepository;
 import com.example.kolla.responses.UserResponse;
 import com.example.kolla.services.UserService;
@@ -45,6 +47,8 @@ public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final DepartmentRepository departmentRepository;
+    private final MemberRepository memberRepository;
+    private final DocumentRepository documentRepository;
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate redisTemplate;
 
@@ -53,7 +57,7 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public Page<UserResponse> listUsers(Pageable pageable) {
-        Page<User> page = userRepository.findAll(pageable);
+        Page<User> page = userRepository.findVisibleUsers(pageable);
 
         Set<Long> deptIds = page.getContent().stream()
                 .map(User::getDepartmentId)
@@ -75,7 +79,7 @@ public class UserServiceImpl implements UserService {
         if (query == null || query.isBlank()) return List.of();
         org.springframework.data.domain.Pageable limit =
                 org.springframework.data.domain.PageRequest.of(0, 20);
-        return userRepository.searchByNameOrUsername(query.trim(), limit)
+        return userRepository.searchVisibleByNameOrUsername(query.trim(), limit)
                 .stream()
                 .map(UserResponse::from)
                 .toList();
@@ -84,7 +88,7 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public List<UserResponse> listAllActiveUsers() {
-        return userRepository.findAllByOrderByFullNameAsc()
+        return userRepository.findAllVisibleByOrderByFullNameAsc()
                 .stream()
                 .map(UserResponse::from)
                 .toList();
@@ -93,7 +97,7 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public List<UserResponse> listMeetingCandidates() {
-        List<User> users = userRepository.findByRoleOrderByFullNameAsc(Role.SECRETARY);
+        List<User> users = userRepository.findVisibleByRoleOrderByFullNameAsc(Role.SECRETARY);
 
         // Batch-load departments to avoid N+1
         Set<Long> deptIds = users.stream()
@@ -353,16 +357,21 @@ public class UserServiceImpl implements UserService {
             throw new BadRequestException("You cannot delete your own account");
         }
 
-        // Prevent deletion of users with active meeting memberships (Requirement 11.7)
-        if (userRepository.hasActiveMeetingMemberships(id)) {
-            throw new BadRequestException(
-                    "Cannot delete user '" + target.getUsername()
-                    + "': they have active or scheduled meeting memberships");
+        boolean hasHistory = memberRepository.existsByUserId(id)
+                || documentRepository.existsByUploadedById(id);
+        invalidateUserTokens(id);
+
+        if (!hasHistory) {
+            userRepository.delete(target);
+            log.info("Deleted user '{}' (id={}) by '{}'",
+                    target.getUsername(), id, requester.getUsername());
+            return;
         }
 
-        userRepository.delete(target);
-        log.info("Deleted user '{}' (id={}) by '{}'",
-                target.getUsername(), id, requester.getUsername());
+        anonymizeDeletedUser(target);
+        userRepository.save(target);
+        log.info("Anonymized deleted user id={} by '{}'",
+                id, requester.getUsername());
     }
 
     // Ã¢â€â‚¬Ã¢â€â‚¬ Reset password Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
@@ -396,6 +405,24 @@ public class UserServiceImpl implements UserService {
     }
 
     // Ã¢â€â‚¬Ã¢â€â‚¬ Private helpers Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+
+    private void anonymizeDeletedUser(User target) {
+        String deletedUsername = "deleted-user-" + target.getId();
+        target.setUsername(deletedUsername);
+        target.setEmployeeCode(deletedUsername);
+        target.setFullName("Nguoi dung da xoa");
+        target.setEmail(null);
+        target.setDob(null);
+        target.setPhoneNumber(null);
+        target.setDegree(null);
+        target.setIdentification(null);
+        target.setAddress(null);
+        target.setBankName(null);
+        target.setBankNumber(null);
+        target.setImg(null);
+        target.setRole(Role.USER);
+        target.setPasswordHash(passwordEncoder.encode(generateTemporaryPassword()));
+    }
 
     private User findUserOrThrow(Long id) {
         return userRepository.findById(id)

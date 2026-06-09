@@ -23,6 +23,8 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
 
     boolean existsByMeetingIdAndUserId(Long meetingId, Long userId);
 
+    boolean existsByUserId(Long userId);
+
     boolean existsByMeetingIdAndMeetingRole(Long meetingId, MeetingRole meetingRole);
 
     void deleteByMeetingIdAndUserId(Long meetingId, Long userId);
