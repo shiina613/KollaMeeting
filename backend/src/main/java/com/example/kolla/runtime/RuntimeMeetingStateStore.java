@@ -183,6 +183,9 @@ public class RuntimeMeetingStateStore {
                         || (segment.getMeeting() != null && meetingId.equals(segment.getMeeting().getId())))
                 .filter(segment -> segment.getText() != null
                         && segment.getText().toLowerCase().contains(normalized)));
+        if (pageable.isUnpaged()) {
+            return new PageImpl<>(matches);
+        }
         int start = Math.min((int) pageable.getOffset(), matches.size());
         int end = Math.min(start + pageable.getPageSize(), matches.size());
         return new PageImpl<>(matches.subList(start, end), pageable, matches.size());
