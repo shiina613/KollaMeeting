@@ -21,6 +21,8 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.nio.file.Path;
 
@@ -97,6 +99,25 @@ class RuntimeMeetingStateStoreTest {
         assertThat(segments)
                 .extracting(TranscriptionSegment::getText)
                 .containsExactly("earlier first", "later first", "later second");
+    }
+
+    @Test
+    void searchSegmentsSupportsUnpagedRequests() {
+        Meeting meeting = Meeting.builder().id(42L).title("Hop").build();
+        RuntimeMeetingStateStore store = store();
+        store.saveTranscriptionSegment(segment(
+                meeting,
+                "job-1",
+                "turn-1",
+                1,
+                "can phan bien noi dung nay",
+                LocalDateTime.of(2026, 6, 7, 9, 52)));
+
+        Page<TranscriptionSegment> result = store.searchSegments("phan bien", null, Pageable.unpaged());
+
+        assertThat(result.getContent())
+                .extracting(TranscriptionSegment::getText)
+                .containsExactly("can phan bien noi dung nay");
     }
 
     private TranscriptionSegment segment(
