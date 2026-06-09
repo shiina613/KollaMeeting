@@ -18,6 +18,9 @@ export interface Minutes {
   meetingId: number
   status: MinutesStatus
   contentHtml?: string
+  contentEntries?: MinutesContentEntry[]
+  conclusion?: string
+  editedWordAvailable?: boolean
   draftPdfPath?: string
   draftDocxPath?: string
   confirmedPdfPath?: string
@@ -46,5 +49,13 @@ export interface MinutesConfirmationResponse {
 // ─── Request bodies ───────────────────────────────────────────────────────────
 
 export interface EditMinutesRequest {
-  contentHtml: string
+  contentEntries: MinutesContentEntry[]
+  conclusion?: string
+}
+
+export interface MinutesContentEntry {
+  speakerName?: string
+  roleLabel?: string
+  timeLabel?: string
+  text: string
 }

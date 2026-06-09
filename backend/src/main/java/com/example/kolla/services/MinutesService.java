@@ -2,6 +2,7 @@ package com.example.kolla.services;
 
 import com.example.kolla.models.Meeting;
 import com.example.kolla.models.User;
+import com.example.kolla.dto.EditMinutesRequest;
 import com.example.kolla.responses.MinutesConfirmationResponse;
 import com.example.kolla.responses.MinutesResponse;
 import org.springframework.core.io.Resource;
@@ -61,18 +62,18 @@ public interface MinutesService {
 
     /**
      * Secretary edits and publishes the minutes.
-     * Renders contentHtml to PDF and DOCX.
-     * Saves the secretary files; updates status to SECRETARY_CONFIRMED;
+     * Renders structured edited content to DOCX.
+     * Saves the edited Word file; updates status to SECRETARY_CONFIRMED;
      * broadcasts MINUTES_PUBLISHED to all participants.
      *
      * Requirements: 25.5
      *
      * @param meetingId   the meeting ID
-     * @param contentHtml rich-text HTML from the Secretary's editor
+     * @param request structured content from the Secretary's editor
      * @param requester   the Secretary user
      * @throws IOException if PDF generation or file storage fails
      */
-    MinutesResponse editMinutes(Long meetingId, String contentHtml, User requester)
+    MinutesResponse editMinutes(Long meetingId, EditMinutesRequest request, User requester)
             throws IOException;
 
     /**

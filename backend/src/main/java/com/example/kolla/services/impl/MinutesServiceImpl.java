@@ -4,6 +4,8 @@ import com.example.kolla.enums.FileType;
 import com.example.kolla.enums.MeetingRole;
 import com.example.kolla.enums.MinutesStatus;
 import com.example.kolla.enums.Role;
+import com.example.kolla.dto.EditMinutesRequest;
+import com.example.kolla.dto.MinutesContentEntryRequest;
 import com.example.kolla.exceptions.BadRequestException;
 import com.example.kolla.exceptions.ForbiddenException;
 import com.example.kolla.exceptions.ResourceNotFoundException;
@@ -18,6 +20,7 @@ import com.example.kolla.repositories.MinutesRepository;
 import com.example.kolla.repositories.MemberRepository;
 import com.example.kolla.repositories.TranscriptionSegmentRepository;
 import com.example.kolla.responses.MinutesConfirmationResponse;
+import com.example.kolla.responses.MinutesContentEntryResponse;
 import com.example.kolla.responses.MinutesResponse;
 import com.example.kolla.services.FileStorageService;
 import com.example.kolla.services.MeetingService;
@@ -79,6 +82,8 @@ public class MinutesServiceImpl implements MinutesService {
     private static final float FONT_SIZE_TITLE = 16f;
     private static final float FONT_SIZE_HEADING = 12f;
     private static final float FONT_SIZE_BODY = 10f;
+    private static final com.fasterxml.jackson.databind.ObjectMapper OBJECT_MAPPER =
+            new com.fasterxml.jackson.databind.ObjectMapper();
 
     private final MinutesRepository minutesRepository;
     private final MeetingRepository meetingRepository;
@@ -286,7 +291,7 @@ public class MinutesServiceImpl implements MinutesService {
      */
     @Override
     @Transactional
-    public MinutesResponse editMinutes(Long meetingId, String contentHtml, User requester)
+    public MinutesResponse editMinutes(Long meetingId, EditMinutesRequest request, User requester)
             throws IOException {
 
         Meeting meeting = findMeetingOrThrow(meetingId);
@@ -299,38 +304,28 @@ public class MinutesServiceImpl implements MinutesService {
 
         Minutes minutes = findMinutesOrThrow(meetingId);
 
-        if (minutes.getStatus() != MinutesStatus.HOST_CONFIRMED) {
+        if (minutes.getStatus() != MinutesStatus.HOST_CONFIRMED
+                && minutes.getStatus() != MinutesStatus.SECRETARY_CONFIRMED) {
             throw new BadRequestException(
-                    "Minutes must be in HOST_CONFIRMED status to edit (current: "
+                    "Minutes must be confirmed before editing (current: "
                             + minutes.getStatus() + ")");
         }
 
-        // Render HTML to PDF and DOCX
-        List<String> secretaryLines = buildSecretaryLines(meeting, contentHtml);
-        byte[] secretaryPdfBytes = renderLinesToPdf(secretaryLines);
+        List<String> secretaryLines = buildStructuredEditLinesForEditedDocx(meeting, request);
         byte[] secretaryDocxBytes = DocxMinutesRenderer.renderLines(secretaryLines);
 
-        // Store secretary PDF
-        String fileName = "secretary_" + minutes.getId() + ".pdf";
-        java.nio.file.Path storedPath =
-                fileStorageService.storeBytes(secretaryPdfBytes, FileType.MINUTES, meetingId, fileName);
-        String docxFileName = "secretary_" + minutes.getId() + ".docx";
+        String docxFileName = "edited_" + minutes.getId() + ".docx";
         java.nio.file.Path storedDocxPath =
                 fileStorageService.storeBytes(secretaryDocxBytes, FileType.MINUTES, meetingId, docxFileName);
 
         // Update record
         minutes.setStatus(MinutesStatus.SECRETARY_CONFIRMED);
-        minutes.setSecretaryPdfPath(storedPath.toString());
         minutes.setSecretaryDocxPath(storedDocxPath.toString());
-        minutes.setContentHtml(contentHtml);
+        minutes.setContentEntriesJson(OBJECT_MAPPER.writeValueAsString(
+                toEntryResponses(request.getContentEntries())));
+        minutes.setConclusion(request.getConclusion());
         minutes.setSecretaryConfirmedAt(LocalDateTime.now(clock));
         Minutes saved = minutesRepository.save(minutes);
-        createMinutesDocument(
-                meeting,
-                "bien-ban-thu-ky-" + meetingId + ".pdf",
-                "application/pdf",
-                storedPath.toString(),
-                (long) secretaryPdfBytes.length);
         createMinutesDocument(
                 meeting,
                 "bien-ban-thu-ky-" + meetingId + ".docx",
@@ -384,11 +379,16 @@ public class MinutesServiceImpl implements MinutesService {
                         normalizedFormat,
                         "Confirmed");
             }
-            case "secretary" -> selectGeneratedPath(
-                    minutes.getSecretaryPdfPath(),
-                    minutes.getSecretaryDocxPath(),
-                    normalizedFormat,
-                    "Secretary");
+            case "secretary" -> {
+                if ("pdf".equals(normalizedFormat)) {
+                    throw new BadRequestException("Edited PDF is not available");
+                }
+                yield selectGeneratedPath(
+                        minutes.getSecretaryPdfPath(),
+                        minutes.getSecretaryDocxPath(),
+                        normalizedFormat,
+                        "Secretary");
+            }
             default -> throw new BadRequestException(
                     "Invalid version '" + version + "'. Must be: draft, confirmed, or secretary");
         };
@@ -622,6 +622,107 @@ public class MinutesServiceImpl implements MinutesService {
         if (current.length() > 0) {
             lines.add(current.toString());
         }
+    }
+
+    private List<String> buildStructuredEditLinesForEditedDocx(Meeting meeting, EditMinutesRequest request) {
+        List<String> lines = new ArrayList<>();
+        lines.add("BI\u00caN B\u1ea2N CU\u1ed8C H\u1eccP - B\u1ea2N CH\u1ec8NH S\u1eecA");
+        lines.add("");
+        addStructuredMeetingInfo(lines, meeting);
+        addStructuredEntryInfo(lines, request);
+        return lines;
+    }
+
+    private void addStructuredMeetingInfo(List<String> lines, Meeting meeting) {
+        lines.add("Cu\u1ed9c h\u1ecdp: " + meeting.getTitle());
+        if (meeting.getActivatedAt() != null) {
+            lines.add("B\u1eaft \u0111\u1ea7u: " + meeting.getActivatedAt().atZone(ZONE_VN)
+                    .format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")));
+        }
+        if (meeting.getEndedAt() != null) {
+            lines.add("K\u1ebft th\u00fac: " + meeting.getEndedAt().atZone(ZONE_VN)
+                    .format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")));
+        }
+        if (meeting.getHost() != null) lines.add("Ch\u1ee7 t\u1ecda: " + meeting.getHost().getFullName());
+        if (meeting.getSecretary() != null) lines.add("Th\u01b0 k\u00fd: " + meeting.getSecretary().getFullName());
+        lines.add("");
+    }
+
+    private void addStructuredEntryInfo(List<String> lines, EditMinutesRequest request) {
+        for (MinutesContentEntryRequest entry : request.getContentEntries()) {
+            String header = "[" + blankToDefault(entry.getTimeLabel(), "--:--") + "] Ng\u01b0\u1eddi n\u00f3i: "
+                    + blankToDefault(entry.getSpeakerName(), "Kh\u00f4ng x\u00e1c \u0111\u1ecbnh");
+            if (entry.getRoleLabel() != null && !entry.getRoleLabel().isBlank()) {
+                header += " | Vai tr\u00f2: " + entry.getRoleLabel();
+            }
+            lines.add(header);
+            wrapAndAdd(lines, entry.getText().trim(), 80);
+            lines.add("");
+        }
+        if (request.getConclusion() != null && !request.getConclusion().isBlank()) {
+            lines.add("[K\u1ebft lu\u1eadn]");
+            wrapAndAdd(lines, request.getConclusion().trim(), 80);
+        }
+    }
+
+    private List<String> buildStructuredEditLines(Meeting meeting, EditMinutesRequest request) {
+        List<String> lines = new ArrayList<>();
+        lines.add("BIÃŠN Báº¢N CUá»˜C Há»ŒP - Báº¢N CHá»ˆNH Sá»¬A");
+        lines.add("");
+        lines.add("Cuá»™c há»p: " + meeting.getTitle());
+        if (meeting.getActivatedAt() != null) {
+            lines.add("Báº¯t Ä‘áº§u: " + meeting.getActivatedAt()
+                    .atZone(ZONE_VN)
+                    .format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")));
+        }
+        if (meeting.getEndedAt() != null) {
+            lines.add("Káº¿t thÃºc: " + meeting.getEndedAt()
+                    .atZone(ZONE_VN)
+                    .format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")));
+        }
+        if (meeting.getHost() != null) {
+            lines.add("Chá»§ tá»a: " + meeting.getHost().getFullName());
+        }
+        if (meeting.getSecretary() != null) {
+            lines.add("ThÆ° kÃ½: " + meeting.getSecretary().getFullName());
+        }
+        lines.add("");
+
+        for (MinutesContentEntryRequest entry : request.getContentEntries()) {
+            String header = "[" + blankToDefault(entry.getTimeLabel(), "--:--") + "] NgÆ°á»i nÃ³i: "
+                    + blankToDefault(entry.getSpeakerName(), "KhÃ´ng xÃ¡c Ä‘á»‹nh");
+            if (entry.getRoleLabel() != null && !entry.getRoleLabel().isBlank()) {
+                header += " | Vai trÃ²: " + entry.getRoleLabel();
+            }
+            lines.add(header);
+            wrapAndAdd(lines, entry.getText().trim(), 80);
+            lines.add("");
+        }
+
+        if (request.getConclusion() != null && !request.getConclusion().isBlank()) {
+            lines.add("[Káº¿t luáº­n]");
+            wrapAndAdd(lines, request.getConclusion().trim(), 80);
+        }
+        return lines;
+    }
+
+    private List<MinutesContentEntryResponse> toEntryResponses(
+            List<MinutesContentEntryRequest> entries) {
+        if (entries == null) {
+            return List.of();
+        }
+        return entries.stream()
+                .map(entry -> MinutesContentEntryResponse.builder()
+                        .speakerName(entry.getSpeakerName())
+                        .roleLabel(entry.getRoleLabel())
+                        .timeLabel(entry.getTimeLabel())
+                        .text(entry.getText())
+                        .build())
+                .toList();
+    }
+
+    private String blankToDefault(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
     }
 
     private List<String> buildSecretaryLines(Meeting meeting, String contentHtml) {

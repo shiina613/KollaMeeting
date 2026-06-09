@@ -499,6 +499,8 @@ public class RuntimeMeetingStateStore {
             set(p, "secretaryPdfPath", minutes.getSecretaryPdfPath());
             set(p, "secretaryDocxPath", minutes.getSecretaryDocxPath());
             set(p, "contentHtml", minutes.getContentHtml());
+            set(p, "contentEntriesJson", minutes.getContentEntriesJson());
+            set(p, "conclusion", minutes.getConclusion());
             set(p, "hostConfirmedAt", minutes.getHostConfirmedAt());
             set(p, "hostConfirmationHash", minutes.getHostConfirmationHash());
             set(p, "secretaryConfirmedAt", minutes.getSecretaryConfirmedAt());
@@ -532,6 +534,8 @@ public class RuntimeMeetingStateStore {
                         .secretaryPdfPath(p.getProperty("secretaryPdfPath"))
                         .secretaryDocxPath(p.getProperty("secretaryDocxPath"))
                         .contentHtml(p.getProperty("contentHtml"))
+                        .contentEntriesJson(p.getProperty("contentEntriesJson"))
+                        .conclusion(p.getProperty("conclusion"))
                         .hostConfirmedAt(dateTimeProp(p, "hostConfirmedAt"))
                         .hostConfirmationHash(p.getProperty("hostConfirmationHash"))
                         .secretaryConfirmedAt(dateTimeProp(p, "secretaryConfirmedAt"))

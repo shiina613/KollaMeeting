@@ -8,7 +8,7 @@ import NotificationPanel from './NotificationPanel'
  * Top header with user info, logout button, and notification bell.
  * Requirements: 1.4, 10.5, 10.6
  */
-export default function Header() {
+export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   const { user, logout } = useAuthStore()
   const { unreadCount } = useNotificationStore()
   const navigate = useNavigate()
@@ -28,12 +28,21 @@ export default function Header() {
   return (
     <>
       <header
-        className="fixed top-0 left-64 right-0 h-16 bg-white border-b border-slate-200
+        className="fixed top-0 left-0 lg:left-64 right-0 h-16 bg-white border-b border-slate-200
                    flex items-center justify-between px-6 z-40"
         role="banner"
       >
         {/* Left: page title placeholder — pages can override via context if needed */}
         <div className="flex items-center gap-2">
+          <button
+            type='button'
+            onClick={onMenuClick}
+            className='lg:hidden p-2 -ml-2 rounded-lg hover:bg-slate-100 text-slate-600'
+            aria-label='Mở menu điều hướng'
+            data-testid='mobile-menu-button'
+          >
+            <span className='material-symbols-outlined text-xl' aria-hidden='true'>menu</span>
+          </button>
           <span className="text-base font-semibold text-on-surface">Kolla Meeting</span>
         </div>
 

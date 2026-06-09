@@ -122,7 +122,7 @@ public class MinutesController {
             @AuthenticationPrincipal User currentUser) throws IOException {
 
         MinutesResponse response = minutesService.editMinutes(
-                meetingId, request.getContentHtml(), currentUser);
+                meetingId, request, currentUser);
         return ResponseEntity.ok(
                 ApiResponse.success("Minutes published successfully", response));
     }

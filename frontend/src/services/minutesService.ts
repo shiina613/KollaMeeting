@@ -10,6 +10,7 @@ import type { ApiResponse } from '../types/api'
 import type {
   Minutes,
   MinutesConfirmationResponse,
+  EditMinutesRequest,
   MinutesFormat,
   MinutesVersion,
 } from '../types/minutes'
@@ -51,11 +52,11 @@ export async function confirmMinutes(
  */
 export async function editMinutes(
   meetingId: number,
-  contentHtml: string,
+  request: EditMinutesRequest,
 ): Promise<ApiResponse<Minutes>> {
   const response = await api.put<ApiResponse<Minutes>>(
     `/meetings/${meetingId}/minutes/edit`,
-    { contentHtml },
+    request,
   )
   return response.data
 }

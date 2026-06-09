@@ -1,6 +1,8 @@
 package com.example.kolla.dto;
 
-import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -16,10 +18,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class EditMinutesRequest {
 
-    /**
-     * Rich-text HTML content produced by the Secretary's editor (TipTap / Quill).
-     * Will be rendered to PDF via iText after jsoup text extraction.
-     */
-    @NotBlank(message = "contentHtml must not be blank")
-    private String contentHtml;
+    @Valid
+    @NotEmpty(message = "contentEntries must not be empty")
+    private List<MinutesContentEntryRequest> contentEntries;
+
+    private String conclusion;
 }

@@ -141,9 +141,9 @@ function MinutesTab({
   }
 
   // Determine which version to show in viewer
-  const viewerVersion =
-    minutes.status === 'SECRETARY_CONFIRMED' ? 'secretary'
-    : minutes.status === 'HOST_CONFIRMED' ? 'confirmed'
+  const hasEditedWord = minutes.editedWordAvailable || minutes.secretaryDocxAvailable
+  const viewerVersion = minutes.status === 'HOST_CONFIRMED' || minutes.status === 'SECRETARY_CONFIRMED'
+    ? 'confirmed'
     : 'draft'
 
   return (
@@ -166,7 +166,7 @@ function MinutesTab({
             </button>
           )}
           {/* Secretary edit button */}
-          {isSecretary && minutes.status === 'HOST_CONFIRMED' && !showEditor && (
+          {isSecretary && (minutes.status === 'HOST_CONFIRMED' || minutes.status === 'SECRETARY_CONFIRMED') && !showEditor && (
             <button
               onClick={() => setShowEditor(true)}
               className="inline-flex items-center gap-2 border border-outline-variant text-on-surface px-4 py-2 rounded-xl text-button font-medium hover:bg-surface-container transition-colors"
@@ -181,10 +181,12 @@ function MinutesTab({
       </div>
 
       {/* Editor (secretary) */}
-      {showEditor && isSecretary && minutes.status === 'HOST_CONFIRMED' && (
+      {showEditor && isSecretary && (minutes.status === 'HOST_CONFIRMED' || minutes.status === 'SECRETARY_CONFIRMED') && (
         <MinutesEditor
           meetingId={meetingId}
           initialContent={minutes.contentHtml ?? ''}
+          initialEntries={minutes.contentEntries}
+          initialConclusion={minutes.conclusion ?? ''}
           onSuccess={() => {
             // Re-fetch minutes after edit
             getMinutes(meetingId).then((r) => { onMinutesUpdate(r.data); setShowEditor(false) })
@@ -193,7 +195,7 @@ function MinutesTab({
       )}
 
       {/* Viewer */}
-      {!showEditor && (
+      {!showEditor && !hasEditedWord && (
         <MinutesViewer meetingId={meetingId} version={viewerVersion} status={minutes.status} />
       )}
     </div>
