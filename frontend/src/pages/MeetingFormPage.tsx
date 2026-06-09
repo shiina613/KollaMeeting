@@ -11,6 +11,7 @@ import {
   updateMeeting,
   getMeeting,
   listRooms,
+  listDepartments,
   getRoomAvailability,
   isSchedulingConflict,
   getConflictMessage,
@@ -18,7 +19,7 @@ import {
 import { listHostCandidates, listSecretaryCandidates, searchUsers } from '../services/userService'
 import { listMeetingMembers, addMeetingMember, removeMeetingMember } from '../services/meetingService'
 import { formatUserLabel } from '../utils/userUtils'
-import type { Room, MeetingUser, MeetingMember, TranscriptionPriority, MeetingRole } from '../types/meeting'
+import type { Room, Department, MeetingUser, MeetingMember, TranscriptionPriority, MeetingRole } from '../types/meeting'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -56,6 +57,7 @@ interface FormErrors {
   title?: string
   startTime?: string
   endTime?: string
+  departmentId?: string
   roomId?: string
   hostUserId?: string
   secretaryUserId?: string
@@ -97,6 +99,10 @@ function validateForm(
     errors.roomId = 'Phòng họp là bắt buộc'
   }
 
+  if (!values.departmentId) {
+    errors.departmentId = 'Phòng ban là bắt buộc'
+  }
+
   if (!values.hostUserId) {
     errors.hostUserId = 'Chủ trì là bắt buộc'
   }
@@ -115,6 +121,7 @@ interface FormValues {
   description: string
   startTime: string  // datetime-local format
   endTime: string    // datetime-local format
+  departmentId: number | ''
   roomId: number | ''
   hostUserId: number | ''
   secretaryUserId: number | ''
@@ -126,6 +133,7 @@ const DEFAULT_VALUES: FormValues = {
   description: '',
   startTime: '',
   endTime: '',
+  departmentId: '',
   roomId: '',
   hostUserId: '',
   secretaryUserId: '',
@@ -241,6 +249,7 @@ export default function MeetingFormPage() {
 
   const [values, setValues] = useState<FormValues>(DEFAULT_VALUES)
   const [errors, setErrors] = useState<FormErrors>({})
+  const [departments, setDepartments] = useState<Department[]>([])
   const [rooms, setRooms] = useState<Room[]>([])
   const [hostCandidates, setHostCandidates] = useState<MeetingUser[]>([])
   const [secretaryCandidates, setSecretaryCandidates] = useState<MeetingUser[]>([])
@@ -261,6 +270,10 @@ export default function MeetingFormPage() {
   useEffect(() => {
     listRooms()
       .then((res) => setRooms(res.data ?? []))
+      .catch(() => {/* non-critical */})
+
+    listDepartments()
+      .then((res) => setDepartments(res.data ?? []))
       .catch(() => {/* non-critical */})
 
     listHostCandidates()
@@ -288,6 +301,7 @@ export default function MeetingFormPage() {
           description: m.description ?? '',
           startTime: isoToLocal(m.startTime),
           endTime: isoToLocal(m.endTime),
+          departmentId: m.departmentId ?? m.room?.department?.id ?? m.room?.departmentId ?? '',
           roomId: m.room?.id ?? m.roomId ?? '',
           hostUserId: m.hostUser?.id ?? m.hostUserId ?? m.hostId ?? '',
           secretaryUserId: m.secretaryUser?.id ?? m.secretaryUserId ?? m.secretaryId ?? '',
@@ -366,8 +380,7 @@ export default function MeetingFormPage() {
       return
     }
 
-    const selectedRoom = rooms.find((room) => room.id === values.roomId)
-    const departmentId = selectedRoom?.department?.id ?? selectedRoom?.departmentId
+    const departmentId = values.departmentId
     if (!departmentId) {
       setErrors({ general: 'Phòng họp chưa gắn phòng ban.' })
       return
@@ -557,6 +570,41 @@ export default function MeetingFormPage() {
           {errors.endTime && (
             <p id="endTime-error" className="mt-1 text-body-sm text-error" role="alert">
               {errors.endTime}
+            </p>
+          )}
+        </div>
+
+        {/* Department */}
+        <div>
+          <label
+            htmlFor="departmentId"
+            className="block text-label-md text-on-surface-variant mb-1"
+          >
+            Phòng ban <span className="text-error">*</span>
+          </label>
+          <select
+            id="departmentId"
+            value={values.departmentId}
+            onChange={(e) =>
+              handleChange('departmentId', e.target.value === '' ? '' : Number(e.target.value))
+            }
+            aria-describedby={errors.departmentId ? 'departmentId-error' : undefined}
+            aria-invalid={Boolean(errors.departmentId)}
+            data-testid="department-select"
+            className={`w-full border rounded-lg px-3 py-2 text-body-sm text-on-surface bg-surface
+                        focus:outline-none focus:ring-2 focus:ring-primary
+                        ${errors.departmentId ? 'border-error' : 'border-outline-variant'}`}
+          >
+            <option value="">-- Chọn phòng ban --</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+          {errors.departmentId && (
+            <p id="departmentId-error" className="mt-1 text-body-sm text-error" role="alert">
+              {errors.departmentId}
             </p>
           )}
         </div>

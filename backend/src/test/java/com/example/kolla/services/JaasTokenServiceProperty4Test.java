@@ -1,8 +1,10 @@
 package com.example.kolla.services;
 
 import com.example.kolla.config.JaasProperties;
+import com.example.kolla.enums.MeetingRole;
 import com.example.kolla.enums.Role;
 import com.example.kolla.models.Meeting;
+import com.example.kolla.models.Member;
 import com.example.kolla.models.User;
 import com.example.kolla.repositories.MeetingRepository;
 import com.example.kolla.repositories.MemberRepository;
@@ -116,7 +118,8 @@ class JaasTokenServiceProperty4Test {
 
         // Set up mocks
         when(ctx.meetingRepository.findById(1L)).thenReturn(Optional.of(meeting));
-        when(ctx.memberRepository.existsByMeetingIdAndUserId(anyLong(), anyLong())).thenReturn(true);
+        when(ctx.memberRepository.findByMeetingIdAndUserId(anyLong(), anyLong()))
+                .thenReturn(Optional.of(Member.builder().meetingRole(MeetingRole.MEMBER).build()));
 
         // Act: generate the token
         JaasTokenResponse response = ctx.service.generateToken(1L, user);

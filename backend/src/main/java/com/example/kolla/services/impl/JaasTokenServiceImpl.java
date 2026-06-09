@@ -1,10 +1,12 @@
 package com.example.kolla.services.impl;
 
 import com.example.kolla.config.JaasProperties;
+import com.example.kolla.enums.MeetingRole;
 import com.example.kolla.exceptions.ForbiddenException;
 import com.example.kolla.exceptions.ResourceNotFoundException;
 import com.example.kolla.exceptions.ServiceUnavailableException;
 import com.example.kolla.models.Meeting;
+import com.example.kolla.models.Member;
 import com.example.kolla.models.User;
 import com.example.kolla.repositories.MeetingRepository;
 import com.example.kolla.repositories.MemberRepository;
@@ -51,15 +53,12 @@ public class JaasTokenServiceImpl implements JaasTokenService {
                 .orElseThrow(() -> new ResourceNotFoundException("Meeting not found: " + meetingId));
 
         // 3. Check membership
-        if (!memberRepository.existsByMeetingIdAndUserId(meetingId, currentUser.getId())) {
-            throw new ForbiddenException("User is not a member of this meeting");
-        }
+        Member member = memberRepository.findByMeetingIdAndUserId(meetingId, currentUser.getId())
+                .orElseThrow(() -> new ForbiddenException("User is not a member of this meeting"));
 
         // 4. Determine moderator flag — host or secretary
-        boolean isModerator = (meeting.getHost() != null
-                && currentUser.getId().equals(meeting.getHost().getId()))
-                || (meeting.getSecretary() != null
-                && currentUser.getId().equals(meeting.getSecretary().getId()));
+        boolean isModerator = member.getMeetingRole() == MeetingRole.HOST
+                || member.getMeetingRole() == MeetingRole.SECRETARY;
 
         // 5. Build and sign JWT
         String token = buildJwt(meeting, currentUser, isModerator);

@@ -1,6 +1,8 @@
 package com.example.kolla.services.impl;
 
 import com.example.kolla.enums.MeetingStatus;
+import com.example.kolla.enums.MeetingRole;
+import com.example.kolla.enums.Role;
 import com.example.kolla.exceptions.BadRequestException;
 import com.example.kolla.exceptions.ForbiddenException;
 import com.example.kolla.exceptions.ResourceNotFoundException;
@@ -9,6 +11,7 @@ import com.example.kolla.models.Meeting;
 import com.example.kolla.models.User;
 import com.example.kolla.repositories.AttendanceLogRepository;
 import com.example.kolla.repositories.MeetingRepository;
+import com.example.kolla.repositories.MemberRepository;
 import com.example.kolla.services.RaiseHandQueueService;
 import com.example.kolla.responses.MeetingResponse;
 import com.example.kolla.services.MeetingLifecycleService;
@@ -58,6 +61,7 @@ public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
     private static final String WAITING_TIMEOUT_KEY_PREFIX = "meeting:%d:waiting_timeout";
 
     private final MeetingRepository meetingRepository;
+    private final MemberRepository memberRepository;
     private final AttendanceLogRepository attendanceLogRepository;
     private final NotificationService notificationService;
     private final StringRedisTemplate redisTemplate;
@@ -333,8 +337,18 @@ public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
      */
     @Override
     public boolean hasHostAuthority(Meeting meeting, User user) {
-        return meeting.getHost() != null
-                && meeting.getHost().getId().equals(user.getId());
+        if (meeting == null || user == null) {
+            return false;
+        }
+
+        if (meeting.getHost() != null
+                && meeting.getHost().getId().equals(user.getId())) {
+            return true;
+        }
+
+        return memberRepository.findByMeetingIdAndUserId(meeting.getId(), user.getId())
+                .map(member -> member.getMeetingRole() == MeetingRole.HOST)
+                .orElse(false);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
@@ -486,8 +500,26 @@ public class MeetingLifecycleServiceImpl implements MeetingLifecycleService {
     }
 
     private Meeting findMeetingOrThrow(Long id) {
-        return meetingRepository.findById(id)
+        Meeting meeting = meetingRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Meeting not found with id: " + id));
+        hydrateMeetingRoles(meeting);
+        return meeting;
+    }
+
+    private void hydrateMeetingRoles(Meeting meeting) {
+        if (meeting == null || meeting.getId() == null) return;
+        memberRepository.findByMeetingId(meeting.getId()).forEach(member -> {
+            if (member.getMeetingRole() == MeetingRole.HOST && meeting.getHost() == null) {
+                meeting.setHost(member.getUser());
+            } else if (member.getMeetingRole() == MeetingRole.SECRETARY && meeting.getSecretary() == null) {
+                meeting.setSecretary(member.getUser());
+            }
+        });
+        if (meeting.getSecretary() == null
+                && meeting.getHost() != null
+                && meeting.getHost().getRole() == Role.SECRETARY) {
+            meeting.setSecretary(meeting.getHost());
+        }
     }
 }

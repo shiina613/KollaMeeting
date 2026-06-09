@@ -1,8 +1,10 @@
 package com.example.kolla.integration;
 
 import com.example.kolla.dto.CreateMeetingRequest;
+import com.example.kolla.enums.MeetingMode;
 import com.example.kolla.enums.MeetingStatus;
 import com.example.kolla.enums.Role;
+import com.example.kolla.enums.TranscriptionPriority;
 import com.example.kolla.exceptions.BadRequestException;
 import com.example.kolla.models.Department;
 import com.example.kolla.models.Meeting;
@@ -14,7 +16,9 @@ import com.example.kolla.repositories.RoomRepository;
 import com.example.kolla.repositories.UserRepository;
 import com.example.kolla.responses.MeetingResponse;
 import com.example.kolla.services.MeetingLifecycleService;
+import com.example.kolla.services.MeetingModeService;
 import com.example.kolla.services.MeetingService;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -52,6 +56,9 @@ class MeetingLifecycleIntegrationTest {
     private MeetingLifecycleService meetingLifecycleService;
 
     @Autowired
+    private MeetingModeService meetingModeService;
+
+    @Autowired
     private MeetingRepository meetingRepository;
 
     @Autowired
@@ -62,6 +69,9 @@ class MeetingLifecycleIntegrationTest {
 
     @Autowired
     private DepartmentRepository departmentRepository;
+
+    @Autowired
+    private EntityManager entityManager;
 
     private User admin;
     private User secretary;
@@ -139,6 +149,49 @@ class MeetingLifecycleIntegrationTest {
             assertThat(response.getHostId()).isEqualTo(secretary.getId());
             assertThat(response.getSecretaryId()).isEqualTo(secretary.getId());
         }
+
+        @Test
+        @DisplayName("Reloaded meeting response includes host and secretary from member roles")
+        void reloadedMeetingIncludesHostAndSecretary() {
+            MeetingResponse created = createMeeting("Reloaded Host Secretary Test");
+            entityManager.flush();
+            entityManager.clear();
+
+            MeetingResponse response = meetingService.getMeetingById(created.getId(), secretary);
+
+            assertThat(response.getHostId()).isEqualTo(secretary.getId());
+            assertThat(response.getSecretaryId()).isEqualTo(secretary.getId());
+        }
+
+        @Test
+        @DisplayName("Reloaded meeting host authority uses persisted member role")
+        void reloadedMeetingHostAuthorityUsesMemberRole() {
+            MeetingResponse created = createMeeting("Reloaded Host Authority Test");
+            entityManager.flush();
+            entityManager.clear();
+
+            Meeting reloaded = meetingRepository.findById(created.getId()).orElseThrow();
+
+            assertThat(meetingLifecycleService.hasHostAuthority(reloaded, secretary)).isTrue();
+        }
+
+        @Test
+        @DisplayName("High transcription priority persists after reload")
+        void highTranscriptionPriorityPersistsAfterReload() {
+            MeetingResponse created = createMeetingAt(
+                    "High Priority Reload Test",
+                    LocalDateTime.now().plusDays(3),
+                    LocalDateTime.now().plusDays(3).plusHours(1),
+                    TranscriptionPriority.HIGH_PRIORITY);
+            entityManager.flush();
+            entityManager.clear();
+
+            Meeting reloaded = meetingRepository.findById(created.getId()).orElseThrow();
+            MeetingResponse response = meetingService.getMeetingById(created.getId(), secretary);
+
+            assertThat(reloaded.getTranscriptionPriority()).isEqualTo(TranscriptionPriority.HIGH_PRIORITY);
+            assertThat(response.getTranscriptionPriority()).isEqualTo(TranscriptionPriority.HIGH_PRIORITY);
+        }
     }
 
     // ── Activate meeting ──────────────────────────────────────────────────────
@@ -151,6 +204,8 @@ class MeetingLifecycleIntegrationTest {
         @DisplayName("Activating a SCHEDULED meeting transitions it to ACTIVE")
         void activatesScheduledMeeting() {
             MeetingResponse created = createMeeting("Activate Test");
+            entityManager.flush();
+            entityManager.clear();
             Meeting meeting = meetingRepository.findById(created.getId()).orElseThrow();
 
             meetingLifecycleService.activateMeeting(meeting.getId(), secretary);
@@ -158,6 +213,38 @@ class MeetingLifecycleIntegrationTest {
             Meeting activated = meetingRepository.findById(meeting.getId()).orElseThrow();
             assertThat(activated.getStatus()).isEqualTo(MeetingStatus.ACTIVE);
             assertThat(activated.getActivatedAt()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("Reloaded host can switch mode after activation")
+        void reloadedHostCanSwitchModeAfterActivation() {
+            MeetingResponse created = createMeeting("Reloaded Host Mode Switch Test");
+            entityManager.flush();
+            entityManager.clear();
+
+            meetingLifecycleService.activateMeeting(created.getId(), secretary);
+
+            MeetingResponse response = meetingModeService.switchMode(
+                    created.getId(), MeetingMode.MEETING_MODE, secretary);
+
+            assertThat(response.getMode()).isEqualTo(MeetingMode.MEETING_MODE);
+        }
+
+        @Test
+        @DisplayName("Meeting mode persists after mode switch")
+        void meetingModePersistsAfterSwitch() {
+            MeetingResponse created = createMeeting("Persisted Mode Switch Test");
+            entityManager.flush();
+            entityManager.clear();
+
+            meetingLifecycleService.activateMeeting(created.getId(), secretary);
+            meetingModeService.switchMode(created.getId(), MeetingMode.MEETING_MODE, secretary);
+            entityManager.flush();
+            entityManager.clear();
+
+            Meeting reloaded = meetingRepository.findById(created.getId()).orElseThrow();
+
+            assertThat(reloaded.getMode()).isEqualTo(MeetingMode.MEETING_MODE);
         }
 
         @Test
@@ -285,6 +372,14 @@ class MeetingLifecycleIntegrationTest {
     }
 
     private MeetingResponse createMeetingAt(String title, LocalDateTime start, LocalDateTime end) {
+        return createMeetingAt(title, start, end, TranscriptionPriority.NORMAL_PRIORITY);
+    }
+
+    private MeetingResponse createMeetingAt(
+            String title,
+            LocalDateTime start,
+            LocalDateTime end,
+            TranscriptionPriority transcriptionPriority) {
         return meetingService.createMeeting(
                 CreateMeetingRequest.builder()
                         .title(title)
@@ -295,6 +390,7 @@ class MeetingLifecycleIntegrationTest {
                         .departmentId(room.getDepartment().getId())
                         .hostUserId(secretary.getId())
                         .secretaryUserId(secretary.getId())
+                        .transcriptionPriority(transcriptionPriority)
                         .build(),
                 admin);
     }

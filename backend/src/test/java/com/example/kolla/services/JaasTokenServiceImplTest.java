@@ -1,11 +1,13 @@
 package com.example.kolla.services;
 
 import com.example.kolla.config.JaasProperties;
+import com.example.kolla.enums.MeetingRole;
 import com.example.kolla.enums.Role;
 import com.example.kolla.exceptions.ForbiddenException;
 import com.example.kolla.exceptions.ResourceNotFoundException;
 import com.example.kolla.exceptions.ServiceUnavailableException;
 import com.example.kolla.models.Meeting;
+import com.example.kolla.models.Member;
 import com.example.kolla.models.User;
 import com.example.kolla.repositories.MeetingRepository;
 import com.example.kolla.repositories.MemberRepository;
@@ -29,7 +31,6 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
 /**
@@ -115,6 +116,19 @@ class JaasTokenServiceImplTest {
         return meeting;
     }
 
+    private Member buildMember(Meeting meeting, User user, MeetingRole role) {
+        return Member.builder()
+                .meeting(meeting)
+                .user(user)
+                .meetingRole(role)
+                .build();
+    }
+
+    private void mockMember(Long meetingId, Meeting meeting, User user, MeetingRole role) {
+        when(memberRepository.findByMeetingIdAndUserId(meetingId, user.getId()))
+                .thenReturn(Optional.of(buildMember(meeting, user, role)));
+    }
+
     /**
      * Decodes the JWT payload (middle part) and returns it as a JsonNode.
      */
@@ -139,7 +153,7 @@ class JaasTokenServiceImplTest {
             Meeting meeting = buildMeeting(1L, "ABCDEF1234567890ABCD", null, null);
 
             when(meetingRepository.findById(1L)).thenReturn(Optional.of(meeting));
-            when(memberRepository.existsByMeetingIdAndUserId(1L, 10L)).thenReturn(true);
+            mockMember(1L, meeting, member, MeetingRole.MEMBER);
 
             // Act
             JaasTokenResponse response = jaasTokenService.generateToken(1L, member);
@@ -166,7 +180,7 @@ class JaasTokenServiceImplTest {
             Meeting meeting = buildMeeting(2L, "HOSTMEETING12345ABCD", host, null);
 
             when(meetingRepository.findById(2L)).thenReturn(Optional.of(meeting));
-            when(memberRepository.existsByMeetingIdAndUserId(2L, 20L)).thenReturn(true);
+            mockMember(2L, meeting, host, MeetingRole.HOST);
 
             // Act
             JaasTokenResponse response = jaasTokenService.generateToken(2L, host);
@@ -179,6 +193,23 @@ class JaasTokenServiceImplTest {
         }
 
         @Test
+        @DisplayName("Sets moderator=true for host persisted only as member role")
+        void generateToken_moderatorTrueForReloadedHostMemberRole() throws Exception {
+            User host = buildUser(21L, "reloaded_host", Role.USER);
+            Meeting meeting = buildMeeting(21L, "RELOADEDHOST123456", null, null);
+
+            when(meetingRepository.findById(21L)).thenReturn(Optional.of(meeting));
+            mockMember(21L, meeting, host, MeetingRole.HOST);
+
+            JaasTokenResponse response = jaasTokenService.generateToken(21L, host);
+
+            JsonNode contextUser = decodeJwtPayload(response.getToken()).get("context").get("user");
+            assertThat(contextUser.get("moderator").asBoolean())
+                    .as("Reloaded Host member must have moderator=true")
+                    .isTrue();
+        }
+
+        @Test
         @DisplayName("Sets moderator=true when user is the secretary")
         void generateToken_moderatorTrueForSecretary() throws Exception {
             // Arrange
@@ -186,7 +217,7 @@ class JaasTokenServiceImplTest {
             Meeting meeting = buildMeeting(3L, "SECRETARYMEETING1234", null, secretary);
 
             when(meetingRepository.findById(3L)).thenReturn(Optional.of(meeting));
-            when(memberRepository.existsByMeetingIdAndUserId(3L, 30L)).thenReturn(true);
+            mockMember(3L, meeting, secretary, MeetingRole.SECRETARY);
 
             // Act
             JaasTokenResponse response = jaasTokenService.generateToken(3L, secretary);
@@ -208,7 +239,7 @@ class JaasTokenServiceImplTest {
             Meeting meeting = buildMeeting(4L, "REGULARMEMBER1234567", host, secretary);
 
             when(meetingRepository.findById(4L)).thenReturn(Optional.of(meeting));
-            when(memberRepository.existsByMeetingIdAndUserId(4L, 40L)).thenReturn(true);
+            mockMember(4L, meeting, regularMember, MeetingRole.MEMBER);
 
             // Act
             JaasTokenResponse response = jaasTokenService.generateToken(4L, regularMember);
@@ -228,7 +259,7 @@ class JaasTokenServiceImplTest {
             Meeting meeting = buildMeeting(5L, "NOHOSTMEETING1234567", null, null);
 
             when(meetingRepository.findById(5L)).thenReturn(Optional.of(meeting));
-            when(memberRepository.existsByMeetingIdAndUserId(5L, 50L)).thenReturn(true);
+            mockMember(5L, meeting, member, MeetingRole.MEMBER);
 
             // Act
             JaasTokenResponse response = jaasTokenService.generateToken(5L, member);
@@ -255,7 +286,7 @@ class JaasTokenServiceImplTest {
             Meeting meeting = buildMeeting(1L, "ABCDEF1234567890ABCD", null, null);
 
             when(meetingRepository.findById(1L)).thenReturn(Optional.of(meeting));
-            when(memberRepository.existsByMeetingIdAndUserId(1L, 99L)).thenReturn(false);
+            when(memberRepository.findByMeetingIdAndUserId(1L, 99L)).thenReturn(Optional.empty());
 
             // Act & Assert
             assertThatThrownBy(() -> jaasTokenService.generateToken(1L, nonMember))
@@ -332,7 +363,7 @@ class JaasTokenServiceImplTest {
             Meeting meeting = buildMeeting(1L, "ABCDEF1234567890ABCD", null, null);
 
             when(meetingRepository.findById(1L)).thenReturn(Optional.of(meeting));
-            when(memberRepository.existsByMeetingIdAndUserId(anyLong(), anyLong())).thenReturn(true);
+            mockMember(1L, meeting, member, MeetingRole.MEMBER);
 
             // Act
             JaasTokenResponse response = jaasTokenService.generateToken(1L, member);
@@ -357,7 +388,7 @@ class JaasTokenServiceImplTest {
             Meeting meeting = buildMeeting(1L, "ABCDEF1234567890ABCD", null, null);
 
             when(meetingRepository.findById(1L)).thenReturn(Optional.of(meeting));
-            when(memberRepository.existsByMeetingIdAndUserId(anyLong(), anyLong())).thenReturn(true);
+            mockMember(1L, meeting, member, MeetingRole.MEMBER);
 
             // Act
             JaasTokenResponse response = jaasTokenService.generateToken(1L, member);
@@ -379,7 +410,7 @@ class JaasTokenServiceImplTest {
             Meeting meeting = buildMeeting(1L, "TESTCODE1234567890AB", null, null);
 
             when(meetingRepository.findById(1L)).thenReturn(Optional.of(meeting));
-            when(memberRepository.existsByMeetingIdAndUserId(anyLong(), anyLong())).thenReturn(true);
+            mockMember(1L, meeting, member, MeetingRole.MEMBER);
 
             // Act
             JaasTokenResponse response = jaasTokenService.generateToken(1L, member);

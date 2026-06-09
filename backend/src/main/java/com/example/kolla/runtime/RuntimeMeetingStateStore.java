@@ -170,23 +170,19 @@ public class RuntimeMeetingStateStore {
 
     public List<TranscriptionSegment> findSegmentsByMeetingId(Long meetingId) {
         loadSegmentsForMeeting(meetingId);
-        return segmentsByJobId.values().stream()
+        return sortSegmentsForMinutes(segmentsByJobId.values().stream()
                 .filter(segment -> segment.getMeeting() != null
-                        && meetingId.equals(segment.getMeeting().getId()))
-                .sorted(segmentComparator())
-                .toList();
+                        && meetingId.equals(segment.getMeeting().getId())));
     }
 
     public Page<TranscriptionSegment> searchSegments(String keyword, Long meetingId, Pageable pageable) {
         loadAllSegments();
         String normalized = keyword == null ? "" : keyword.toLowerCase();
-        List<TranscriptionSegment> matches = segmentsByJobId.values().stream()
+        List<TranscriptionSegment> matches = sortSegmentsForMinutes(segmentsByJobId.values().stream()
                 .filter(segment -> meetingId == null
                         || (segment.getMeeting() != null && meetingId.equals(segment.getMeeting().getId())))
                 .filter(segment -> segment.getText() != null
-                        && segment.getText().toLowerCase().contains(normalized))
-                .sorted(segmentComparator())
-                .toList();
+                        && segment.getText().toLowerCase().contains(normalized)));
         int start = Math.min((int) pageable.getOffset(), matches.size());
         int end = Math.min(start + pageable.getPageSize(), matches.size());
         return new PageImpl<>(matches.subList(start, end), pageable, matches.size());
@@ -392,11 +388,67 @@ public class RuntimeMeetingStateStore {
         return storageLog;
     }
 
-    private Comparator<TranscriptionSegment> segmentComparator() {
-        return Comparator
-                .comparing(TranscriptionSegment::getSpeakerTurnId, Comparator.nullsLast(String::compareTo))
-                .thenComparingInt(TranscriptionSegment::getSequenceNumber)
-                .thenComparing(TranscriptionSegment::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()));
+    private List<TranscriptionSegment> sortSegmentsForMinutes(Stream<TranscriptionSegment> segmentStream) {
+        List<TranscriptionSegment> segments = segmentStream.toList();
+        Map<String, LocalDateTime> turnStartTimes = new java.util.HashMap<>();
+        for (TranscriptionSegment segment : segments) {
+            turnStartTimes.merge(
+                    speakerTurnKey(segment),
+                    segmentOrderTime(segment),
+                    (left, right) -> left.isBefore(right) ? left : right);
+        }
+
+        return segments.stream()
+                .sorted((left, right) -> compareSegmentsForMinutes(left, right, turnStartTimes))
+                .toList();
+    }
+
+    private int compareSegmentsForMinutes(
+            TranscriptionSegment left,
+            TranscriptionSegment right,
+            Map<String, LocalDateTime> turnStartTimes) {
+        String leftTurn = speakerTurnKey(left);
+        String rightTurn = speakerTurnKey(right);
+
+        if (!leftTurn.equals(rightTurn)) {
+            int turnStartComparison = turnStartTimes.get(leftTurn).compareTo(turnStartTimes.get(rightTurn));
+            if (turnStartComparison != 0) {
+                return turnStartComparison;
+            }
+            int turnKeyComparison = leftTurn.compareTo(rightTurn);
+            if (turnKeyComparison != 0) {
+                return turnKeyComparison;
+            }
+        }
+
+        int sequenceComparison = Integer.compare(left.getSequenceNumber(), right.getSequenceNumber());
+        if (sequenceComparison != 0) {
+            return sequenceComparison;
+        }
+
+        int timeComparison = segmentOrderTime(left).compareTo(segmentOrderTime(right));
+        if (timeComparison != 0) {
+            return timeComparison;
+        }
+
+        return String.valueOf(left.getJobId()).compareTo(String.valueOf(right.getJobId()));
+    }
+
+    private String speakerTurnKey(TranscriptionSegment segment) {
+        if (segment.getSpeakerTurnId() != null && !segment.getSpeakerTurnId().isBlank()) {
+            return segment.getSpeakerTurnId();
+        }
+        return "job:" + String.valueOf(segment.getJobId());
+    }
+
+    private LocalDateTime segmentOrderTime(TranscriptionSegment segment) {
+        if (segment.getSegmentStartTime() != null) {
+            return segment.getSegmentStartTime();
+        }
+        if (segment.getCreatedAt() != null) {
+            return segment.getCreatedAt();
+        }
+        return LocalDateTime.MAX;
     }
 
     private Path basePath() {

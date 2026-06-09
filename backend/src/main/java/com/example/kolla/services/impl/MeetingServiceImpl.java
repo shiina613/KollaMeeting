@@ -465,8 +465,26 @@ public class MeetingServiceImpl implements MeetingService {
     }
 
     private Meeting findMeetingOrThrow(Long id) {
-        return meetingRepository.findById(id)
+        Meeting meeting = meetingRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Meeting not found with id: " + id));
+        hydrateMeetingRoles(meeting);
+        return meeting;
+    }
+
+    private void hydrateMeetingRoles(Meeting meeting) {
+        if (meeting == null || meeting.getId() == null) return;
+        memberRepository.findByMeetingId(meeting.getId()).forEach(member -> {
+            if (member.getMeetingRole() == MeetingRole.HOST && meeting.getHost() == null) {
+                meeting.setHost(member.getUser());
+            } else if (member.getMeetingRole() == MeetingRole.SECRETARY && meeting.getSecretary() == null) {
+                meeting.setSecretary(member.getUser());
+            }
+        });
+        if (meeting.getSecretary() == null
+                && meeting.getHost() != null
+                && meeting.getHost().getRole() == Role.SECRETARY) {
+            meeting.setSecretary(meeting.getHost());
+        }
     }
 
     private User findUserOrThrow(Long id) {

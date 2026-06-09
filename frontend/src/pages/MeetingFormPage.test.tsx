@@ -17,6 +17,7 @@ vi.mock('../services/meetingService', () => ({
   updateMeeting: vi.fn(),
   getMeeting: vi.fn(),
   listRooms: vi.fn(),
+  listDepartments: vi.fn(),
   getRoomAvailability: vi.fn(),
   isSchedulingConflict: vi.fn(),
   getConflictMessage: vi.fn(),
@@ -31,10 +32,18 @@ vi.mock('../services/userService', () => ({
 import * as meetingService from '../services/meetingService'
 import * as userService from '../services/userService'
 
+beforeEach(() => {
+  vi.clearAllMocks()
+})
+
 // ─── Default mock data ────────────────────────────────────────────────────────
 
 const mockRooms = [
   { id: 1, name: 'Phòng A', capacity: 10, department: { id: 1, name: 'IT' } },
+]
+
+const mockDepartments = [
+  { id: 1, name: 'IT' },
 ]
 
 const mockHostCandidates = [
@@ -50,6 +59,10 @@ const mockSecretaryCandidates = [
 function setupDefaultMocks() {
   vi.mocked(meetingService.listRooms).mockResolvedValue({
     data: mockRooms,
+    success: true,
+  })
+  vi.mocked(meetingService.listDepartments).mockResolvedValue({
+    data: mockDepartments,
     success: true,
   })
   vi.mocked(meetingService.getRoomAvailability).mockResolvedValue([])
@@ -282,6 +295,10 @@ describe('MeetingFormPage — calls createMeeting on valid submit', () => {
       target: { value: '1' },
     })
 
+    fireEvent.change(screen.getByTestId('department-select'), {
+      target: { value: '1' },
+    })
+
     fireEvent.change(screen.getByTestId('host-select'), {
       target: { value: '10' },
     })
@@ -305,6 +322,53 @@ describe('MeetingFormPage — calls createMeeting on valid submit', () => {
     // startTime and endTime should be ISO strings
     expect(callArgs.startTime).toMatch(/^\d{4}-\d{2}-\d{2}T/)
     expect(callArgs.endTime).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+  })
+
+  it('uses selected department when rooms only have flat department fields', async () => {
+    vi.mocked(meetingService.listRooms).mockResolvedValue({
+      data: [{ id: 1, name: 'Room A', capacity: 10, departmentId: 1, departmentName: 'IT' }],
+      success: true,
+    })
+    vi.mocked(meetingService.listDepartments).mockResolvedValue({
+      data: [{ id: 1, name: 'IT' }],
+      success: true,
+    })
+
+    renderCreateForm()
+
+    await waitFor(() => {
+      const departmentSelect = screen.getByTestId('department-select')
+      expect(departmentSelect.querySelector('option[value="1"]')).toBeInTheDocument()
+    })
+
+    await userEvent.type(document.querySelector('#title') as HTMLInputElement, 'Test Meeting')
+    fireEvent.change(document.querySelector('#startTime') as HTMLInputElement, {
+      target: { value: '2030-12-01T10:00' },
+    })
+    fireEvent.change(document.querySelector('#endTime') as HTMLInputElement, {
+      target: { value: '2030-12-01T11:00' },
+    })
+    fireEvent.change(screen.getByTestId('department-select'), {
+      target: { value: '1' },
+    })
+    fireEvent.change(document.querySelector('#roomId') as HTMLSelectElement, {
+      target: { value: '1' },
+    })
+    fireEvent.change(screen.getByTestId('host-select'), {
+      target: { value: '10' },
+    })
+    fireEvent.change(screen.getByTestId('secretary-select'), {
+      target: { value: '11' },
+    })
+
+    await userEvent.click(document.querySelector('button[type="submit"]') as HTMLButtonElement)
+
+    await waitFor(() => {
+      expect(vi.mocked(meetingService.createMeeting)).toHaveBeenCalledOnce()
+    })
+
+    expect(vi.mocked(meetingService.createMeeting).mock.calls[0][0].departmentId).toBe(1)
+    expect(screen.queryByText(/chưa gắn phòng ban/i)).not.toBeInTheDocument()
   })
 })
 

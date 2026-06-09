@@ -782,8 +782,16 @@ public class MinutesServiceImpl implements MinutesService {
     // ── Access control helpers ────────────────────────────────────────────────
 
     private boolean isHost(Meeting meeting, User user) {
-        return meeting.getHost() != null
-                && meeting.getHost().getId().equals(user.getId());
+        if (meeting == null || user == null) {
+            return false;
+        }
+        if (meeting.getHost() != null
+                && meeting.getHost().getId().equals(user.getId())) {
+            return true;
+        }
+        return memberRepository.findByMeetingIdAndUserId(meeting.getId(), user.getId())
+                .map(member -> member.getMeetingRole() == MeetingRole.HOST)
+                .orElse(false);
     }
 
     private boolean isSecretaryOrAdmin(Meeting meeting, User user) {

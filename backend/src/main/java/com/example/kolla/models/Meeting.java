@@ -57,11 +57,13 @@ public class Meeting {
     @Builder.Default
     private MeetingStatus status = MeetingStatus.SCHEDULED;
 
-    @Transient
+    @Enumerated(EnumType.STRING)
+    @Column(name = "Mode", nullable = false)
     @Builder.Default
     private MeetingMode mode = MeetingMode.FREE_MODE;
 
-    @Transient
+    @Enumerated(EnumType.STRING)
+    @Column(name = "TranscriptionPriority", nullable = false)
     @Builder.Default
     private TranscriptionPriority transcriptionPriority = TranscriptionPriority.NORMAL_PRIORITY;
 

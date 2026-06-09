@@ -42,11 +42,37 @@ class MinutesAssemblyOrderingPropertyTest {
      * {@code TranscriptionSegmentRepository.findByMeetingIdOrderedForMinutes()}.
      */
     private List<TranscriptionSegment> sortSegments(List<TranscriptionSegment> segments) {
+        Map<String, LocalDateTime> turnStartTimes = new HashMap<>();
+        for (TranscriptionSegment segment : segments) {
+            turnStartTimes.merge(
+                    segment.getSpeakerTurnId(),
+                    segmentOrderTime(segment),
+                    (left, right) -> left.isBefore(right) ? left : right);
+        }
+
         return segments.stream()
-                .sorted(Comparator
-                        .comparing(TranscriptionSegment::getSpeakerTurnId)
-                        .thenComparingInt(TranscriptionSegment::getSequenceNumber))
+                .sorted((left, right) -> {
+                    if (!left.getSpeakerTurnId().equals(right.getSpeakerTurnId())) {
+                        int turnStartComparison = turnStartTimes.get(left.getSpeakerTurnId())
+                                .compareTo(turnStartTimes.get(right.getSpeakerTurnId()));
+                        if (turnStartComparison != 0) {
+                            return turnStartComparison;
+                        }
+                        return left.getSpeakerTurnId().compareTo(right.getSpeakerTurnId());
+                    }
+                    return Integer.compare(left.getSequenceNumber(), right.getSequenceNumber());
+                })
                 .collect(Collectors.toList());
+    }
+
+    private LocalDateTime segmentOrderTime(TranscriptionSegment segment) {
+        if (segment.getSegmentStartTime() != null) {
+            return segment.getSegmentStartTime();
+        }
+        if (segment.getCreatedAt() != null) {
+            return segment.getCreatedAt();
+        }
+        return LocalDateTime.MAX;
     }
 
     /**
