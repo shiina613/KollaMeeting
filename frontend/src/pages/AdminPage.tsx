@@ -10,7 +10,7 @@ import DepartmentRoomManagement from '../components/admin/DepartmentRoomManageme
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 
-type TabId = 'users' | 'departments'
+type TabId = 'users' | 'departments' | 'rooms'
 
 interface Tab {
   id: TabId
@@ -20,7 +20,8 @@ interface Tab {
 
 const TABS: Tab[] = [
   { id: 'users', label: 'Quản lý người dùng', icon: 'group' },
-  { id: 'departments', label: 'Phòng ban & Phòng họp', icon: 'corporate_fare' },
+  { id: 'departments', label: 'Phòng ban', icon: 'corporate_fare' },
+  { id: 'rooms', label: 'Phòng họp', icon: 'meeting_room' },
 ]
 
 // ─── AdminPage ────────────────────────────────────────────────────────────────
@@ -86,7 +87,17 @@ export default function AdminPage() {
         hidden={activeTab !== 'departments'}
         data-testid="tab-panel-departments"
       >
-        {activeTab === 'departments' && <DepartmentRoomManagement />}
+        {activeTab === 'departments' && <DepartmentRoomManagement view="departments" />}
+      </div>
+
+      <div
+        id="tab-panel-rooms"
+        role="tabpanel"
+        aria-labelledby="tab-rooms"
+        hidden={activeTab !== 'rooms'}
+        data-testid="tab-panel-rooms"
+      >
+        {activeTab === 'rooms' && <DepartmentRoomManagement view="rooms" />}
       </div>
     </div>
   )
