@@ -1,8 +1,10 @@
 package com.example.kolla.services;
 
 import com.example.kolla.config.JaasProperties;
+import com.example.kolla.enums.MeetingRole;
 import com.example.kolla.enums.Role;
 import com.example.kolla.models.Meeting;
+import com.example.kolla.models.Member;
 import com.example.kolla.models.User;
 import com.example.kolla.repositories.MeetingRepository;
 import com.example.kolla.repositories.MemberRepository;
@@ -110,7 +112,8 @@ class JaasTokenServiceProperty1Test {
 
         // Set up mocks
         when(meetingRepository.findById(1L)).thenReturn(Optional.of(meeting));
-        when(memberRepository.existsByMeetingIdAndUserId(anyLong(), anyLong())).thenReturn(true);
+        when(memberRepository.findByMeetingIdAndUserId(anyLong(), anyLong()))
+                .thenReturn(Optional.of(Member.builder().meetingRole(MeetingRole.MEMBER).build()));
 
         // Act: generate the token
         JaasTokenResponse response = jaasTokenService.generateToken(1L, user);
@@ -194,7 +197,8 @@ class JaasTokenServiceProperty1Test {
         meeting.setSecretary(null);
 
         when(meetingRepository.findById(1L)).thenReturn(Optional.of(meeting));
-        when(memberRepository.existsByMeetingIdAndUserId(anyLong(), anyLong())).thenReturn(true);
+        when(memberRepository.findByMeetingIdAndUserId(anyLong(), anyLong()))
+                .thenReturn(Optional.of(Member.builder().meetingRole(MeetingRole.HOST).build()));
 
         JaasTokenResponse response = jaasTokenService.generateToken(1L, user);
         String token = response.getToken();

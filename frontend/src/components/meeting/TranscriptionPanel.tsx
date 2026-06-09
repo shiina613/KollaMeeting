@@ -10,7 +10,7 @@
  * Requirements: 8.12, 8.13
  */
 
-import { useEffect, useRef } from 'react'
+import { Fragment, useEffect, useRef } from 'react'
 import type { TranscriptionSegment } from '../../utils/audioUtils'
 import { formatJavaZonedTime } from '../../utils/parseJavaZonedDateTime'
 import type { MeetingRole } from '../../types/meeting'
@@ -104,8 +104,35 @@ interface SpeakerBlockCardProps {
   isLast: boolean
 }
 
+interface AnimatedTranscriptTextProps {
+  text: string
+  animate: boolean
+}
+
+function AnimatedTranscriptText({ text, animate }: AnimatedTranscriptTextProps) {
+  const trimmed = text.trim()
+  if (!trimmed) return null
+  if (!animate) return <>{trimmed}</>
+
+  return (
+    <>
+      {trimmed.split(/\s+/).map((word, idx, words) => (
+        <Fragment key={`${word}-${idx}`}>
+          <span
+            className="transcript-word"
+            data-testid="transcript-word"
+            style={{ animationDelay: `${idx * 70}ms` }}
+          >
+            {word}
+          </span>
+          {idx < words.length - 1 ? ' ' : null}
+        </Fragment>
+      ))}
+    </>
+  )
+}
+
 function SpeakerBlockCard({ block, isLast }: SpeakerBlockCardProps) {
-  const text = block.segments.map((s) => s.text).join(' ')
   const firstSegment = block.segments[0]
 
   const time = formatJavaZonedTime(firstSegment.segmentStartTime ?? '', {
@@ -132,7 +159,19 @@ function SpeakerBlockCard({ block, isLast }: SpeakerBlockCardProps) {
       {/* Format: Tên - Phòng - UserId: Nội dung <HH:MM:SS> */}
       <p className="text-body-sm text-slate-200 leading-relaxed break-words">
         <span className="font-semibold text-blue-300">{speakerInfo}:</span>
-        <span className="text-slate-200"> {text} </span>
+        <span className="text-slate-200">
+          {' '}
+          {block.segments.map((segment, idx) => (
+            <Fragment key={segment.jobId}>
+              {idx > 0 ? ' ' : null}
+              <AnimatedTranscriptText
+                text={segment.text}
+                animate={isLast && idx === block.segments.length - 1}
+              />
+            </Fragment>
+          ))}
+          {' '}
+        </span>
         <span className="text-slate-400 font-mono text-label-sm">&lt;{timeDisplay}&gt;</span>
       </p>
     </div>

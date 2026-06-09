@@ -18,6 +18,32 @@
 }
 
 @layer utilities {
+  @keyframes transcript-word-in {
+    from {
+      opacity: 0;
+      transform: translateY(0.35em);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .transcript-word {
+    display: inline-block;
+    opacity: 0;
+    animation: transcript-word-in 220ms ease-out forwards;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .transcript-word {
+      opacity: 1;
+      transform: none;
+      animation: none;
+    }
+  }
+
   .material-symbols-outlined {
     font-family: 'Material Symbols Outlined';
     font-weight: normal;

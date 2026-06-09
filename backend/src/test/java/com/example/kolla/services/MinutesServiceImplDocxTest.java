@@ -318,6 +318,57 @@ class MinutesServiceImplDocxTest {
                 .hasMessageContaining("Only the meeting Host may confirm the minutes");
     }
 
+    @Test
+    void confirmMinutes_allowsPersistedHostMemberWhenMeetingHostIsTransientMissing() throws Exception {
+        User host = User.builder()
+                .id(10L)
+                .username("host")
+                .fullName("Host")
+                .role(Role.USER)
+                .isActive(true)
+                .build();
+        Meeting meeting = Meeting.builder()
+                .id(123L)
+                .title("Hop")
+                .creator(host)
+                .build();
+        Minutes minutes = Minutes.builder()
+                .id(77L)
+                .meeting(meeting)
+                .status(com.example.kolla.enums.MinutesStatus.DRAFT)
+                .draftPdfPath("minutes/123/draft_77.pdf")
+                .build();
+        byte[] draftBytes = "draft-pdf".getBytes(StandardCharsets.UTF_8);
+        byte[] signedBytes = "%PDF-signed".getBytes(StandardCharsets.UTF_8);
+
+        when(meetingRepository.findById(123L)).thenReturn(Optional.of(meeting));
+        when(memberRepository.findByMeetingIdAndUserId(123L, 10L))
+                .thenReturn(Optional.of(Member.builder()
+                        .id(501L)
+                        .meeting(meeting)
+                        .user(host)
+                        .meetingRole(MeetingRole.HOST)
+                        .build()));
+        when(minutesRepository.findByMeetingId(123L)).thenReturn(Optional.of(minutes));
+        when(fileStorageService.loadFileAsResource("minutes/123/draft_77.pdf"))
+                .thenReturn(new ByteArrayResource(draftBytes));
+        when(pdfDigitalSignatureService.signPdf(draftBytes, "Host"))
+                .thenReturn(signedBytes);
+        when(pdfDigitalSignatureService.signerCertificateSubject()).thenReturn("CN=Test Signer");
+        when(fileStorageService.storeBytes(
+                signedBytes,
+                FileType.MINUTES,
+                123L,
+                "confirmed_77.pdf"))
+                .thenReturn(Path.of("minutes/123/confirmed_77.pdf"));
+        when(minutesRepository.save(any(Minutes.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        MinutesConfirmationResponse response = service.confirmMinutes(123L, host, "jwt-token");
+
+        assertThat(response.getMinutes().getStatus())
+                .isEqualTo(com.example.kolla.enums.MinutesStatus.HOST_CONFIRMED);
+    }
+
     private TranscriptionSegment segment(
             Long id,
             String turnId,
