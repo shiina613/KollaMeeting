@@ -187,7 +187,7 @@ function RoomFormModal({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-label-md text-on-surface-variant mb-1">
-              Ma phong hop <span className="text-error">*</span>
+              Mã phòng họp <span className="text-error">*</span>
             </label>
             <input
               type="text"
@@ -479,7 +479,7 @@ export default function DepartmentRoomManagement({ view }: { view: View }) {
               <table className="w-full text-body-sm">
                 <thead>
                   <tr className="border-b border-outline-variant bg-surface-container-low">
-                    <th className="text-left px-4 py-3 text-label-md text-on-surface-variant font-semibold">Ma phong</th>
+                    <th className="text-left px-4 py-3 text-label-md text-on-surface-variant font-semibold">Mã phòng</th>
                     <th className="text-left px-4 py-3 text-label-md text-on-surface-variant font-semibold">Tên phòng</th>
                     <th className="text-left px-4 py-3 text-label-md text-on-surface-variant font-semibold hidden md:table-cell">Phòng ban</th>
                     <th className="text-left px-4 py-3 text-label-md text-on-surface-variant font-semibold hidden lg:table-cell">Sức chứa</th>
