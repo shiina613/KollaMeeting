@@ -15,6 +15,7 @@ import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -23,7 +24,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 /**
  * Implementation of {@link SearchService}.
@@ -44,9 +48,24 @@ public class SearchServiceImpl implements SearchService {
     @Transactional(readOnly = true)
     public Page<MeetingSearchResult> searchMeetings(SearchMeetingRequest request,
                                                      Pageable pageable) {
-        Specification<Meeting> spec = buildMeetingSpec(request);
-        Page<Meeting> meetings = meetingRepository.findAll(spec, pageable);
-        return meetings.map(this::toMeetingSearchResult);
+        String keyword = normalizeKeyword(request.getKeyword());
+        Specification<Meeting> spec = buildMeetingFilterSpec(request);
+
+        if (keyword == null) {
+            Page<Meeting> meetings = meetingRepository.findAll(spec, pageable);
+            return meetings.map(this::toMeetingSearchResult);
+        }
+
+        List<Meeting> candidates = meetingRepository.findAll(spec);
+        Set<Long> transcriptionMeetingIds = findMeetingIdsWithMatchingTranscriptions(keyword);
+
+        List<MeetingSearchResult> matched = candidates.stream()
+                .filter(meeting -> matchesTitle(meeting, keyword)
+                        || transcriptionMeetingIds.contains(meeting.getId()))
+                .map(this::toMeetingSearchResult)
+                .toList();
+
+        return page(matched, pageable);
     }
 
     /**
@@ -54,17 +73,9 @@ public class SearchServiceImpl implements SearchService {
      * All predicates are AND-combined; null/blank fields are ignored.
      * Requirements: 13.1–13.3
      */
-    private Specification<Meeting> buildMeetingSpec(SearchMeetingRequest request) {
+    private Specification<Meeting> buildMeetingFilterSpec(SearchMeetingRequest request) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
-
-            // Keyword: search in title OR description (case-insensitive)
-            if (request.getKeyword() != null && !request.getKeyword().isBlank()) {
-                String pattern = "%" + request.getKeyword().toLowerCase() + "%";
-                Predicate titleMatch = cb.like(cb.lower(root.get("title")), pattern);
-                Predicate descMatch = cb.like(cb.lower(root.get("description")), pattern);
-                predicates.add(cb.or(titleMatch, descMatch));
-            }
 
             // Date range: filter on start_time (indexed column)
             if (request.getStartDate() != null) {
@@ -102,6 +113,36 @@ public class SearchServiceImpl implements SearchService {
 
             return cb.and(predicates.toArray(new Predicate[0]));
         };
+    }
+
+    private String normalizeKeyword(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return null;
+        }
+        return keyword.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private boolean matchesTitle(Meeting meeting, String keyword) {
+        return meeting.getTitle() != null
+                && meeting.getTitle().toLowerCase(Locale.ROOT).contains(keyword);
+    }
+
+    private Set<Long> findMeetingIdsWithMatchingTranscriptions(String keyword) {
+        Page<TranscriptionSegment> segments = transcriptionSegmentRepository
+                .findByTextContainingIgnoreCase(keyword, Pageable.unpaged());
+        Set<Long> meetingIds = new HashSet<>();
+        for (TranscriptionSegment segment : segments.getContent()) {
+            if (segment.getMeeting() != null && segment.getMeeting().getId() != null) {
+                meetingIds.add(segment.getMeeting().getId());
+            }
+        }
+        return meetingIds;
+    }
+
+    private Page<MeetingSearchResult> page(List<MeetingSearchResult> results, Pageable pageable) {
+        int start = Math.toIntExact(Math.min(pageable.getOffset(), results.size()));
+        int end = Math.min(start + pageable.getPageSize(), results.size());
+        return new PageImpl<>(results.subList(start, end), pageable, results.size());
     }
 
     /**

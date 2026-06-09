@@ -10,7 +10,6 @@ import { listRooms, listDepartments } from '../services/meetingService'
 import type { Meeting, Room, Department } from '../types/meeting'
 import type { TranscriptionSearchResult } from '../services/searchService'
 import type { PageResponse } from '../types/api'
-import { MeetingStatusBadge } from '../components/common/StatusBadge'
 import Pagination from '../components/common/Pagination'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -326,19 +325,9 @@ function MeetingResults({ results }: { results: PageResponse<Meeting> }) {
             <li key={m.id}>
               <Link
                 to={`/meetings/${m.id}`}
-                className="flex items-center gap-4 px-5 py-4 hover:bg-surface-container-low transition-colors"
+                className="block px-5 py-4 hover:bg-surface-container-low transition-colors"
               >
-                <div className="flex-1 min-w-0">
-                  <div className="text-body-sm font-medium text-on-surface truncate">{m.title}</div>
-                  <div className="text-label-md text-on-surface-variant mt-0.5">
-                    {(m.roomName ?? m.room?.name) && `${m.roomName ?? m.room?.name} · `}
-                    {new Intl.DateTimeFormat('vi-VN', {
-                      timeZone: 'Asia/Ho_Chi_Minh',
-                      year: 'numeric', month: '2-digit', day: '2-digit',
-                    }).format(new Date(m.startTime))}
-                  </div>
-                </div>
-                <MeetingStatusBadge status={m.status} />
+                <div className="text-body-sm font-medium text-on-surface truncate">{m.title}</div>
               </Link>
             </li>
           ))}
