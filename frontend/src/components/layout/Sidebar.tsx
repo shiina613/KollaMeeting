@@ -28,12 +28,13 @@ const BOTTOM_NAV_ITEMS: NavItem[] = [
  * Pixel-perfect implementation based on Stitch design spec.
  * Requirements: 1.4
  */
-export default function Sidebar() {
+export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { user, logout } = useAuthStore()
   const navigate = useNavigate()
 
   const handleLogout = async () => {
     logout()
+    onNavigate?.()
     navigate('/login', { replace: true })
   }
 
@@ -60,7 +61,7 @@ export default function Sidebar() {
       {/* Main nav items */}
       <div className="flex-1 flex flex-col gap-1 w-full">
         {NAV_ITEMS.map((item) => (
-          <SidebarNavLink key={item.path} item={item} />
+          <SidebarNavLink key={item.path} item={item} onNavigate={onNavigate} />
         ))}
 
         {/* Admin section — only visible to ADMIN role */}
@@ -68,7 +69,7 @@ export default function Sidebar() {
           <>
             <div className="mx-4 my-2 border-t border-slate-200" />
             {visibleAdminItems.map((item) => (
-              <SidebarNavLink key={item.path} item={item} />
+              <SidebarNavLink key={item.path} item={item} onNavigate={onNavigate} />
             ))}
           </>
         )}
@@ -77,7 +78,7 @@ export default function Sidebar() {
       {/* Bottom section */}
       <div className="mt-auto flex flex-col gap-1 w-full pt-4 border-t border-slate-200">
         {BOTTOM_NAV_ITEMS.map((item) => (
-          <SidebarNavLink key={item.path} item={item} />
+          <SidebarNavLink key={item.path} item={item} onNavigate={onNavigate} />
         ))}
 
         {/* Logout button */}
@@ -102,13 +103,15 @@ export default function Sidebar() {
 
 interface SidebarNavLinkProps {
   item: NavItem
+  onNavigate?: () => void
 }
 
-function SidebarNavLink({ item }: SidebarNavLinkProps) {
+function SidebarNavLink({ item, onNavigate }: SidebarNavLinkProps) {
   return (
     <NavLink
       to={item.path}
       end={item.path === '/'}
+      onClick={onNavigate}
       className={({ isActive }) =>
         isActive
           ? 'bg-blue-50 text-blue-600 border-r-4 border-blue-600 rounded-none ' +

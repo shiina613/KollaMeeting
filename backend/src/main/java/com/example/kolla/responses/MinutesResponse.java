@@ -2,12 +2,15 @@ package com.example.kolla.responses;
 
 import com.example.kolla.enums.MinutesStatus;
 import com.example.kolla.models.Minutes;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * API response DTO for a {@link Minutes} record.
@@ -18,6 +21,8 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 public class MinutesResponse {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private Long id;
     private Long meetingId;
@@ -47,6 +52,10 @@ public class MinutesResponse {
     /** Rich-text HTML content (Secretary version). May be null before Secretary edits. */
     private String contentHtml;
 
+    private List<MinutesContentEntryResponse> contentEntries;
+    private String conclusion;
+    private boolean editedWordAvailable;
+
     private LocalDateTime hostConfirmedAt;
     private LocalDateTime secretaryConfirmedAt;
     private LocalDateTime createdAt;
@@ -70,10 +79,25 @@ public class MinutesResponse {
                 .secretaryDocxAvailable(minutes.getSecretaryDocxPath() != null
                         && !minutes.getSecretaryDocxPath().isBlank())
                 .contentHtml(minutes.getContentHtml())
+                .contentEntries(parseContentEntries(minutes.getContentEntriesJson()))
+                .conclusion(minutes.getConclusion())
+                .editedWordAvailable(minutes.getSecretaryDocxPath() != null
+                        && !minutes.getSecretaryDocxPath().isBlank())
                 .hostConfirmedAt(minutes.getHostConfirmedAt())
                 .secretaryConfirmedAt(minutes.getSecretaryConfirmedAt())
                 .createdAt(minutes.getCreatedAt())
                 .updatedAt(minutes.getUpdatedAt())
                 .build();
+    }
+
+    private static List<MinutesContentEntryResponse> parseContentEntries(String json) {
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        try {
+            return OBJECT_MAPPER.readValue(json, new TypeReference<>() { });
+        } catch (Exception e) {
+            return List.of();
+        }
     }
 }

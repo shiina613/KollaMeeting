@@ -2,7 +2,10 @@ package com.example.kolla.services;
 
 import com.example.kolla.enums.FileType;
 import com.example.kolla.enums.MeetingRole;
+import com.example.kolla.enums.MinutesStatus;
 import com.example.kolla.enums.Role;
+import com.example.kolla.dto.EditMinutesRequest;
+import com.example.kolla.dto.MinutesContentEntryRequest;
 import com.example.kolla.exceptions.ForbiddenException;
 import com.example.kolla.models.Document;
 import com.example.kolla.models.Meeting;
@@ -367,6 +370,47 @@ class MinutesServiceImplDocxTest {
 
         assertThat(response.getMinutes().getStatus())
                 .isEqualTo(com.example.kolla.enums.MinutesStatus.HOST_CONFIRMED);
+    }
+
+    @Test
+    void editMinutes_rendersEditedDocxFromStructuredContentOnly() throws Exception {
+        User secretary = User.builder()
+                .id(12L).username("secretary").fullName("Secretary")
+                .role(Role.SECRETARY).isActive(true).build();
+        Meeting meeting = Meeting.builder()
+                .id(123L).title("Hop nghiem thu").secretary(secretary).creator(secretary)
+                .activatedAt(LocalDateTime.of(2026, 6, 5, 9, 0))
+                .endedAt(LocalDateTime.of(2026, 6, 5, 10, 0)).build();
+        Minutes minutes = Minutes.builder()
+                .id(77L).meeting(meeting).status(MinutesStatus.HOST_CONFIRMED)
+                .draftPdfPath("minutes/123/draft_77.pdf")
+                .draftDocxPath("minutes/123/draft_77.docx")
+                .confirmedPdfPath("minutes/123/confirmed_77.pdf")
+                .hostConfirmationHash("hash-raw").build();
+        EditMinutesRequest request = new EditMinutesRequest(
+                List.of(new MinutesContentEntryRequest("Nguyen Van A", "Chu tri", "09:01", "Edited speech")),
+                "Edited conclusion");
+
+        when(meetingRepository.findById(123L)).thenReturn(Optional.of(meeting));
+        when(minutesRepository.findByMeetingId(123L)).thenReturn(Optional.of(minutes));
+        when(fileStorageService.storeBytes(any(byte[].class), eq(FileType.MINUTES), eq(123L), eq("edited_77.docx")))
+                .thenReturn(Path.of("minutes/123/edited_77.docx"));
+        when(minutesRepository.save(any(Minutes.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.editMinutes(123L, request, secretary);
+
+        ArgumentCaptor<Minutes> minutesCaptor = ArgumentCaptor.forClass(Minutes.class);
+        verify(minutesRepository).save(minutesCaptor.capture());
+        Minutes saved = minutesCaptor.getValue();
+        assertThat(saved.getStatus()).isEqualTo(MinutesStatus.SECRETARY_CONFIRMED);
+        assertThat(saved.getSecretaryDocxPath()).isEqualTo(Path.of("minutes/123/edited_77.docx").toString());
+        assertThat(saved.getSecretaryPdfPath()).isNull();
+        assertThat(saved.getConfirmedPdfPath()).isEqualTo("minutes/123/confirmed_77.pdf");
+        assertThat(saved.getHostConfirmationHash()).isEqualTo("hash-raw");
+        assertThat(saved.getContentEntriesJson()).contains("Edited speech");
+        assertThat(response.isSecretaryDocxAvailable()).isTrue();
+        assertThat(response.isSecretaryAvailable()).isFalse();
+        assertThat(response.getContentEntries().get(0).getText()).isEqualTo("Edited speech");
     }
 
     private TranscriptionSegment segment(

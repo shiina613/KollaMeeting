@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Component tests for MinutesEditor.
  *
  * Tests:
@@ -19,7 +19,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import MinutesEditor from './MinutesEditor'
 
-// ─── Mocks ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Mocks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 vi.mock('../../services/minutesService', () => ({
   editMinutes: vi.fn(),
@@ -36,27 +36,30 @@ vi.mock('../../store/authStore', () => {
   useAuthStore.getState = vi.fn(() => ({ user: mockUser, token: 'test-token' }))
   return { default: useAuthStore }
 })
-
 import { editMinutes } from '../../services/minutesService'
 import useAuthStore from '../../store/authStore'
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function renderEditor(props: {
   meetingId?: number
   initialContent?: string
+  initialEntries?: import('../../types/minutes').MinutesContentEntry[]
+  initialConclusion?: string
   onSuccess?: () => void
 } = {}) {
   return render(
     <MinutesEditor
       meetingId={props.meetingId ?? 1}
       initialContent={props.initialContent}
+      initialEntries={props.initialEntries}
+      initialConclusion={props.initialConclusion}
       onSuccess={props.onSuccess}
     />,
   )
 }
 
-// ─── Setup ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Setup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -66,28 +69,28 @@ beforeEach(() => {
   } as ReturnType<typeof useAuthStore>)
 })
 
-// ─── Test 1: Renders with initial content ─────────────────────────────────────
+// â”€â”€â”€ Test 1: Renders with initial content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe('MinutesEditor — renders correctly', () => {
+describe('MinutesEditor â€” renders correctly', () => {
   it('renders the editor form for SECRETARY role', () => {
     renderEditor()
 
     expect(screen.getByTestId('minutes-editor')).toBeInTheDocument()
-    expect(screen.getByTestId('minutes-content-textarea')).toBeInTheDocument()
+    expect(screen.getByTestId('minutes-entry-text-0')).toBeInTheDocument()
     expect(screen.getByTestId('minutes-editor-submit')).toBeInTheDocument()
   })
 
   it('renders with initial content in the textarea', () => {
-    const initialContent = '<h1>Biên bản</h1><p>Nội dung cuộc họp</p>'
+    const initialContent = '<h1>BiÃªn báº£n</h1><p>Ná»™i dung cuá»™c há»p</p>'
     renderEditor({ initialContent })
 
-    expect(screen.getByTestId('minutes-content-textarea')).toHaveValue(initialContent)
+    expect(screen.getByTestId('minutes-entry-text-0')).toHaveValue(initialContent)
   })
 
   it('renders with empty textarea when no initial content provided', () => {
     renderEditor()
 
-    expect(screen.getByTestId('minutes-content-textarea')).toHaveValue('')
+    expect(screen.getByTestId('minutes-entry-text-0')).toHaveValue('')
   })
 
   it('renders for ADMIN role as well', () => {
@@ -101,9 +104,9 @@ describe('MinutesEditor — renders correctly', () => {
   })
 })
 
-// ─── Test 2: Role-based visibility ───────────────────────────────────────────
+// â”€â”€â”€ Test 2: Role-based visibility â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe('MinutesEditor — role-based visibility', () => {
+describe('MinutesEditor â€” role-based visibility', () => {
   it('renders nothing for USER role', () => {
     vi.mocked(useAuthStore).mockReturnValue({
       user: { id: 3, username: 'user1', email: 'user@example.com', role: 'USER' },
@@ -125,21 +128,50 @@ describe('MinutesEditor — role-based visibility', () => {
   })
 })
 
-// ─── Test 3: Submit calls API with correct contentHtml ────────────────────────
+// â”€â”€â”€ Test 3: Submit calls API with correct contentHtml â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe('MinutesEditor — submit behavior', () => {
+describe('MinutesEditor â€” submit behavior', () => {
+  it('submits structured entries and conclusion', async () => {
+    vi.mocked(editMinutes).mockResolvedValue({
+      data: {} as import('../../types/minutes').Minutes,
+      success: true,
+    })
+
+    renderEditor({
+      meetingId: 42,
+      initialEntries: [{ speakerName: 'Nguyen Van A', roleLabel: 'Chu tri', timeLabel: '09:01', text: 'Noi dung cu' }],
+      initialConclusion: '',
+    })
+
+    const entry = screen.getByTestId('minutes-entry-text-0')
+    await userEvent.clear(entry)
+    await userEvent.type(entry, 'Edited speech')
+    await userEvent.type(screen.getByTestId('minutes-conclusion-input'), 'Edited conclusion')
+    await userEvent.click(screen.getByTestId('minutes-editor-submit'))
+
+    await waitFor(() => {
+      expect(vi.mocked(editMinutes)).toHaveBeenCalledWith(42, {
+        contentEntries: [{ speakerName: 'Nguyen Van A', roleLabel: 'Chu tri', timeLabel: '09:01', text: 'Edited speech' }],
+        conclusion: 'Edited conclusion',
+      })
+    })
+  })
+
   it('calls editMinutes with correct meetingId and contentHtml on submit', async () => {
     vi.mocked(editMinutes).mockResolvedValue({
       data: {} as import('../../types/minutes').Minutes,
       success: true,
     })
 
-    renderEditor({ meetingId: 42, initialContent: '<p>Nội dung</p>' })
+    renderEditor({ meetingId: 42, initialContent: '<p>Ná»™i dung</p>' })
 
     await userEvent.click(screen.getByTestId('minutes-editor-submit'))
 
     await waitFor(() => {
-      expect(vi.mocked(editMinutes)).toHaveBeenCalledWith(42, '<p>Nội dung</p>')
+      expect(vi.mocked(editMinutes)).toHaveBeenCalledWith(42, {
+        contentEntries: [{ speakerName: '', roleLabel: '', timeLabel: '', text: '<p>Ná»™i dung</p>' }],
+        conclusion: '',
+      })
     })
   })
 
@@ -151,22 +183,25 @@ describe('MinutesEditor — submit behavior', () => {
 
     renderEditor({ meetingId: 5 })
 
-    const textarea = screen.getByTestId('minutes-content-textarea')
-    await userEvent.type(textarea, '<h1>Tiêu đề</h1>')
+    const textarea = screen.getByTestId('minutes-entry-text-0')
+    await userEvent.type(textarea, '<h1>TiÃªu Ä‘á»</h1>')
 
     await userEvent.click(screen.getByTestId('minutes-editor-submit'))
 
     await waitFor(() => {
-      expect(vi.mocked(editMinutes)).toHaveBeenCalledWith(5, '<h1>Tiêu đề</h1>')
+      expect(vi.mocked(editMinutes)).toHaveBeenCalledWith(5, {
+        contentEntries: [{ speakerName: '', roleLabel: '', timeLabel: '', text: '<h1>TiÃªu Ä‘á»</h1>' }],
+        conclusion: '',
+      })
     })
   })
 })
 
-// ─── Test 4: Loading state ────────────────────────────────────────────────────
+// â”€â”€â”€ Test 4: Loading state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe('MinutesEditor — loading state', () => {
+describe('MinutesEditor â€” loading state', () => {
   it('shows loading indicator during submission', async () => {
-    // Never resolves — keeps loading state
+    // Never resolves â€” keeps loading state
     vi.mocked(editMinutes).mockReturnValue(new Promise(() => {}))
 
     renderEditor({ initialContent: '<p>Content</p>' })
@@ -184,13 +219,13 @@ describe('MinutesEditor — loading state', () => {
 
     await userEvent.click(screen.getByTestId('minutes-editor-submit'))
 
-    expect(screen.getByTestId('minutes-content-textarea')).toBeDisabled()
+    expect(screen.getByTestId('minutes-entry-text-0')).toBeDisabled()
   })
 })
 
-// ─── Test 5: Success feedback ─────────────────────────────────────────────────
+// â”€â”€â”€ Test 5: Success feedback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe('MinutesEditor — success feedback', () => {
+describe('MinutesEditor â€” success feedback', () => {
   it('shows success message after successful submission', async () => {
     vi.mocked(editMinutes).mockResolvedValue({
       data: {} as import('../../types/minutes').Minutes,
@@ -204,9 +239,7 @@ describe('MinutesEditor — success feedback', () => {
     await waitFor(() => {
       expect(screen.getByTestId('minutes-editor-success')).toBeInTheDocument()
     })
-    expect(screen.getByTestId('minutes-editor-success')).toHaveTextContent(
-      'Biên bản đã được lưu thành công.',
-    )
+    expect(screen.getByTestId('minutes-editor-success')).toHaveTextContent('Biên bản đã được lưu thành công.')
   })
 
   it('calls onSuccess callback after successful submission', async () => {
@@ -226,12 +259,12 @@ describe('MinutesEditor — success feedback', () => {
   })
 })
 
-// ─── Test 6: Error handling ───────────────────────────────────────────────────
+// â”€â”€â”€ Test 6: Error handling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe('MinutesEditor — error handling', () => {
+describe('MinutesEditor â€” error handling', () => {
   it('shows error message when API fails with a message', async () => {
     vi.mocked(editMinutes).mockRejectedValue({
-      response: { data: { message: 'Bạn không có quyền chỉnh sửa biên bản' } },
+      response: { data: { message: 'Báº¡n khÃ´ng cÃ³ quyá»n chá»‰nh sá»­a biÃªn báº£n' } },
     })
 
     renderEditor({ initialContent: '<p>Content</p>' })
@@ -241,9 +274,7 @@ describe('MinutesEditor — error handling', () => {
     await waitFor(() => {
       expect(screen.getByTestId('minutes-editor-error')).toBeInTheDocument()
     })
-    expect(screen.getByTestId('minutes-editor-error')).toHaveTextContent(
-      'Bạn không có quyền chỉnh sửa biên bản',
-    )
+    expect(screen.getByTestId('minutes-editor-error')).toHaveTextContent('Báº¡n khÃ´ng cÃ³ quyá»n chá»‰nh sá»­a biÃªn báº£n')
   })
 
   it('shows fallback error message when API error has no message', async () => {
@@ -254,9 +285,7 @@ describe('MinutesEditor — error handling', () => {
     await userEvent.click(screen.getByTestId('minutes-editor-submit'))
 
     await waitFor(() => {
-      expect(screen.getByTestId('minutes-editor-error')).toHaveTextContent(
-        'Không thể lưu biên bản. Vui lòng thử lại.',
-      )
+    expect(screen.getByTestId('minutes-editor-error')).toHaveTextContent('Không thể lưu biên bản. Vui lòng thử lại.')
     })
   })
 
@@ -285,13 +314,13 @@ describe('MinutesEditor — error handling', () => {
 
     renderEditor({ initialContent: '<p>Content</p>' })
 
-    // First submit — fails
+    // First submit â€” fails
     await userEvent.click(screen.getByTestId('minutes-editor-submit'))
     await waitFor(() => {
       expect(screen.getByTestId('minutes-editor-error')).toBeInTheDocument()
     })
 
-    // Second submit — succeeds
+    // Second submit â€” succeeds
     await userEvent.click(screen.getByTestId('minutes-editor-submit'))
     await waitFor(() => {
       expect(screen.queryByTestId('minutes-editor-error')).not.toBeInTheDocument()
@@ -299,9 +328,9 @@ describe('MinutesEditor — error handling', () => {
   })
 })
 
-// ─── Test 7: Submit button disabled when content is empty ────────────────────
+// â”€â”€â”€ Test 7: Submit button disabled when content is empty â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe('MinutesEditor — submit button state', () => {
+describe('MinutesEditor â€” submit button state', () => {
   it('disables submit button when textarea is empty', () => {
     renderEditor({ initialContent: '' })
 
@@ -317,32 +346,26 @@ describe('MinutesEditor — submit button state', () => {
   it('disables submit button when content is only whitespace', async () => {
     renderEditor({ initialContent: '' })
 
-    const textarea = screen.getByTestId('minutes-content-textarea')
+    const textarea = screen.getByTestId('minutes-entry-text-0')
     await userEvent.type(textarea, '   ')
 
     expect(screen.getByTestId('minutes-editor-submit')).toBeDisabled()
   })
 })
 
-// ─── Test 8: Accessibility ────────────────────────────────────────────────────
+// â”€â”€â”€ Test 8: Accessibility â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe('MinutesEditor — accessibility', () => {
+describe('MinutesEditor â€” accessibility', () => {
   it('has correct aria-label on the form', () => {
     renderEditor()
 
-    expect(screen.getByTestId('minutes-editor')).toHaveAttribute(
-      'aria-label',
-      'Chỉnh sửa biên bản cuộc họp',
-    )
+    expect(screen.getByTestId('minutes-editor')).toHaveAttribute('aria-label', 'Chỉnh sửa biên bản cuộc họp')
   })
 
   it('has correct aria-label on the textarea', () => {
     renderEditor()
 
-    expect(screen.getByTestId('minutes-content-textarea')).toHaveAttribute(
-      'aria-label',
-      'Nội dung HTML biên bản',
-    )
+    expect(screen.getByTestId('minutes-entry-text-0')).toHaveAttribute('aria-label', 'Nội dung phát biểu 1')
   })
 
   it('success message has role="status"', async () => {

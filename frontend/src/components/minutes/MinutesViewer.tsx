@@ -65,6 +65,7 @@ export default function MinutesViewer({ meetingId, version, status }: MinutesVie
   const [blobUrl, setBlobUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [zoom, setZoom] = useState<'fit' | '100' | '125'>('fit')
 
   // Track previous blob URL to revoke it on unmount / re-fetch
   const prevBlobRef = useRef<string | null>(null)
@@ -183,15 +184,30 @@ export default function MinutesViewer({ meetingId, version, status }: MinutesVie
 
   if (!blobUrl) return null
 
+  const viewerSrc = `${blobUrl}${zoom === 'fit' ? '#view=FitH' : `#zoom=${zoom}`}`
+
   return (
     <div
       className="w-full rounded-lg overflow-hidden border border-outline-variant"
       data-testid={`minutes-viewer-${version}`}
     >
+      <div className='flex items-center justify-end gap-1 border-b border-outline-variant bg-surface-container-low px-3 py-2'>
+        {(['fit', '100', '125'] as const).map((value) => (
+          <button
+            key={value}
+            type='button'
+            onClick={() => setZoom(value)}
+            className={`px-3 py-1.5 rounded-md text-label-md font-medium ${zoom === value ? 'bg-primary text-white' : 'text-on-surface-variant hover:bg-surface-container'}`}
+            data-testid={`minutes-zoom-${value}`}
+          >
+            {value === 'fit' ? 'Fit width' : `${value}%`}
+          </button>
+        ))}
+      </div>
       <iframe
-        src={blobUrl}
+        src={viewerSrc}
         title={`Biên bản cuộc họp — ${label}`}
-        className="w-full h-[600px] border-0"
+        className="w-full h-[calc(100vh-260px)] min-h-[480px] border-0"
         aria-label={`Xem ${label} biên bản cuộc họp`}
         data-testid={`minutes-iframe-${version}`}
       />

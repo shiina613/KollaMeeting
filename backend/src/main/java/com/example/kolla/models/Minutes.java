@@ -24,6 +24,8 @@ public class Minutes {
     private String secretaryPdfPath;
     private String secretaryDocxPath;
     private String contentHtml;
+    private String contentEntriesJson;
+    private String conclusion;
     private LocalDateTime hostConfirmedAt;
     private String hostConfirmationHash;
     private LocalDateTime secretaryConfirmedAt;
