@@ -257,6 +257,24 @@ public class UserController {
      * to the user securely. It is not logged or stored in plaintext.
      * Requirements: 11.8, 11.9, 11.10
      */
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Delete user (ADMIN only)")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "User deleted"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Cannot delete own account"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "User not found")
+    })
+    public ResponseEntity<ApiResponse<Void>> deleteUser(
+            @Parameter(description = "User ID") @PathVariable Long id,
+            @AuthenticationPrincipal User currentUser) {
+
+        userService.deleteUser(id, currentUser);
+        return ResponseEntity.ok(ApiResponse.success("User deleted successfully", null));
+    }
+
     @PostMapping("/{id}/reset-password")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Reset user password (ADMIN only)",
