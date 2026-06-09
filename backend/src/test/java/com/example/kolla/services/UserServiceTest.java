@@ -8,6 +8,8 @@ import com.example.kolla.exceptions.BadRequestException;
 import com.example.kolla.exceptions.ForbiddenException;
 import com.example.kolla.exceptions.ResourceNotFoundException;
 import com.example.kolla.models.User;
+import com.example.kolla.repositories.DocumentRepository;
+import com.example.kolla.repositories.MemberRepository;
 import com.example.kolla.repositories.UserRepository;
 import com.example.kolla.responses.UserResponse;
 import com.example.kolla.services.impl.UserServiceImpl;
@@ -43,6 +45,12 @@ class UserServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private MemberRepository memberRepository;
+
+    @Mock
+    private DocumentRepository documentRepository;
 
     @Mock
     private PasswordEncoder passwordEncoder;
@@ -84,7 +92,7 @@ class UserServiceTest {
         @DisplayName("Returns paginated user list")
         void listUsers_returnsPaginatedList() {
             Page<User> page = new PageImpl<>(List.of(adminUser, regularUser));
-            when(userRepository.findAll(any(PageRequest.class))).thenReturn(page);
+            when(userRepository.findVisibleUsers(any(PageRequest.class))).thenReturn(page);
 
             Page<UserResponse> result = userService.listUsers(PageRequest.of(0, 20));
 
@@ -300,22 +308,35 @@ class UserServiceTest {
         @DisplayName("ADMIN can delete a user without active memberships")
         void deleteUser_adminCanDeleteUser() {
             when(userRepository.findById(4L)).thenReturn(Optional.of(targetUser));
-            when(userRepository.hasActiveMeetingMemberships(4L)).thenReturn(false);
+            when(memberRepository.existsByUserId(4L)).thenReturn(false);
+            when(documentRepository.existsByUploadedById(4L)).thenReturn(false);
 
             userService.deleteUser(4L, adminUser);
 
             verify(userRepository).delete(targetUser);
+            verify(userRepository, never()).save(any(User.class));
+            verify(valueOps).set(eq("jwt:blacklist:user:4"), anyString());
         }
 
         @Test
-        @DisplayName("Throws BadRequestException when user has active meeting memberships")
-        void deleteUser_throwsWhenHasActiveMemberships() {
+        @DisplayName("Anonymizes referenced user instead of deleting row")
+        void deleteUser_anonymizesWhenUserHasHistoricalReferences() {
             when(userRepository.findById(4L)).thenReturn(Optional.of(targetUser));
-            when(userRepository.hasActiveMeetingMemberships(4L)).thenReturn(true);
+            when(memberRepository.existsByUserId(4L)).thenReturn(true);
+            when(passwordEncoder.encode(anyString())).thenReturn("$2a$12$deletedHash");
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
-            assertThatThrownBy(() -> userService.deleteUser(4L, adminUser))
-                    .isInstanceOf(BadRequestException.class)
-                    .hasMessageContaining("active or scheduled meeting memberships");
+            userService.deleteUser(4L, adminUser);
+
+            assertThat(targetUser.getUsername()).isEqualTo("deleted-user-4");
+            assertThat(targetUser.getFullName()).isEqualTo("Nguoi dung da xoa");
+            assertThat(targetUser.getEmail()).isNull();
+            assertThat(targetUser.getPhoneNumber()).isNull();
+            assertThat(targetUser.getIdentification()).isNull();
+            assertThat(targetUser.getPasswordHash()).isEqualTo("$2a$12$deletedHash");
+            verify(userRepository, never()).delete(any(User.class));
+            verify(userRepository).save(targetUser);
+            verify(valueOps).set(eq("jwt:blacklist:user:4"), anyString());
         }
 
         @Test

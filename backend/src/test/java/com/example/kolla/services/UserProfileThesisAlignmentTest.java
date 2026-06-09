@@ -7,6 +7,8 @@ import com.example.kolla.enums.Role;
 import com.example.kolla.exceptions.BadRequestException;
 import com.example.kolla.models.User;
 import com.example.kolla.repositories.DepartmentRepository;
+import com.example.kolla.repositories.DocumentRepository;
+import com.example.kolla.repositories.MemberRepository;
 import com.example.kolla.repositories.UserRepository;
 import com.example.kolla.responses.UserResponse;
 import com.example.kolla.services.impl.UserServiceImpl;
@@ -35,6 +37,8 @@ class UserProfileThesisAlignmentTest {
 
     @Mock private UserRepository userRepository;
     @Mock private DepartmentRepository departmentRepository;
+    @Mock private MemberRepository memberRepository;
+    @Mock private DocumentRepository documentRepository;
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private StringRedisTemplate redisTemplate;
     @Mock private ValueOperations<String, String> valueOperations;
@@ -46,6 +50,8 @@ class UserProfileThesisAlignmentTest {
         service = new UserServiceImpl(
                 userRepository,
                 departmentRepository,
+                memberRepository,
+                documentRepository,
                 passwordEncoder,
                 redisTemplate);
         org.mockito.Mockito.lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);

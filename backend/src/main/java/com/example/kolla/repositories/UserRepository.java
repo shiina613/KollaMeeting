@@ -2,6 +2,8 @@ package com.example.kolla.repositories;
 
 import com.example.kolla.enums.Role;
 import com.example.kolla.models.User;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -19,6 +21,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByUsername(String username);
 
+    @Query("SELECT u FROM User u WHERE u.username NOT LIKE 'deleted-user-%'")
+    Page<User> findVisibleUsers(Pageable pageable);
+
     boolean existsByUsername(String username);
 
     boolean existsByEmployeeCode(String employeeCode);
@@ -35,11 +40,17 @@ public interface UserRepository extends JpaRepository<User, Long> {
      */
     List<User> findByRoleOrderByFullNameAsc(Role role);
 
+    @Query("SELECT u FROM User u WHERE u.role = :role AND u.username NOT LIKE 'deleted-user-%' ORDER BY u.fullName ASC")
+    List<User> findVisibleByRoleOrderByFullNameAsc(@Param("role") Role role);
+
     /**
      * Returns all users ordered by full name.
      * Used to populate the member picker panel.
      */
     List<User> findAllByOrderByFullNameAsc();
+
+    @Query("SELECT u FROM User u WHERE u.username NOT LIKE 'deleted-user-%' ORDER BY u.fullName ASC")
+    List<User> findAllVisibleByOrderByFullNameAsc();
 
     /**
      * Search users by full name or username (case-insensitive, partial match).
@@ -53,6 +64,16 @@ public interface UserRepository extends JpaRepository<User, Long> {
             ORDER BY u.fullName ASC
             """)
     List<User> searchByNameOrUsername(@Param("q") String query, org.springframework.data.domain.Pageable pageable);
+
+    @Query("""
+            SELECT u FROM User u
+            WHERE u.username NOT LIKE 'deleted-user-%'
+              AND (LOWER(u.fullName) LIKE LOWER(CONCAT('%', :q, '%'))
+                OR LOWER(u.username) LIKE LOWER(CONCAT('%', :q, '%'))
+                OR LOWER(u.employeeCode) LIKE LOWER(CONCAT('%', :q, '%')))
+            ORDER BY u.fullName ASC
+            """)
+    List<User> searchVisibleByNameOrUsername(@Param("q") String query, Pageable pageable);
 
     /**
      * Returns true if the user is a member of any SCHEDULED or ACTIVE meeting.
