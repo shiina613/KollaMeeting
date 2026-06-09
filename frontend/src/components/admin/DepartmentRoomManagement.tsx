@@ -287,10 +287,9 @@ function DeleteConfirm({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-type SubTab = 'departments' | 'rooms'
+type View = 'departments' | 'rooms'
 
-export default function DepartmentRoomManagement() {
-  const [subTab, setSubTab] = useState<SubTab>('departments')
+export default function DepartmentRoomManagement({ view }: { view: View }) {
 
   // Departments state
   const [departments, setDepartments] = useState<DepartmentDto[]>([])
@@ -373,28 +372,8 @@ export default function DepartmentRoomManagement() {
 
   return (
     <div className="space-y-6">
-      {/* Sub-tabs */}
-      <div className="flex gap-1 border-b border-outline-variant">
-        {(['departments', 'rooms'] as SubTab[]).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setSubTab(tab)}
-            className={`inline-flex items-center gap-2 px-4 py-2.5 text-button font-medium border-b-2 transition-colors
-              ${subTab === tab
-                ? 'border-primary text-primary'
-                : 'border-transparent text-on-surface-variant hover:text-on-surface hover:border-outline-variant'
-              }`}
-          >
-            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
-              {tab === 'departments' ? 'corporate_fare' : 'meeting_room'}
-            </span>
-            {tab === 'departments' ? 'Phòng ban' : 'Phòng họp'}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Departments ── */}
-      {subTab === 'departments' && (
+      {/* Departments */}
+      {view === 'departments' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-body-sm text-on-surface-variant">{departments.length} phòng ban</p>
@@ -467,7 +446,7 @@ export default function DepartmentRoomManagement() {
       )}
 
       {/* ── Rooms ── */}
-      {subTab === 'rooms' && (
+      {view === 'rooms' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-body-sm text-on-surface-variant">{rooms.length} phòng họp</p>
