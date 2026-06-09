@@ -1,92 +1,97 @@
-# Delete User Design
+# Thiết Kế Tính Năng Xóa Người Dùng
 
-## Context
+## Bối Cảnh
 
-Admin user management currently presents a deactivate/reactivate action. The requested behavior is to turn that action into user deletion while keeping the existing `block` icon. The project schema is aligned with the submitted Word document, and the `user` table is referenced by `member.User_id` and `document.User_id`. Deleting a referenced user can break meeting history, documents, minutes, or database constraints.
+Màn hình quản trị người dùng hiện có hành động vô hiệu hóa/kích hoạt lại tài khoản. Yêu cầu mới là đổi hành động này thành xóa người dùng, nhưng vẫn giữ nguyên icon `block` đang dùng trên nút hành động.
 
-## Goal
+Schema hiện tại đang được căn theo tài liệu Word đã nộp. Bảng `user` đang được các bảng khác tham chiếu, đặc biệt là `member.User_id` và `document.User_id`. Vì vậy, nếu xóa thẳng một user đã từng tham gia cuộc họp hoặc tải tài liệu lên hệ thống, dữ liệu lịch sử có thể bị hỏng hoặc bị database chặn do ràng buộc khóa ngoại.
 
-Replace the admin-facing deactivate flow with a delete flow that removes users completely when it is safe and preserves meeting/document history when a hard delete would break other data.
+## Mục Tiêu
 
-## Recommended Behavior
+Thay luồng vô hiệu hóa người dùng bằng luồng xóa người dùng. Hệ thống cần xóa hoàn toàn user khi an toàn, đồng thời vẫn bảo toàn lịch sử cuộc họp, tài liệu và biên bản khi xóa cứng có nguy cơ làm hỏng dữ liệu liên quan.
 
-The delete action uses a two-path backend operation:
+## Hành Vi Đề Xuất
 
-1. If the target user has no historical references, hard-delete the `user` row.
-2. If the target user is referenced by meeting members, documents, or other persisted history, perform a safe delete by anonymizing the existing user row instead of removing it.
+Backend xử lý xóa người dùng theo 2 nhánh:
 
-Safe delete means:
+1. Nếu user chưa có dữ liệu lịch sử liên quan, xóa cứng record trong bảng `user`.
+2. Nếu user đã được tham chiếu bởi thành viên cuộc họp, tài liệu hoặc dữ liệu lịch sử khác, không xóa record. Thay vào đó, thực hiện xóa an toàn bằng cách ẩn và ẩn danh hóa record user hiện có.
 
-- Change the employee code/username to a sentinel value such as `deleted-user-<id>`.
-- Replace full name with `Nguoi dung da xoa`.
-- Clear personal fields where nullable: email, phone number, date of birth, degree, identification, address, bank name, bank number, image.
-- Change password to an unguessable generated value and invalidate existing tokens.
-- Keep `id`, `Department_id`, and referenced rows intact so historical meeting and document data still resolves.
-- Exclude sentinel users from user management lists, active user lists, meeting candidate lists, and user search results.
+Xóa an toàn nghĩa là:
 
-## Frontend Design
+- Đổi mã nhân viên/username sang giá trị đánh dấu, ví dụ `deleted-user-<id>`.
+- Đổi họ tên thành `Người dùng đã xóa`.
+- Xóa các thông tin cá nhân có thể để trống: email, số điện thoại, ngày sinh, học vị, CCCD/CMND, địa chỉ, ngân hàng, số tài khoản, ảnh đại diện.
+- Đổi mật khẩu sang giá trị ngẫu nhiên không thể đoán.
+- Vô hiệu hóa các token hiện có để tài khoản không thể tiếp tục đăng nhập.
+- Giữ nguyên `id`, `Department_id` và các record lịch sử để dữ liệu cuộc họp, tài liệu, biên bản vẫn đọc được.
+- Loại user đã xóa khỏi danh sách quản trị, danh sách user active, danh sách chọn chủ trì/thư ký/thành viên và kết quả tìm kiếm user.
 
-In `frontend/src/components/admin/UserManagement.tsx`:
+## Thiết Kế Frontend
 
-- Replace `toggleUserActive` import and calls with `deleteUser`.
-- Rename modal state from toggle/deactivate naming to delete naming.
-- Keep the material icon text `block` on the row action button.
-- Change labels to `Xoa nguoi dung`, `Xoa`, and a permanent-deletion warning.
-- After successful deletion, close the dialog and reload users.
-- On failure, show the backend error message when present; fall back to `Khong the xoa nguoi dung. Vui long thu lai.`
+Trong `frontend/src/components/admin/UserManagement.tsx`:
 
-In `frontend/src/services/userService.ts`:
+- Thay import và lời gọi `toggleUserActive` bằng `deleteUser`.
+- Đổi tên state/modal từ nhóm toggle/deactivate sang nhóm delete.
+- Giữ nguyên icon material `block` trên nút hành động trong từng dòng user.
+- Đổi tooltip, aria-label, tiêu đề dialog và nút xác nhận sang ngữ nghĩa xóa người dùng.
+- Dialog cần cảnh báo rõ đây là thao tác xóa người dùng. Nếu user có lịch sử liên quan, backend sẽ tự chuyển sang xóa an toàn để không làm hỏng dữ liệu cũ.
+- Sau khi xóa thành công, đóng dialog và tải lại danh sách user.
+- Nếu xóa thất bại, hiển thị message từ backend khi có. Nếu không có message, dùng fallback: `Không thể xóa người dùng. Vui lòng thử lại.`
 
-- Keep `deleteUser(id)` using `DELETE /users/{id}`.
-- `toggleUserActive` may remain for backward compatibility unless unused cleanup is low risk.
+Trong `frontend/src/services/userService.ts`:
 
-## Backend Design
+- Giữ hàm `deleteUser(id)` gọi `DELETE /users/{id}`.
+- Có thể giữ `toggleUserActive` nếu cần tương thích ngược, nhưng UI quản trị không dùng luồng này nữa.
 
-In `backend/src/main/java/com/example/kolla/controllers/UserController.java`:
+## Thiết Kế Backend
 
-- Add `DELETE /users/{id}`.
-- Restrict it to `ADMIN` with a Spring Security pre-authorization expression for `hasRole('ADMIN')`.
-- Call `userService.deleteUser(id, currentUser)`.
-- Return a successful `ApiResponse<Void>`.
+Trong `backend/src/main/java/com/example/kolla/controllers/UserController.java`:
 
-In `UserServiceImpl`:
+- Thêm endpoint `DELETE /users/{id}`.
+- Chỉ cho phép role `ADMIN` gọi endpoint này bằng Spring Security pre-authorization với biểu thức `hasRole('ADMIN')`.
+- Gọi `userService.deleteUser(id, currentUser)`.
+- Trả về `ApiResponse<Void>` khi thao tác thành công.
 
-- Keep self-delete protection.
-- Determine whether the user has any persisted references, not only active/scheduled memberships.
-- Hard-delete only when no references exist.
-- Safe-delete/anonymize when references exist.
-- Invalidate tokens for both hard delete and safe delete.
+Trong `UserServiceImpl`:
 
-In `UserRepository` and related repositories:
+- Giữ bảo vệ không cho admin xóa chính tài khoản đang đăng nhập.
+- Kiểm tra user có dữ liệu tham chiếu hay không, không chỉ kiểm tra cuộc họp `SCHEDULED`/`ACTIVE`.
+- Nếu không có tham chiếu, xóa cứng user bằng `userRepository.delete(target)`.
+- Nếu có tham chiếu, thực hiện xóa an toàn/anonymize thay vì xóa record.
+- Vô hiệu hóa token trong cả 2 trường hợp xóa cứng và xóa an toàn.
 
-- Add reference checks for any membership/document history needed by the current schema.
-- Exclude sentinel deleted users from list/search/candidate queries.
+Trong `UserRepository` và các repository liên quan:
 
-## Error Handling
+- Bổ sung query kiểm tra user có dữ liệu lịch sử hay không, tối thiểu gồm membership và document theo schema hiện tại.
+- Loại user có username dạng `deleted-user-<id>` khỏi list/search/candidate query.
 
-- Self-delete returns `BadRequestException` with a clear message.
-- Missing target user returns `ResourceNotFoundException`.
-- Unexpected database integrity failures should not leak raw SQL details to the UI.
+## Xử Lý Lỗi
 
-## Testing
+- Nếu admin cố xóa chính mình, trả `BadRequestException` với message rõ ràng.
+- Nếu target user không tồn tại, trả `ResourceNotFoundException`.
+- Nếu database phát sinh lỗi ràng buộc ngoài dự kiến, không hiển thị raw SQL cho frontend.
+- Frontend hiển thị lỗi từ backend nếu có, nếu không thì dùng message fallback dễ hiểu.
 
-Backend tests should cover:
+## Kiểm Thử
 
-- `DELETE /users/{id}` calls service for ADMIN.
-- Hard delete removes unreferenced users.
-- Referenced users are anonymized, not removed.
-- Self-delete is rejected.
-- Deleted/anonymized users are excluded from list/search/candidate results.
+Backend cần test:
 
-Frontend tests should cover:
+- `DELETE /users/{id}` chỉ cho `ADMIN` và gọi đúng service.
+- User không có dữ liệu liên quan bị xóa cứng.
+- User có dữ liệu liên quan bị ẩn danh hóa, không bị xóa record.
+- Không thể xóa chính tài khoản đang đăng nhập.
+- User đã xóa an toàn không còn xuất hiện trong list/search/candidate.
 
-- Row action keeps `block` icon but opens delete dialog.
-- Confirm calls `deleteUser(id)`.
-- Successful delete reloads users and closes dialog.
-- Failure shows an error message.
+Frontend cần test:
 
-## Non-Goals
+- Nút hành động vẫn dùng icon `block` nhưng mở dialog xóa người dùng.
+- Bấm xác nhận gọi `deleteUser(id)`.
+- Xóa thành công thì đóng dialog và reload danh sách.
+- Xóa thất bại thì hiện lỗi.
 
-- Do not add new database columns such as `deleted_at` or `is_deleted`, to avoid drifting from the Word-aligned schema.
-- Do not cascade-delete meetings, members, documents, minutes, recordings, or transcripts.
-- Do not change the icon requested by the user.
+## Ngoài Phạm Vi
+
+- Không thêm cột mới như `deleted_at` hoặc `is_deleted`, để tránh lệch schema đang căn theo tài liệu Word.
+- Không cascade-delete cuộc họp, thành viên, tài liệu, biên bản, recording hoặc transcript.
+- Không đổi icon `block` vì user yêu cầu giữ nguyên icon đó.
