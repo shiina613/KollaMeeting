@@ -1,5 +1,6 @@
 package com.example.kolla.services.impl;
 
+import com.example.kolla.config.FileStorageProperties;
 import com.example.kolla.dto.ChangePasswordRequest;
 import com.example.kolla.dto.CreateUserRequest;
 import com.example.kolla.dto.ResetPasswordRequest;
@@ -18,18 +19,30 @@ import com.example.kolla.responses.UserResponse;
 import com.example.kolla.services.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.security.SecureRandom;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * UserService implementation.
@@ -51,6 +64,7 @@ public class UserServiceImpl implements UserService {
     private final DocumentRepository documentRepository;
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate redisTemplate;
+    private final FileStorageProperties fileStorageProperties;
 
     // Ã¢â€â‚¬Ã¢â€â‚¬ List Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
@@ -300,6 +314,59 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
+    public UserResponse uploadCurrentUserAvatar(MultipartFile file, User requester) {
+        validateAvatarFile(file);
+
+        User target = findUserOrThrow(requester.getId());
+        Path userAvatarDir = avatarDir(target.getId());
+
+        try {
+            Files.createDirectories(userAvatarDir);
+            deleteExistingAvatarFiles(userAvatarDir);
+
+            String extension = avatarExtension(file.getContentType());
+            String fileName = "avatar_" + UUID.randomUUID() + extension;
+            Path targetFile = userAvatarDir.resolve(fileName).normalize();
+
+            if (!targetFile.startsWith(userAvatarDir.toAbsolutePath().normalize())) {
+                throw new BadRequestException("Invalid avatar file path");
+            }
+
+            try (InputStream input = file.getInputStream()) {
+                Files.copy(input, targetFile, StandardCopyOption.REPLACE_EXISTING);
+            }
+
+            target.setImg("/api/v1/users/" + target.getId() + "/avatar");
+            User saved = userRepository.save(target);
+            log.info("Updated avatar for user '{}'", saved.getUsername());
+            return UserResponse.from(saved);
+        } catch (IOException e) {
+            throw new BadRequestException("Cannot store avatar image");
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Resource loadUserAvatar(Long id) throws IOException {
+        User target = findUserOrThrow(id);
+        Path userAvatarDir = avatarDir(target.getId());
+
+        try (Stream<Path> files = Files.list(userAvatarDir)) {
+            Path avatar = files
+                    .filter(Files::isRegularFile)
+                    .findFirst()
+                    .orElseThrow(() -> new NoSuchFileException("Avatar not found for user: " + id));
+
+            Resource resource = new UrlResource(avatar.toUri());
+            if (!resource.isReadable()) {
+                throw new NoSuchFileException("Avatar is not readable for user: " + id);
+            }
+            return resource;
+        }
+    }
+
+    @Override
+    @Transactional
     public void changeOwnPassword(ChangePasswordRequest request, User requester) {
         User target = findUserOrThrow(requester.getId());
         if (!passwordEncoder.matches(request.currentPassword(), target.getPasswordHash())) {
@@ -472,6 +539,60 @@ public class UserServiceImpl implements UserService {
             throw new BadRequestException("Employee code is required");
         }
         return value;
+    }
+
+    private void validateAvatarFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new BadRequestException("Avatar image must not be empty");
+        }
+
+        String contentType = file.getContentType();
+        if (contentType == null || !fileStorageProperties.getAllowedAvatarTypes().contains(contentType)) {
+            throw new BadRequestException("Unsupported avatar type: " + contentType);
+        }
+
+        long maxBytes = fileStorageProperties.getMaxAvatarSizeMb() * 1024L * 1024L;
+        if (file.getSize() > maxBytes) {
+            throw new BadRequestException("Avatar size exceeds the maximum of "
+                    + fileStorageProperties.getMaxAvatarSizeMb() + " MB");
+        }
+    }
+
+    private Path avatarDir(Long userId) {
+        return Paths.get(fileStorageProperties.getBasePath())
+                .resolve(fileStorageProperties.getAvatarsDir())
+                .resolve(String.valueOf(userId))
+                .toAbsolutePath()
+                .normalize();
+    }
+
+    private void deleteExistingAvatarFiles(Path userAvatarDir) throws IOException {
+        if (!Files.exists(userAvatarDir)) {
+            return;
+        }
+        try (Stream<Path> files = Files.list(userAvatarDir)) {
+            files.filter(Files::isRegularFile).forEach(path -> {
+                try {
+                    Files.deleteIfExists(path);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        } catch (RuntimeException e) {
+            if (e.getCause() instanceof IOException ioException) {
+                throw ioException;
+            }
+            throw e;
+        }
+    }
+
+    private String avatarExtension(String contentType) {
+        return switch (contentType) {
+            case "image/jpeg" -> ".jpg";
+            case "image/png" -> ".png";
+            case "image/webp" -> ".webp";
+            default -> throw new BadRequestException("Unsupported avatar type: " + contentType);
+        };
     }
 
     private String blankToNull(String value) {

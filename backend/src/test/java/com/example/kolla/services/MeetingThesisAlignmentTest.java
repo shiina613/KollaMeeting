@@ -16,6 +16,7 @@ import com.example.kolla.repositories.MeetingRepository;
 import com.example.kolla.repositories.MemberRepository;
 import com.example.kolla.repositories.RoomRepository;
 import com.example.kolla.repositories.UserRepository;
+import com.example.kolla.responses.MeetingResponse;
 import com.example.kolla.responses.MemberResponse;
 import com.example.kolla.services.impl.MeetingServiceImpl;
 import com.example.kolla.dto.UpdateMeetingRequest;
@@ -26,6 +27,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -174,6 +178,39 @@ class MeetingThesisAlignmentTest {
         verify(meetingRepository, atLeastOnce()).save(meetingCaptor.capture());
         assertThat(meetingCaptor.getAllValues().get(meetingCaptor.getAllValues().size() - 1).getCode())
                 .isEqualTo("MTG-000042");
+    }
+
+    @Test
+    void listMeetings_hydratesHostFromMeetingRoleForListDisplay() {
+        Meeting meeting = Meeting.builder()
+                .id(100L)
+                .code("MTG-000100")
+                .title("Hop nghiem thu")
+                .startTime(LocalDateTime.now().plusDays(1))
+                .endTime(LocalDateTime.now().plusDays(1).plusHours(1))
+                .room(Room.builder().id(9L).name("Phong hop A").build())
+                .departmentId(8L)
+                .status(MeetingStatus.SCHEDULED)
+                .build();
+        Member hostMember = Member.builder()
+                .meeting(meeting)
+                .user(employeeHost)
+                .meetingRole(MeetingRole.HOST)
+                .build();
+        Page<Meeting> page = new PageImpl<>(List.of(meeting));
+
+        when(meetingRepository.findAllFiltered(null, null, null, null, PageRequest.of(0, 10)))
+                .thenReturn(page);
+        when(memberRepository.findByMeetingId(100L)).thenReturn(List.of(hostMember));
+
+        Page<MeetingResponse> response = service.listMeetings(
+                null, null, null, null, PageRequest.of(0, 10), secretary);
+
+        assertThat(response.getContent()).singleElement()
+                .satisfies(item -> {
+                    assertThat(item.getHostId()).isEqualTo(employeeHost.getId());
+                    assertThat(item.getHostName()).isEqualTo(employeeHost.getFullName());
+                });
     }
 
     @Test

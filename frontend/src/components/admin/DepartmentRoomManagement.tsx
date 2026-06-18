@@ -35,7 +35,6 @@ function DepartmentFormModal({
   const isEdit = !!dept
   const [departmentCode, setDepartmentCode] = useState(dept?.departmentCode ?? '')
   const [name, setName] = useState(dept?.name ?? '')
-  const [description, setDescription] = useState(dept?.description ?? '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -45,9 +44,9 @@ function DepartmentFormModal({
     setError(null)
     try {
       if (isEdit) {
-        await updateDepartment(dept!.id, { departmentCode, name, description: description || undefined })
+        await updateDepartment(dept!.id, { departmentCode, name })
       } else {
-        await createDepartment({ departmentCode, name, description: description || undefined })
+        await createDepartment({ departmentCode, name })
       }
       onSuccess()
     } catch (err: unknown) {
@@ -71,10 +70,11 @@ function DepartmentFormModal({
         )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-label-md text-on-surface-variant mb-1">
+            <label htmlFor="department-code" className="block text-label-md text-on-surface-variant mb-1">
               Mã phòng ban <span className="text-error">*</span>
             </label>
             <input
+              id="department-code"
               type="text"
               required
               value={departmentCode}
@@ -83,24 +83,16 @@ function DepartmentFormModal({
             />
           </div>
           <div>
-            <label className="block text-label-md text-on-surface-variant mb-1">
+            <label htmlFor="department-name" className="block text-label-md text-on-surface-variant mb-1">
               Tên phòng ban <span className="text-error">*</span>
             </label>
             <input
+              id="department-name"
               type="text"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
-          <div>
-            <label className="block text-label-md text-on-surface-variant mb-1">Mô tả</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              className="w-full border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary resize-none"
             />
           </div>
           <div className="flex justify-end gap-3 pt-2 border-t border-outline-variant">
@@ -134,14 +126,13 @@ function RoomFormModal({
   const isEdit = !!room
   const [roomCode, setRoomCode] = useState(room?.roomCode ?? '')
   const [name, setName] = useState(room?.name ?? '')
-  const [capacity, setCapacity] = useState(room?.capacity?.toString() ?? '')
-  const [departmentId, setDepartmentId] = useState<number | ''>(room?.departmentId ?? (departments[0]?.id ?? ''))
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (departmentId === '') { setError('Vui lòng chọn phòng ban.'); return }
+    const departmentId = room?.departmentId ?? departments[0]?.id
+    if (departmentId === undefined) { setError('Không thể lưu phòng họp.'); return }
     setLoading(true)
     setError(null)
     try {
@@ -150,8 +141,7 @@ function RoomFormModal({
           roomCode,
           name,
           roomName: name,
-          capacity: capacity ? Number(capacity) : undefined,
-          departmentId: departmentId as number,
+          departmentId,
         }
         await updateRoom(room!.id, data)
       } else {
@@ -159,8 +149,7 @@ function RoomFormModal({
           roomCode,
           name,
           roomName: name,
-          capacity: capacity ? Number(capacity) : undefined,
-          departmentId: departmentId as number,
+          departmentId,
         }
         await createRoom(data)
       }
@@ -186,10 +175,11 @@ function RoomFormModal({
         )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-label-md text-on-surface-variant mb-1">
+            <label htmlFor="room-code" className="block text-label-md text-on-surface-variant mb-1">
               Mã phòng họp <span className="text-error">*</span>
             </label>
             <input
+              id="room-code"
               type="text"
               required
               value={roomCode}
@@ -198,43 +188,17 @@ function RoomFormModal({
             />
           </div>
           <div>
-            <label className="block text-label-md text-on-surface-variant mb-1">
+            <label htmlFor="room-name" className="block text-label-md text-on-surface-variant mb-1">
               Tên phòng họp <span className="text-error">*</span>
             </label>
             <input
+              id="room-name"
               type="text"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary"
             />
-          </div>
-          <div>
-            <label className="block text-label-md text-on-surface-variant mb-1">Sức chứa</label>
-            <input
-              type="number"
-              min={1}
-              value={capacity}
-              onChange={(e) => setCapacity(e.target.value)}
-              placeholder="Không giới hạn"
-              className="w-full border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
-          <div>
-            <label className="block text-label-md text-on-surface-variant mb-1">
-              Phòng ban <span className="text-error">*</span>
-            </label>
-            <select
-              required
-              value={departmentId}
-              onChange={(e) => setDepartmentId(e.target.value === '' ? '' : Number(e.target.value))}
-              className="w-full border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              <option value="">Chọn phòng ban</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
-            </select>
           </div>
           <div className="flex justify-end gap-3 pt-2 border-t border-outline-variant">
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-button font-medium text-on-surface border border-outline-variant hover:bg-surface-container transition-colors">
@@ -408,7 +372,6 @@ export default function DepartmentRoomManagement({ view }: { view: View }) {
                   <tr className="border-b border-outline-variant bg-surface-container-low">
                     <th className="text-left px-4 py-3 text-label-md text-on-surface-variant font-semibold">Mã phòng ban</th>
                     <th className="text-left px-4 py-3 text-label-md text-on-surface-variant font-semibold">Tên phòng ban</th>
-                    <th className="text-left px-4 py-3 text-label-md text-on-surface-variant font-semibold hidden md:table-cell">Mô tả</th>
                     <th className="px-4 py-3" aria-label="Hành động" />
                   </tr>
                 </thead>
@@ -417,7 +380,6 @@ export default function DepartmentRoomManagement({ view }: { view: View }) {
                     <tr key={d.id} className={`border-b border-outline-variant last:border-0 hover:bg-surface-container-low transition-colors ${idx % 2 === 0 ? '' : 'bg-surface-container/30'}`}>
                       <td className="px-4 py-3 font-mono text-on-surface">{d.departmentCode ?? '—'}</td>
                       <td className="px-4 py-3 font-medium text-on-surface">{d.name}</td>
-                      <td className="px-4 py-3 text-on-surface-variant hidden md:table-cell">{d.description ?? '—'}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-2">
                           <button
@@ -481,8 +443,6 @@ export default function DepartmentRoomManagement({ view }: { view: View }) {
                   <tr className="border-b border-outline-variant bg-surface-container-low">
                     <th className="text-left px-4 py-3 text-label-md text-on-surface-variant font-semibold">Mã phòng</th>
                     <th className="text-left px-4 py-3 text-label-md text-on-surface-variant font-semibold">Tên phòng</th>
-                    <th className="text-left px-4 py-3 text-label-md text-on-surface-variant font-semibold hidden md:table-cell">Phòng ban</th>
-                    <th className="text-left px-4 py-3 text-label-md text-on-surface-variant font-semibold hidden lg:table-cell">Sức chứa</th>
                     <th className="px-4 py-3" aria-label="Hành động" />
                   </tr>
                 </thead>
@@ -491,10 +451,6 @@ export default function DepartmentRoomManagement({ view }: { view: View }) {
                     <tr key={r.id} className={`border-b border-outline-variant last:border-0 hover:bg-surface-container-low transition-colors ${idx % 2 === 0 ? '' : 'bg-surface-container/30'}`}>
                       <td className="px-4 py-3 font-mono text-on-surface">{r.roomCode ?? '—'}</td>
                       <td className="px-4 py-3 font-medium text-on-surface">{r.name}</td>
-                      <td className="px-4 py-3 text-on-surface-variant hidden md:table-cell">{r.departmentName ?? '—'}</td>
-                      <td className="px-4 py-3 text-on-surface-variant hidden lg:table-cell">
-                        {r.capacity ? `${r.capacity} người` : '—'}
-                      </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-2">
                           <button

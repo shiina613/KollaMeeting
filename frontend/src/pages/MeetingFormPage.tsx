@@ -141,12 +141,12 @@ const DEFAULT_VALUES: FormValues = {
 }
 
 const MEETING_ROLE_LABELS: Record<MeetingRole, string> = {
-  HOST: 'Ch? tr?',
-  SECRETARY: 'Th? k?',
-  REVIEWER: 'Ph?n bi?n',
-  COMMITTEE_MEMBER: '?y vi?n',
-  GUEST: 'Kh?ch m?i',
-  MEMBER: 'Th?nh vi?n',
+  HOST: 'Chủ trì',
+  SECRETARY: 'Thư ký',
+  REVIEWER: 'Phản biện',
+  COMMITTEE_MEMBER: 'Ủy viên',
+  GUEST: 'Khách mời',
+  MEMBER: 'Thành viên',
 }
 
 // ─── Room availability indicator ─────────────────────────────────────────────
@@ -795,7 +795,7 @@ export default function MeetingFormPage() {
             )}
 
             <div>
-              <label className="block text-label-md text-on-surface-variant mb-1">Vai tr? khi th?m</label>
+              <label className="block text-label-md text-on-surface-variant mb-1">Vai trò khi thêm</label>
               <select
                 value={memberRole}
                 onChange={(e) => setMemberRole(e.target.value as MeetingRole)}

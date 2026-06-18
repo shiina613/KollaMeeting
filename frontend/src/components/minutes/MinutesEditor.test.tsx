@@ -46,6 +46,13 @@ function renderEditor(props: {
   initialContent?: string
   initialEntries?: import('../../types/minutes').MinutesContentEntry[]
   initialConclusion?: string
+  readonlySummary?: {
+    meetingTitle: string
+    endedAt?: string
+    hostName?: string
+    secretaryName?: string
+  }
+  onCancel?: () => void
   onSuccess?: () => void
 } = {}) {
   return render(
@@ -54,6 +61,8 @@ function renderEditor(props: {
       initialContent={props.initialContent}
       initialEntries={props.initialEntries}
       initialConclusion={props.initialConclusion}
+      readonlySummary={props.readonlySummary}
+      onCancel={props.onCancel}
       onSuccess={props.onSuccess}
     />,
   )
@@ -71,7 +80,7 @@ beforeEach(() => {
 
 // â”€â”€â”€ Test 1: Renders with initial content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe('MinutesEditor â€” renders correctly', () => {
+describe('MinutesEditor - renders correctly', () => {
   it('renders the editor form for SECRETARY role', () => {
     renderEditor()
 
@@ -81,7 +90,7 @@ describe('MinutesEditor â€” renders correctly', () => {
   })
 
   it('renders with initial content in the textarea', () => {
-    const initialContent = '<h1>BiÃªn báº£n</h1><p>Ná»™i dung cuá»™c há»p</p>'
+    const initialContent = '<h1>Biên bản</h1><p>Nội dung cuộc họp</p>'
     renderEditor({ initialContent })
 
     expect(screen.getByTestId('minutes-entry-text-0')).toHaveValue(initialContent)
@@ -91,6 +100,35 @@ describe('MinutesEditor â€” renders correctly', () => {
     renderEditor()
 
     expect(screen.getByTestId('minutes-entry-text-0')).toHaveValue('')
+  })
+
+  it('renders fixed minutes context and does not render a conclusion textarea', () => {
+    renderEditor({
+      readonlySummary: {
+        meetingTitle: 'Cuoc hop phan bien CNTT',
+        endedAt: '2026-06-09T04:01:00.000Z',
+        hostName: 'Ngo Quoc Vuong',
+        secretaryName: 'Nguyen Quang Tung',
+      },
+      initialEntries: [
+        {
+          speakerName: 'Nguyen Quang Tung',
+          roleLabel: 'Thu ky cuoc hop',
+          timeLabel: '11:00',
+          text: 'chao moi nguoi',
+        },
+      ],
+      initialConclusion: 'Ket luan cu khong hien thanh o sua',
+    })
+
+    expect(screen.getByText('BIÊN BẢN CUỘC HỌP - BẢN NHÁP')).toBeInTheDocument()
+    expect(screen.getByText('Cuộc họp: Cuoc hop phan bien CNTT')).toBeInTheDocument()
+    expect(screen.getByText('Chủ tọa: Ngo Quoc Vuong')).toBeInTheDocument()
+    expect(screen.getByText('Thư ký: Nguyen Quang Tung')).toBeInTheDocument()
+    expect(
+      screen.getByText('[11:00] Người nói: Nguyen Quang Tung | Vai trò: Thu ky cuoc hop'),
+    ).toBeInTheDocument()
+    expect(screen.queryByTestId('minutes-conclusion-input')).not.toBeInTheDocument()
   })
 
   it('renders for ADMIN role as well', () => {
@@ -106,7 +144,7 @@ describe('MinutesEditor â€” renders correctly', () => {
 
 // â”€â”€â”€ Test 2: Role-based visibility â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe('MinutesEditor â€” role-based visibility', () => {
+describe('MinutesEditor - role-based visibility', () => {
   it('renders nothing for USER role', () => {
     vi.mocked(useAuthStore).mockReturnValue({
       user: { id: 3, username: 'user1', email: 'user@example.com', role: 'USER' },
@@ -130,8 +168,8 @@ describe('MinutesEditor â€” role-based visibility', () => {
 
 // â”€â”€â”€ Test 3: Submit calls API with correct contentHtml â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe('MinutesEditor â€” submit behavior', () => {
-  it('submits structured entries and conclusion', async () => {
+describe('MinutesEditor - submit behavior', () => {
+  it('submits structured entries without conclusion', async () => {
     vi.mocked(editMinutes).mockResolvedValue({
       data: {} as import('../../types/minutes').Minutes,
       success: true,
@@ -146,13 +184,11 @@ describe('MinutesEditor â€” submit behavior', () => {
     const entry = screen.getByTestId('minutes-entry-text-0')
     await userEvent.clear(entry)
     await userEvent.type(entry, 'Edited speech')
-    await userEvent.type(screen.getByTestId('minutes-conclusion-input'), 'Edited conclusion')
     await userEvent.click(screen.getByTestId('minutes-editor-submit'))
 
     await waitFor(() => {
       expect(vi.mocked(editMinutes)).toHaveBeenCalledWith(42, {
         contentEntries: [{ speakerName: 'Nguyen Van A', roleLabel: 'Chu tri', timeLabel: '09:01', text: 'Edited speech' }],
-        conclusion: 'Edited conclusion',
       })
     })
   })
@@ -163,14 +199,13 @@ describe('MinutesEditor â€” submit behavior', () => {
       success: true,
     })
 
-    renderEditor({ meetingId: 42, initialContent: '<p>Ná»™i dung</p>' })
+    renderEditor({ meetingId: 42, initialContent: '<p>Nội dung</p>' })
 
     await userEvent.click(screen.getByTestId('minutes-editor-submit'))
 
     await waitFor(() => {
       expect(vi.mocked(editMinutes)).toHaveBeenCalledWith(42, {
-        contentEntries: [{ speakerName: '', roleLabel: '', timeLabel: '', text: '<p>Ná»™i dung</p>' }],
-        conclusion: '',
+        contentEntries: [{ speakerName: '', roleLabel: '', timeLabel: '', text: '<p>Nội dung</p>' }],
       })
     })
   })
@@ -184,24 +219,34 @@ describe('MinutesEditor â€” submit behavior', () => {
     renderEditor({ meetingId: 5 })
 
     const textarea = screen.getByTestId('minutes-entry-text-0')
-    await userEvent.type(textarea, '<h1>TiÃªu Ä‘á»</h1>')
+    await userEvent.type(textarea, '<h1>Tiêu đề</h1>')
 
     await userEvent.click(screen.getByTestId('minutes-editor-submit'))
 
     await waitFor(() => {
       expect(vi.mocked(editMinutes)).toHaveBeenCalledWith(5, {
-        contentEntries: [{ speakerName: '', roleLabel: '', timeLabel: '', text: '<h1>TiÃªu Ä‘á»</h1>' }],
-        conclusion: '',
+        contentEntries: [{ speakerName: '', roleLabel: '', timeLabel: '', text: '<h1>Tiêu đề</h1>' }],
       })
     })
+  })
+
+  it('calls onCancel when the cancel button is clicked', async () => {
+    const onCancel = vi.fn()
+
+    renderEditor({ initialContent: '<p>Content</p>', onCancel })
+
+    await userEvent.click(screen.getByTestId('minutes-editor-cancel'))
+
+    expect(onCancel).toHaveBeenCalledOnce()
+    expect(vi.mocked(editMinutes)).not.toHaveBeenCalled()
   })
 })
 
 // â”€â”€â”€ Test 4: Loading state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe('MinutesEditor â€” loading state', () => {
+describe('MinutesEditor - loading state', () => {
   it('shows loading indicator during submission', async () => {
-    // Never resolves â€” keeps loading state
+    // Never resolves - keeps loading state
     vi.mocked(editMinutes).mockReturnValue(new Promise(() => {}))
 
     renderEditor({ initialContent: '<p>Content</p>' })
@@ -225,7 +270,7 @@ describe('MinutesEditor â€” loading state', () => {
 
 // â”€â”€â”€ Test 5: Success feedback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe('MinutesEditor â€” success feedback', () => {
+describe('MinutesEditor - success feedback', () => {
   it('shows success message after successful submission', async () => {
     vi.mocked(editMinutes).mockResolvedValue({
       data: {} as import('../../types/minutes').Minutes,
@@ -261,10 +306,10 @@ describe('MinutesEditor â€” success feedback', () => {
 
 // â”€â”€â”€ Test 6: Error handling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe('MinutesEditor â€” error handling', () => {
+describe('MinutesEditor - error handling', () => {
   it('shows error message when API fails with a message', async () => {
     vi.mocked(editMinutes).mockRejectedValue({
-      response: { data: { message: 'Báº¡n khÃ´ng cÃ³ quyá»n chá»‰nh sá»­a biÃªn báº£n' } },
+      response: { data: { message: 'Bạn không có quyền chỉnh sửa biên bản' } },
     })
 
     renderEditor({ initialContent: '<p>Content</p>' })
@@ -274,7 +319,7 @@ describe('MinutesEditor â€” error handling', () => {
     await waitFor(() => {
       expect(screen.getByTestId('minutes-editor-error')).toBeInTheDocument()
     })
-    expect(screen.getByTestId('minutes-editor-error')).toHaveTextContent('Báº¡n khÃ´ng cÃ³ quyá»n chá»‰nh sá»­a biÃªn báº£n')
+    expect(screen.getByTestId('minutes-editor-error')).toHaveTextContent('Bạn không có quyền chỉnh sửa biên bản')
   })
 
   it('shows fallback error message when API error has no message', async () => {
@@ -314,13 +359,13 @@ describe('MinutesEditor â€” error handling', () => {
 
     renderEditor({ initialContent: '<p>Content</p>' })
 
-    // First submit â€” fails
+    // First submit - fails
     await userEvent.click(screen.getByTestId('minutes-editor-submit'))
     await waitFor(() => {
       expect(screen.getByTestId('minutes-editor-error')).toBeInTheDocument()
     })
 
-    // Second submit â€” succeeds
+    // Second submit - succeeds
     await userEvent.click(screen.getByTestId('minutes-editor-submit'))
     await waitFor(() => {
       expect(screen.queryByTestId('minutes-editor-error')).not.toBeInTheDocument()
@@ -330,7 +375,7 @@ describe('MinutesEditor â€” error handling', () => {
 
 // â”€â”€â”€ Test 7: Submit button disabled when content is empty â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe('MinutesEditor â€” submit button state', () => {
+describe('MinutesEditor - submit button state', () => {
   it('disables submit button when textarea is empty', () => {
     renderEditor({ initialContent: '' })
 
@@ -355,7 +400,7 @@ describe('MinutesEditor â€” submit button state', () => {
 
 // â”€â”€â”€ Test 8: Accessibility â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe('MinutesEditor â€” accessibility', () => {
+describe('MinutesEditor - accessibility', () => {
   it('has correct aria-label on the form', () => {
     renderEditor()
 

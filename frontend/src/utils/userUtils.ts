@@ -8,6 +8,8 @@ interface UserDisplayInfo {
   departmentName?: string | null
 }
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api/v1'
+
 /**
  * Format a user for display as "Tên - Phòng ban - #ID".
  * If departmentName is not available, falls back to "Tên - #ID".
@@ -43,4 +45,24 @@ export function formatMeetingUserLabel(
   if (dept && id != null) return `${name} - ${dept} - #${id}`
   if (id != null) return `${name} - #${id}`
   return name
+}
+
+export function resolveUserImageUrl(img: string | undefined | null): string {
+  const url = img?.trim()
+  if (!url) return ''
+
+  if (/^(https?:|data:|blob:)/i.test(url)) {
+    return url
+  }
+
+  if (url.startsWith('/api/')) {
+    try {
+      const apiOrigin = new URL(API_BASE_URL).origin
+      return `${apiOrigin}${url}`
+    } catch {
+      return url
+    }
+  }
+
+  return url
 }

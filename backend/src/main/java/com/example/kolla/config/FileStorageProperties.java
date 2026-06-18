@@ -28,6 +28,9 @@ public class FileStorageProperties {
     /** Sub-directory for generated meeting minutes. */
     private String minutesDir = "minutes";
 
+    /** Sub-directory for uploaded user avatars. */
+    private String avatarsDir = "avatars";
+
     /** Allowed MIME types for document uploads. */
     private List<String> allowedDocumentTypes = List.of(
             "application/pdf",
@@ -42,9 +45,19 @@ public class FileStorageProperties {
             "image/png"
     );
 
+    /** Allowed MIME types for avatar uploads. */
+    private List<String> allowedAvatarTypes = List.of(
+            "image/jpeg",
+            "image/png",
+            "image/webp"
+    );
+
     /** Maximum allowed document size in megabytes. */
     private long maxDocumentSizeMb = 100;
 
     /** Maximum allowed recording size in megabytes. */
     private long maxRecordingSizeMb = 5120;
+
+    /** Maximum allowed avatar size in megabytes. */
+    private long maxAvatarSizeMb = 5;
 }

@@ -14,6 +14,10 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
+import org.springframework.http.MediaTypeFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -22,7 +26,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 import java.util.Map;
 
 /**
@@ -66,6 +73,29 @@ public class UserController {
 
         UserResponse response = userService.updateUser(currentUser.getId(), request, currentUser);
         return ResponseEntity.ok(ApiResponse.success("Profile updated successfully", response));
+    }
+
+    @PostMapping(value = "/me/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Upload current user's avatar")
+    public ResponseEntity<ApiResponse<UserResponse>> uploadCurrentUserAvatar(
+            @RequestParam("file") MultipartFile file,
+            @AuthenticationPrincipal User currentUser) {
+
+        UserResponse response = userService.uploadCurrentUserAvatar(file, currentUser);
+        return ResponseEntity.ok(ApiResponse.success("Avatar uploaded successfully", response));
+    }
+
+    @GetMapping("/{id}/avatar")
+    @Operation(summary = "View a user's avatar")
+    public ResponseEntity<Resource> getUserAvatar(@PathVariable Long id) throws IOException {
+        Resource resource = userService.loadUserAvatar(id);
+        MediaType mediaType = MediaTypeFactory.getMediaType(resource)
+                .orElse(MediaType.APPLICATION_OCTET_STREAM);
+
+        return ResponseEntity.ok()
+                .contentType(mediaType)
+                .cacheControl(CacheControl.maxAge(1, TimeUnit.HOURS).cachePublic())
+                .body(resource);
     }
 
     @PostMapping("/me/change-password")

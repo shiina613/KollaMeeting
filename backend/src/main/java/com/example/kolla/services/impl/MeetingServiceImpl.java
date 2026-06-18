@@ -169,6 +169,8 @@ public class MeetingServiceImpl implements MeetingService {
         Page<Meeting> page = meetingRepository
                 .findAllFiltered(status, roomId, startFrom, startTo, pageable);
 
+        page.getContent().forEach(this::hydrateMeetingRoles);
+
         // Batch-load departments for all host/secretary users in this page
         Set<Long> deptIds = page.getContent().stream()
                 .flatMap(m -> {

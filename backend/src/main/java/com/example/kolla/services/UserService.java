@@ -7,8 +7,12 @@ import com.example.kolla.dto.UpdateUserRequest;
 import com.example.kolla.models.User;
 import com.example.kolla.enums.Role;
 import com.example.kolla.responses.UserResponse;
+import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
 
 import java.util.List;
 
@@ -71,6 +75,16 @@ public interface UserService {
      * @param requester the authenticated user making the request
      */
     UserResponse updateUser(Long id, UpdateUserRequest request, User requester);
+
+    /**
+     * Upload and set the current user's avatar image.
+     */
+    UserResponse uploadCurrentUserAvatar(MultipartFile file, User requester);
+
+    /**
+     * Load a stored avatar image for browser rendering.
+     */
+    Resource loadUserAvatar(Long id) throws IOException;
 
     /**
      * Change the current user's own password after verifying their current password.

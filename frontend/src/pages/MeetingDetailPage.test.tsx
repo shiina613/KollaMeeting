@@ -4,6 +4,8 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import MeetingDetailPage from './MeetingDetailPage'
 import api from '../services/api'
+import { getMinutes } from '../services/minutesService'
+import type { Minutes } from '../types/minutes'
 
 vi.mock('../store/authStore', () => ({
   default: () => ({
@@ -19,6 +21,21 @@ vi.mock('../services/recordingService', () => ({
 
 vi.mock('../services/minutesService', () => ({
   getMinutes: vi.fn().mockResolvedValue({ data: null }),
+  downloadMinutesFile: vi.fn(),
+}))
+
+vi.mock('../components/minutes/MinutesViewer', () => ({
+  default: ({ version }: { version: string }) => (
+    <div data-testid={`mock-minutes-pdf-${version}`}>PDF preview {version}</div>
+  ),
+}))
+
+vi.mock('../components/minutes/MinutesWordPreview', () => ({
+  default: ({ available }: { available: boolean }) => (
+    <div data-testid="mock-minutes-word-preview">
+      {available ? 'Word preview available' : 'Word preview unavailable'}
+    </div>
+  ),
 }))
 
 const apiMocks = vi.hoisted(() => ({
@@ -84,6 +101,23 @@ function meetingData(overrides = {}) {
     secretaryId: 10,
     secretaryName: 'Thư ký A',
     roomName: 'Phòng họp 1',
+    ...overrides,
+  }
+}
+
+function minutesData(overrides: Partial<Minutes> = {}): Minutes {
+  return {
+    id: 7,
+    meetingId: 1,
+    status: 'SECRETARY_CONFIRMED',
+    draftAvailable: true,
+    confirmedAvailable: true,
+    secretaryAvailable: true,
+    draftDocxAvailable: true,
+    secretaryDocxAvailable: true,
+    editedWordAvailable: true,
+    createdAt: '2026-06-09T10:00:00',
+    updatedAt: '2026-06-09T10:05:00',
     ...overrides,
   }
 }
@@ -163,5 +197,58 @@ describe('MeetingDetailPage document permissions', () => {
 
     await screen.findByText('agenda.pdf')
     expect(screen.queryByRole('button', { name: /Xóa agenda\.pdf/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('MeetingDetailPage minutes preview selector', () => {
+  beforeEach(() => {
+    meetingServiceMocks.getMeeting.mockResolvedValue({
+      data: meetingData({ status: 'ENDED' }),
+    })
+    vi.mocked(getMinutes).mockResolvedValue({ data: minutesData() })
+  })
+
+  it('shows the signed PDF preview by default and switches to Word preview', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByText('Họp hội đồng')
+    await user.click(screen.getByRole('tab', { name: /Biên bản/i }))
+
+    expect(await screen.findByTestId('mock-minutes-pdf-confirmed')).toBeInTheDocument()
+    expect(screen.getByTestId('minutes-preview-mode-pdf')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    await user.click(screen.getByTestId('minutes-preview-mode-word'))
+
+    expect(screen.getByTestId('mock-minutes-word-preview')).toHaveTextContent(
+      'Word preview available',
+    )
+    expect(screen.getByTestId('minutes-preview-mode-word')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+  })
+
+  it('disables the Word preview option when the edited Word file is missing', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getMinutes).mockResolvedValue({
+      data: minutesData({
+        editedWordAvailable: false,
+        secretaryDocxAvailable: false,
+        secretaryDocxPath: undefined,
+      }),
+    })
+
+    renderPage()
+
+    await screen.findByText('Họp hội đồng')
+    await user.click(screen.getByRole('tab', { name: /Biên bản/i }))
+
+    expect(await screen.findByTestId('mock-minutes-pdf-confirmed')).toBeInTheDocument()
+    expect(screen.getByTestId('minutes-preview-mode-word')).toBeDisabled()
+    expect(screen.queryByTestId('mock-minutes-word-preview')).not.toBeInTheDocument()
   })
 })

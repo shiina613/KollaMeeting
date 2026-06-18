@@ -38,6 +38,7 @@ import type {
 import type { Minutes } from '../types/minutes'
 import type { ApiResponse } from '../types/api'
 import MinutesViewer from '../components/minutes/MinutesViewer'
+import MinutesWordPreview from '../components/minutes/MinutesWordPreview'
 import MinutesEditor from '../components/minutes/MinutesEditor'
 import MinutesConfirmDialog from '../components/minutes/MinutesConfirmDialog'
 import MinutesDownloadButtons from '../components/minutes/MinutesDownloadButtons'
@@ -107,8 +108,15 @@ function Section({ title, icon, children }: { title: string; icon: string; child
 
 // ─── Minutes tab ──────────────────────────────────────────────────────────────
 
+type MinutesPreviewMode = 'pdf' | 'word'
+
+function hasEditedWordPreview(minutes: Minutes): boolean {
+  return minutes.editedWordAvailable ?? minutes.secretaryDocxAvailable ?? !!minutes.secretaryDocxPath
+}
+
 function MinutesTab({
   meetingId,
+  meeting,
   minutes,
   onMinutesUpdate,
   isHost,
@@ -116,6 +124,7 @@ function MinutesTab({
   onShowConfirm,
 }: {
   meetingId: number
+  meeting: Meeting | null
   minutes: Minutes | null
   onMinutesUpdate: (m: Minutes) => void
   isHost: boolean
@@ -123,6 +132,14 @@ function MinutesTab({
   onShowConfirm: () => void
 }) {
   const [showEditor, setShowEditor] = useState(false)
+  const [previewMode, setPreviewMode] = useState<MinutesPreviewMode>('pdf')
+  const wordPreviewAvailable = minutes ? hasEditedWordPreview(minutes) : false
+
+  useEffect(() => {
+    if (!wordPreviewAvailable && previewMode === 'word') {
+      setPreviewMode('pdf')
+    }
+  }, [previewMode, wordPreviewAvailable])
 
   if (!minutes) {
     return (
@@ -141,7 +158,6 @@ function MinutesTab({
   }
 
   // Determine which version to show in viewer
-  const hasEditedWord = minutes.editedWordAvailable || minutes.secretaryDocxAvailable
   const viewerVersion = minutes.status === 'HOST_CONFIRMED' || minutes.status === 'SECRETARY_CONFIRMED'
     ? 'confirmed'
     : 'draft'
@@ -187,6 +203,13 @@ function MinutesTab({
           initialContent={minutes.contentHtml ?? ''}
           initialEntries={minutes.contentEntries}
           initialConclusion={minutes.conclusion ?? ''}
+          readonlySummary={{
+            meetingTitle: meeting?.title ?? '',
+            endedAt: meeting?.endTime,
+            hostName: meeting?.hostName ?? meeting?.hostUserName ?? meeting?.hostUser?.fullName,
+            secretaryName: meeting?.secretaryName ?? meeting?.secretaryUserName ?? meeting?.secretaryUser?.fullName,
+          }}
+          onCancel={() => setShowEditor(false)}
           onSuccess={() => {
             // Re-fetch minutes after edit
             getMinutes(meetingId).then((r) => { onMinutesUpdate(r.data); setShowEditor(false) })
@@ -195,8 +218,46 @@ function MinutesTab({
       )}
 
       {/* Viewer */}
-      {!showEditor && !hasEditedWord && (
-        <MinutesViewer meetingId={meetingId} version={viewerVersion} status={minutes.status} />
+      {!showEditor && (
+        <div className="space-y-3">
+          <div
+            className="inline-flex rounded-lg border border-outline-variant bg-surface-container-low p-1"
+            role="group"
+            aria-label="Chọn bản xem biên bản"
+          >
+            <button
+              type="button"
+              onClick={() => setPreviewMode('pdf')}
+              aria-pressed={previewMode === 'pdf'}
+              className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-label-md font-medium transition-colors ${previewMode === 'pdf' ? 'bg-primary text-white' : 'text-on-surface-variant hover:bg-surface-container'}`}
+              data-testid="minutes-preview-mode-pdf"
+            >
+              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+                picture_as_pdf
+              </span>
+              PDF gốc có chữ ký
+            </button>
+            <button
+              type="button"
+              onClick={() => setPreviewMode('word')}
+              disabled={!wordPreviewAvailable}
+              aria-pressed={previewMode === 'word'}
+              className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-label-md font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${previewMode === 'word' ? 'bg-primary text-white' : 'text-on-surface-variant hover:bg-surface-container'}`}
+              data-testid="minutes-preview-mode-word"
+            >
+              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+                description
+              </span>
+              Bản Word
+            </button>
+          </div>
+
+          {previewMode === 'pdf' ? (
+            <MinutesViewer meetingId={meetingId} version={viewerVersion} status={minutes.status} />
+          ) : (
+            <MinutesWordPreview meetingId={meetingId} available={wordPreviewAvailable} />
+          )}
+        </div>
       )}
     </div>
   )
@@ -383,7 +444,7 @@ export default function MeetingDetailPage() {
       setMessageContent('')
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      setMessageError(msg ?? 'Kh?ng th? g?i tin nh?n.')
+      setMessageError(msg ?? 'Không thể gửi tin nhắn.')
     } finally {
       setMessageLoading(false)
     }
@@ -473,7 +534,7 @@ export default function MeetingDetailPage() {
   const tabs: { key: TabKey; label: string; icon: string; count?: number }[] = [
     { key: 'info', label: 'Thông tin', icon: 'info' },
     { key: 'members', label: 'Thành viên', icon: 'group', count: members.length },
-    { key: 'messages', label: 'Trao ??i', icon: 'forum', count: messages.length },
+    { key: 'messages', label: 'Trao đổi', icon: 'forum', count: messages.length },
     { key: 'documents', label: 'Tài liệu', icon: 'description', count: documents.length },
     { key: 'recordings', label: 'Ghi âm', icon: 'mic', count: recordings.length || audioJobs.length },
     { key: 'attendance', label: 'Điểm danh', icon: 'fact_check', count: attendance.length },
@@ -778,10 +839,10 @@ export default function MeetingDetailPage() {
         )}
 
         {activeTab === 'messages' && (
-          <Section title={`Trao ??i (${messages.length})`} icon="forum">
+          <Section title={`Trao đổi (${messages.length})`} icon="forum">
             <div className="space-y-4">
               {messages.length === 0 ? (
-                <p className="text-body-sm text-on-surface-variant text-center py-4">Ch?a c? tin nh?n n?o</p>
+                <p className="text-body-sm text-on-surface-variant text-center py-4">Chưa có tin nhắn nào</p>
               ) : (
                 <ul className="divide-y divide-outline-variant">
                   {messages.map((message) => (
@@ -806,7 +867,7 @@ export default function MeetingDetailPage() {
               )}
 
               <form onSubmit={handleSendMessage} className="border-t border-outline-variant pt-4 space-y-3">
-                <label className="block text-label-md text-on-surface-variant">Noi dung trao doi</label>
+                <label className="block text-label-md text-on-surface-variant">Nội dung trao đổi</label>
                 <textarea
                   value={messageContent}
                   onChange={(event) => setMessageContent(event.target.value)}
@@ -824,7 +885,7 @@ export default function MeetingDetailPage() {
                     className="inline-flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-xl text-button font-medium hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                   >
                     {messageLoading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                    Gui tin nhan
+                    Gửi tin nhắn
                   </button>
                 </div>
               </form>
@@ -931,7 +992,7 @@ export default function MeetingDetailPage() {
                           {recordingDownloadId === recording.id
                             ? <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                             : <span className="material-symbols-outlined text-[18px]" aria-hidden="true">download</span>}
-                          Tai xuong
+                          Tải xuống
                         </button>
                       )}
                     </li>
@@ -943,7 +1004,7 @@ export default function MeetingDetailPage() {
               <div className="flex flex-col items-center justify-center py-10 text-on-surface-variant">
                 <span className="material-symbols-outlined text-5xl mb-3" aria-hidden="true">mic_off</span>
                 <p className="text-body-md">Chưa có đoạn ghi âm nào</p>
-                <p className="text-body-sm mt-1 text-center">Các đoạn âm thanh được ghi lại khi phiên họp ở chế độ MEETING_MODE và ưu tiên Cao.</p>
+                <p className="text-body-sm mt-1 text-center">Các đoạn âm thanh được ghi lại khi phiên họp ở chế độ MEETING_MODE.</p>
               </div>
             ) : (
               <>
@@ -1069,6 +1130,7 @@ export default function MeetingDetailPage() {
         {activeTab === 'minutes' && (
           <MinutesTab
             meetingId={meetingId}
+            meeting={meeting}
             minutes={minutes}
             onMinutesUpdate={setMinutes}
             isHost={meeting?.hostId === user?.id}

@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useAuthStore from '../../store/authStore'
 import useNotificationStore from '../../store/notificationStore'
+import { resolveUserImageUrl } from '../../utils/userUtils'
 import NotificationPanel from './NotificationPanel'
 
 /**
@@ -13,6 +14,15 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   const { unreadCount } = useNotificationStore()
   const navigate = useNavigate()
   const [notificationOpen, setNotificationOpen] = useState(false)
+  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false)
+
+  const displayName = user?.fullName?.trim() || user?.username || 'User'
+  const avatarInitial = displayName.charAt(0).toUpperCase()
+  const avatarUrl = resolveUserImageUrl(user?.img)
+
+  useEffect(() => {
+    setAvatarLoadFailed(false)
+  }, [avatarUrl])
 
   const handleLogout = () => {
     logout()
@@ -76,13 +86,22 @@ export default function Header({ onMenuClick }: { onMenuClick?: () => void }) {
           {user && (
             <div className="flex items-center gap-2 pl-3 border-l border-slate-200">
               {/* Avatar */}
-              <div
-                className="w-8 h-8 rounded-full bg-primary flex items-center justify-center
-                           text-white text-sm font-semibold flex-shrink-0"
-                aria-hidden="true"
-              >
-                {user.username.charAt(0).toUpperCase()}
-              </div>
+              {avatarUrl && !avatarLoadFailed ? (
+                <img
+                  src={avatarUrl}
+                  alt={`${displayName} avatar`}
+                  className="w-8 h-8 rounded-full object-cover border border-slate-200 bg-slate-100 flex-shrink-0"
+                  onError={() => setAvatarLoadFailed(true)}
+                />
+              ) : (
+                <div
+                  className="w-8 h-8 rounded-full bg-primary flex items-center justify-center
+                             text-white text-sm font-semibold flex-shrink-0"
+                  aria-hidden="true"
+                >
+                  {avatarInitial}
+                </div>
+              )}
 
               {/* Name + role */}
               <div className="hidden sm:flex flex-col">

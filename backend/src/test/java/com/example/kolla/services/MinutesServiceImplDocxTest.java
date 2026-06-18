@@ -160,7 +160,7 @@ class MinutesServiceImplDocxTest {
                 eq("draft_77.docx"));
         String docxXml = unzipTextEntries(docxBytesCaptor.getValue()).get("word/document.xml");
         assertThat(docxXml)
-                .contains("BIÊN BẢN CUỘC HỌP - BẢN NHÁP")
+                .contains("BIÊN BẢN CUỘC HỌP - BẢN GỐC")
                 .contains("Cuộc họp: Họp nghiệm thu")
                 .contains("Bắt đầu: 05/06/2026 09:00")
                 .contains("Kết thúc: 05/06/2026 10:00")
@@ -237,6 +237,121 @@ class MinutesServiceImplDocxTest {
                 .contains("Noi dung thu nhat")
                 .contains("Noi dung thu hai");
         assertThat(countOccurrences(docxXml, "Nguyen Quang Tung")).isEqualTo(1);
+    }
+
+    @Test
+    void compileDraftMinutes_persistsStructuredEntriesForSecretaryEditing() throws Exception {
+        User host = User.builder()
+                .id(10L)
+                .username("host")
+                .fullName("Host User")
+                .email("host@example.com")
+                .role(Role.SECRETARY)
+                .isActive(true)
+                .build();
+        User speaker = User.builder()
+                .id(20L)
+                .username("speaker")
+                .fullName("Nguyen Quang Tung")
+                .email("speaker@example.com")
+                .role(Role.USER)
+                .isActive(true)
+                .build();
+        Meeting meeting = Meeting.builder()
+                .id(125L)
+                .title("Hop phan bien")
+                .host(host)
+                .creator(host)
+                .activatedAt(LocalDateTime.of(2026, 6, 5, 9, 0))
+                .endedAt(LocalDateTime.of(2026, 6, 5, 10, 0))
+                .build();
+
+        when(minutesRepository.existsByMeetingId(125L)).thenReturn(false);
+        when(transcriptionSegmentRepository.findByMeetingIdOrderedForMinutes(125L))
+                .thenReturn(List.of(
+                        segment(1L, "turn-1", 1, 20L, "Nguyen Quang Tung", "chao moi nguoi"),
+                        segment(2L, "turn-1", 2, 20L, "Nguyen Quang Tung", "minh bat dau hop")));
+        when(memberRepository.findByMeetingId(125L))
+                .thenReturn(List.of(Member.builder()
+                        .id(503L)
+                        .meeting(meeting)
+                        .user(speaker)
+                        .meetingRole(MeetingRole.SECRETARY)
+                        .build()));
+        when(minutesRepository.save(any(Minutes.class))).thenAnswer(invocation -> {
+            Minutes minutes = invocation.getArgument(0);
+            if (minutes.getId() == null) {
+                minutes.setId(79L);
+            }
+            return minutes;
+        });
+        when(fileStorageService.storeBytes(any(byte[].class), eq(FileType.MINUTES), eq(125L), eq("draft_79.pdf")))
+                .thenReturn(Path.of("minutes/125/draft_79.pdf"));
+        when(fileStorageService.storeBytes(any(byte[].class), eq(FileType.MINUTES), eq(125L), eq("draft_79.docx")))
+                .thenReturn(Path.of("minutes/125/draft_79.docx"));
+
+        service.compileDraftMinutes(meeting);
+
+        ArgumentCaptor<Minutes> minutesCaptor = ArgumentCaptor.forClass(Minutes.class);
+        verify(minutesRepository, times(2)).save(minutesCaptor.capture());
+        Minutes saved = minutesCaptor.getAllValues().get(1);
+        assertThat(saved.getContentEntriesJson())
+                .contains("Nguyen Quang Tung")
+                .contains("09:01")
+                .contains("chao moi nguoi minh bat dau hop");
+    }
+
+    @Test
+    void getMinutes_reconstructsStructuredEntriesWhenStoredDraftHasNoEntries() {
+        User secretary = User.builder()
+                .id(12L)
+                .username("secretary")
+                .fullName("Secretary")
+                .role(Role.SECRETARY)
+                .isActive(true)
+                .build();
+        User speaker = User.builder()
+                .id(20L)
+                .username("speaker")
+                .fullName("Nguyen Quang Tung")
+                .role(Role.USER)
+                .isActive(true)
+                .build();
+        Meeting meeting = Meeting.builder()
+                .id(126L)
+                .title("Hop phan bien")
+                .secretary(secretary)
+                .creator(secretary)
+                .build();
+        Minutes minutes = Minutes.builder()
+                .id(80L)
+                .meeting(meeting)
+                .status(MinutesStatus.HOST_CONFIRMED)
+                .confirmedPdfPath("minutes/126/confirmed_80.pdf")
+                .build();
+
+        when(meetingRepository.findById(126L)).thenReturn(Optional.of(meeting));
+        when(minutesRepository.findByMeetingId(126L)).thenReturn(Optional.of(minutes));
+        when(transcriptionSegmentRepository.findByMeetingIdOrderedForMinutes(126L))
+                .thenReturn(List.of(
+                        segment(1L, "turn-1", 1, 20L, "Nguyen Quang Tung", "chao moi nguoi"),
+                        segment(2L, "turn-1", 2, 20L, "Nguyen Quang Tung", "minh bat dau hop")));
+        when(memberRepository.findByMeetingId(126L))
+                .thenReturn(List.of(Member.builder()
+                        .id(504L)
+                        .meeting(meeting)
+                        .user(speaker)
+                        .meetingRole(MeetingRole.SECRETARY)
+                        .build()));
+
+        var response = service.getMinutes(126L, secretary);
+
+        assertThat(response.getContentEntries()).hasSize(1);
+        assertThat(response.getContentEntries().get(0).getSpeakerName()).isEqualTo("Nguyen Quang Tung");
+        assertThat(response.getContentEntries().get(0).getTimeLabel()).isEqualTo("09:01");
+        assertThat(response.getContentEntries().get(0).getRoleLabel()).isNotBlank();
+        assertThat(response.getContentEntries().get(0).getText())
+                .isEqualTo("chao moi nguoi minh bat dau hop");
     }
 
     @Test

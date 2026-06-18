@@ -1,13 +1,15 @@
-import { useEffect, useState, type FormEvent, type HTMLInputTypeAttribute } from 'react'
+import { useEffect, useId, useState, type FormEvent, type HTMLInputTypeAttribute } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   changeOwnPassword,
   getCurrentUser,
   updateCurrentUser,
+  uploadCurrentUserAvatar,
   type ChangePasswordRequest,
   type UpdateUserRequest,
 } from '../services/userService'
 import useAuthStore from '../store/authStore'
+import { resolveUserImageUrl } from '../utils/userUtils'
 
 type ProfileForm = Pick<
   UpdateUserRequest,
@@ -46,6 +48,8 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false)
   const [profileError, setProfileError] = useState<string | null>(null)
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null)
+  const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null)
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null)
   const [passwordForm, setPasswordForm] = useState<ChangePasswordRequest>({
     currentPassword: '',
     newPassword: '',
@@ -54,6 +58,9 @@ export default function ProfilePage() {
   const [passwordLoading, setPasswordLoading] = useState(false)
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null)
+  const displayName = form.fullName || user?.fullName || user?.username || 'Người dùng'
+  const avatarInitial = displayName.trim().charAt(0).toUpperCase() || 'U'
+  const avatarUrl = avatarPreviewUrl ?? resolveUserImageUrl(form.img)
 
   useEffect(() => {
     let mounted = true
@@ -86,8 +93,31 @@ export default function ProfilePage() {
     }
   }, [setUser])
 
+  useEffect(() => {
+    if (!selectedAvatarFile) {
+      setAvatarPreviewUrl(null)
+      return
+    }
+
+    const objectUrl = URL.createObjectURL(selectedAvatarFile)
+    setAvatarPreviewUrl(objectUrl)
+
+    return () => {
+      URL.revokeObjectURL(objectUrl)
+    }
+  }, [selectedAvatarFile])
+
   const updateField = <K extends keyof ProfileForm>(field: K, value: ProfileForm[K]) => {
     setForm((prev) => ({ ...prev, [field]: value }))
+    setProfileError(null)
+    setProfileSuccess(null)
+  }
+
+  const handleAvatarChange = (fileList: FileList | null) => {
+    const file = fileList?.[0]
+    if (!file) return
+
+    setSelectedAvatarFile(file)
     setProfileError(null)
     setProfileSuccess(null)
   }
@@ -98,12 +128,20 @@ export default function ProfilePage() {
     setProfileError(null)
     setProfileSuccess(null)
     try {
+      let nextImg = form.img
+      if (selectedAvatarFile) {
+        const avatarRes = await uploadCurrentUserAvatar(selectedAvatarFile)
+        nextImg = avatarRes.data.img ?? ''
+      }
       const res = await updateCurrentUser({
         ...form,
+        img: nextImg,
         fullName: form.fullName?.trim(),
         email: form.email?.trim(),
       })
       setUser(res.data)
+      setForm((prev) => ({ ...prev, img: res.data.img ?? nextImg ?? prev.img }))
+      setSelectedAvatarFile(null)
       setProfileSuccess('Đã cập nhật hồ sơ.')
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
@@ -159,6 +197,42 @@ export default function ProfilePage() {
         className="bg-surface-container-lowest rounded-xl border border-outline-variant p-6 space-y-5"
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="sm:col-span-2 flex items-center gap-4 border border-outline-variant rounded-lg bg-surface-container-low px-4 py-3">
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt={`Ảnh đại diện của ${displayName}`}
+                className="h-20 w-20 rounded-full object-cover border border-outline-variant bg-surface"
+              />
+            ) : (
+              <div
+                className="h-20 w-20 rounded-full border border-outline-variant bg-primary text-white flex items-center justify-center text-h3 font-semibold"
+                aria-label={`Ảnh đại diện mặc định của ${displayName}`}
+                role="img"
+              >
+                {avatarInitial}
+              </div>
+            )}
+            <div className="min-w-0 flex-1 space-y-2">
+              <div>
+                <p className="text-label-md text-on-surface-variant">Ảnh đại diện</p>
+                <p className="text-body-sm text-on-surface-variant">
+                  {selectedAvatarFile ? selectedAvatarFile.name : 'Chọn ảnh từ máy của bạn'}
+                </p>
+              </div>
+              <label className="inline-flex items-center justify-center gap-2 border border-outline-variant text-on-surface px-3 py-2 rounded-lg text-button font-medium hover:bg-surface-container cursor-pointer transition-colors">
+                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">upload</span>
+                Chọn ảnh
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  aria-label="chon anh dai dien"
+                  className="sr-only"
+                  onChange={(event) => handleAvatarChange(event.target.files)}
+                />
+              </label>
+            </div>
+          </div>
           <ProfileInput label="Mã nhân viên" value={employeeCode} disabled />
           <ProfileInput label="Phòng ban" value={departmentName || 'Không có phòng ban'} disabled />
           <ProfileInput
@@ -204,11 +278,6 @@ export default function ProfilePage() {
             label="Số tài khoản"
             value={form.bankNumber ?? ''}
             onChange={(value) => updateField('bankNumber', value)}
-          />
-          <ProfileInput
-            label="Ảnh đại diện"
-            value={form.img ?? ''}
-            onChange={(value) => updateField('img', value)}
           />
           <div className="sm:col-span-2">
             <label className="block text-label-md text-on-surface-variant mb-1">
@@ -306,6 +375,8 @@ function ProfileInput({
   type = 'text',
   disabled = false,
   required = false,
+  placeholder,
+  ariaLabel,
 }: {
   label: string
   value: string
@@ -313,18 +384,25 @@ function ProfileInput({
   type?: HTMLInputTypeAttribute
   disabled?: boolean
   required?: boolean
+  placeholder?: string
+  ariaLabel?: string
 }) {
+  const inputId = useId()
+
   return (
     <div>
-      <label className="block text-label-md text-on-surface-variant mb-1">
+      <label htmlFor={inputId} className="block text-label-md text-on-surface-variant mb-1">
         {label}
         {required && <span className="text-error"> *</span>}
       </label>
       <input
+        id={inputId}
         type={type}
         value={value}
         required={required}
         disabled={disabled}
+        placeholder={placeholder}
+        aria-label={ariaLabel}
         onChange={(event) => onChange?.(event.target.value)}
         className="w-full border border-outline-variant rounded-lg px-3 py-2 text-body-sm text-on-surface bg-surface focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-surface-container disabled:text-on-surface-variant"
       />

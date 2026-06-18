@@ -3,6 +3,7 @@ package com.example.kolla.services;
 import com.example.kolla.dto.ChangePasswordRequest;
 import com.example.kolla.dto.CreateUserRequest;
 import com.example.kolla.dto.UpdateUserRequest;
+import com.example.kolla.config.FileStorageProperties;
 import com.example.kolla.enums.Role;
 import com.example.kolla.exceptions.BadRequestException;
 import com.example.kolla.models.User;
@@ -53,7 +54,8 @@ class UserProfileThesisAlignmentTest {
                 memberRepository,
                 documentRepository,
                 passwordEncoder,
-                redisTemplate);
+                redisTemplate,
+                new FileStorageProperties());
         org.mockito.Mockito.lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
     }
 

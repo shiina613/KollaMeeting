@@ -1,8 +1,10 @@
 package com.example.kolla.controllers;
 
 import com.example.kolla.enums.Role;
+import com.example.kolla.exceptions.BadRequestException;
 import com.example.kolla.models.User;
 import com.example.kolla.repositories.UserRepository;
+import com.example.kolla.responses.UserResponse;
 import com.example.kolla.services.UserService;
 import com.example.kolla.utils.JwtUtils;
 import org.junit.jupiter.api.DisplayName;
@@ -20,11 +22,16 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.mock.web.MockMultipartFile;
 
 import static org.hamcrest.Matchers.is;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -96,5 +103,74 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.message", is("User deleted successfully")));
 
         verify(userService).deleteUser(4L, admin);
+    }
+
+    @Test
+    @DisplayName("POST /users/me/avatar uploads current user's avatar")
+    void uploadCurrentUserAvatar_callsServiceAndReturnsUpdatedUser() throws Exception {
+        User currentUser = User.builder()
+                .id(1L)
+                .username("tungnq")
+                .passwordHash("hash")
+                .fullName("Nguyen Quang Tung")
+                .email("tungnq@kolla.local")
+                .role(Role.USER)
+                .isActive(true)
+                .build();
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "avatar.jpg",
+                MediaType.IMAGE_JPEG_VALUE,
+                "avatar".getBytes());
+        UserResponse response = UserResponse.builder()
+                .id(1L)
+                .username("tungnq")
+                .fullName("Nguyen Quang Tung")
+                .email("tungnq@kolla.local")
+                .role(Role.USER)
+                .img("/api/v1/users/1/avatar")
+                .isActive(true)
+                .build();
+
+        org.mockito.Mockito.when(userService.uploadCurrentUserAvatar(any(), eq(currentUser)))
+                .thenReturn(response);
+
+        mockMvc.perform(multipart("/users/me/avatar")
+                        .file(file)
+                        .with(user(currentUser))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data.img", is("/api/v1/users/1/avatar")));
+
+        verify(userService).uploadCurrentUserAvatar(any(), eq(currentUser));
+    }
+
+    @Test
+    @DisplayName("POST /users/me/avatar rejects unsupported image type")
+    void uploadCurrentUserAvatar_unsupportedType_returnsBadRequest() throws Exception {
+        User currentUser = User.builder()
+                .id(1L)
+                .username("tungnq")
+                .passwordHash("hash")
+                .fullName("Nguyen Quang Tung")
+                .email("tungnq@kolla.local")
+                .role(Role.USER)
+                .isActive(true)
+                .build();
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "avatar.txt",
+                MediaType.TEXT_PLAIN_VALUE,
+                "not-image".getBytes());
+
+        doThrow(new BadRequestException("Unsupported avatar type: text/plain"))
+                .when(userService).uploadCurrentUserAvatar(any(), eq(currentUser));
+
+        mockMvc.perform(multipart("/users/me/avatar")
+                        .file(file)
+                        .with(user(currentUser))
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
     }
 }

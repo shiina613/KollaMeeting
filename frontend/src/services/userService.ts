@@ -79,6 +79,23 @@ export async function updateCurrentUser(
 }
 
 /**
+ * Upload the current authenticated user's avatar image.
+ */
+export async function uploadCurrentUserAvatar(
+  file: File,
+): Promise<ApiResponse<MeetingUser>> {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const response = await api.post<ApiResponse<MeetingUser>>('/users/me/avatar', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+  return response.data
+}
+
+/**
  * Change the current authenticated user's password.
  */
 export async function changeOwnPassword(

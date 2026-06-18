@@ -117,10 +117,13 @@ file:
     documents-dir: documents
     audio-chunks-dir: audio_chunks
     minutes-dir: minutes
+    avatars-dir: avatars
     # Requirement 6.4 – allowed MIME types and max sizes
     allowed-document-types: application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,image/jpeg,image/png
+    allowed-avatar-types: image/jpeg,image/png,image/webp
     max-document-size-mb: 100
     max-recording-size-mb: 5120
+    max-avatar-size-mb: 5
 
 # ─────────────────────────────────────────────
 # Digital signature — Host confirms minutes (Requirement 25.4)

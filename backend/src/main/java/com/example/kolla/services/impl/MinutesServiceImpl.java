@@ -129,15 +129,20 @@ public class MinutesServiceImpl implements MinutesService {
         log.info("Compiling draft minutes for meeting id={} with {} segments",
                 meetingId, segments.size());
 
+        Map<Long, Member> memberByUserId = membersByUserId(meeting.getId());
+
         // 2. Generate PDF and DOCX bytes
-        List<String> lines = buildTranscriptLines(meeting, segments);
+        List<String> lines = buildTranscriptLines(meeting, segments, memberByUserId);
         byte[] pdfBytes = generateDraftPdf(lines);
         byte[] docxBytes = DocxMinutesRenderer.renderLines(lines);
+        List<MinutesContentEntryResponse> contentEntries =
+                buildTranscriptEntries(segments, memberByUserId);
 
         // 3. Persist Minutes record first to get the ID for the filename
         Minutes minutes = Minutes.builder()
                 .meeting(meeting)
                 .status(MinutesStatus.DRAFT)
+                .contentEntriesJson(OBJECT_MAPPER.writeValueAsString(contentEntries))
                 .build();
         Minutes saved = minutesRepository.save(minutes);
 
@@ -197,7 +202,16 @@ public class MinutesServiceImpl implements MinutesService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Minutes not found for meeting id: " + meetingId));
 
-        return MinutesResponse.from(minutes);
+        MinutesResponse response = MinutesResponse.from(minutes);
+        if (response.getContentEntries().isEmpty()
+                && (minutes.getContentHtml() == null || minutes.getContentHtml().isBlank())) {
+            List<TranscriptionSegment> segments =
+                    transcriptionSegmentRepository.findByMeetingIdOrderedForMinutes(meetingId);
+            response.setContentEntries(buildTranscriptEntries(
+                    segments,
+                    membersByUserId(meetingId)));
+        }
+        return response;
     }
 
     // ── confirmMinutes ────────────────────────────────────────────────────────
@@ -506,11 +520,12 @@ public class MinutesServiceImpl implements MinutesService {
      * Groups consecutive segments by speaker turn for readability.
      */
     private List<String> buildTranscriptLines(Meeting meeting,
-                                               List<TranscriptionSegment> segments) {
+                                               List<TranscriptionSegment> segments,
+                                               Map<Long, Member> memberByUserId) {
         List<String> lines = new ArrayList<>();
 
         // Title block
-        lines.add("BIÊN BẢN CUỘC HỌP - BẢN NHÁP");
+        lines.add("BIÊN BẢN CUỘC HỌP - BẢN GỐC");
         lines.add("");
         lines.add("Cuộc họp: " + meeting.getTitle());
         if (meeting.getActivatedAt() != null) {
@@ -537,13 +552,6 @@ public class MinutesServiceImpl implements MinutesService {
             lines.add("[Chưa có nội dung nhận dạng giọng nói cho cuộc họp này]");
             return lines;
         }
-
-        Map<Long, Member> memberByUserId = memberRepository.findByMeetingId(meeting.getId())
-                .stream()
-                .collect(Collectors.toMap(
-                        member -> member.getUser().getId(),
-                        member -> member,
-                        (left, right) -> left));
 
         String currentSpeakerKey = null;
         boolean hasSpeakerGroup = false;
@@ -583,6 +591,74 @@ public class MinutesServiceImpl implements MinutesService {
         }
 
         return lines;
+    }
+
+    private List<MinutesContentEntryResponse> buildTranscriptEntries(
+            List<TranscriptionSegment> segments,
+            Map<Long, Member> memberByUserId) {
+        if (segments.isEmpty()) {
+            return List.of();
+        }
+
+        List<MinutesContentEntryResponse> entries = new ArrayList<>();
+        String currentSpeakerKey = null;
+        MinutesContentEntryResponse currentEntry = null;
+        StringBuilder currentText = new StringBuilder();
+
+        for (TranscriptionSegment segment : segments) {
+            String speakerKey = speakerIdentity(segment);
+            if (!speakerKey.equals(currentSpeakerKey)) {
+                if (currentEntry != null) {
+                    currentEntry.setText(currentText.toString().trim());
+                    entries.add(currentEntry);
+                }
+
+                Member member = memberByUserId.get(segment.getSpeakerId());
+                String meetingRole = member != null && member.getMeetingRole() != null
+                        ? meetingRoleLabel(member.getMeetingRole())
+                        : "Th\u00e0nh vi\u00ean";
+                String time = segment.getSegmentStartTime() != null
+                        ? segment.getSegmentStartTime()
+                                .atZone(ZONE_VN)
+                                .format(DateTimeFormatter.ofPattern("HH:mm"))
+                        : "--:--";
+
+                currentEntry = MinutesContentEntryResponse.builder()
+                        .speakerName(blankToDefault(
+                                segment.getSpeakerName(),
+                                "Kh\u00f4ng x\u00e1c \u0111\u1ecbnh"))
+                        .roleLabel(meetingRole)
+                        .timeLabel(time)
+                        .text("")
+                        .build();
+                currentText = new StringBuilder();
+                currentSpeakerKey = speakerKey;
+            }
+
+            if (segment.getText() != null && !segment.getText().isBlank()) {
+                if (currentText.length() > 0) {
+                    currentText.append(' ');
+                }
+                currentText.append(segment.getText().trim());
+            }
+        }
+
+        if (currentEntry != null) {
+            currentEntry.setText(currentText.toString().trim());
+            entries.add(currentEntry);
+        }
+
+        return entries;
+    }
+
+    private Map<Long, Member> membersByUserId(Long meetingId) {
+        return memberRepository.findByMeetingId(meetingId)
+                .stream()
+                .filter(member -> member.getUser() != null && member.getUser().getId() != null)
+                .collect(Collectors.toMap(
+                        member -> member.getUser().getId(),
+                        member -> member,
+                        (left, right) -> left));
     }
 
     private String speakerIdentity(TranscriptionSegment segment) {

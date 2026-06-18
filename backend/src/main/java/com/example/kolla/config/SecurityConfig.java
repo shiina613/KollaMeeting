@@ -107,6 +107,7 @@ public class SecurityConfig {
                     .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
                     .requestMatchers(HttpMethod.POST, "/auth/refresh").permitAll()
                     .requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
+                    .requestMatchers(HttpMethod.GET, "/users/*/avatar").permitAll()
                     // Internal callback — secured by X-Internal-Api-Key header, not JWT
                     .requestMatchers(HttpMethod.POST, "/transcription/callback").permitAll()
                     .requestMatchers(HttpMethod.GET, "/api-docs/**").permitAll()
@@ -158,7 +159,7 @@ public class SecurityConfig {
                         // Rate limiting for file upload endpoints
                         if ("POST".equalsIgnoreCase(httpRequest.getMethod())
                                 && (path.contains("/documents") || path.contains("/recordings")
-                                    || path.contains("/upload"))) {
+                                    || path.contains("/upload") || path.contains("/avatar"))) {
                             String contentType = httpRequest.getContentType();
                             if (contentType != null && contentType.contains("multipart")) {
                                 String ip = getClientIp(httpRequest);

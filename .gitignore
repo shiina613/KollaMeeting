@@ -12,6 +12,7 @@ extracted_docx.txt
 .mtg_*.txt
 .test_mtg*.txt
 benchmark/
+evaluation/
 storage/
 /app/storage/
 
